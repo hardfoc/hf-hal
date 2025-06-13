@@ -9,8 +9,7 @@ documentation: "https://hardfoc.dev/docs/hal"  # (adjust if you host docs)
 
 license: "GPL-3.0-or-later"
 maintainers:
-  - name: Nebiyu Tadesse
-    email: nebysma@gmail.com
+  - "Nebiyu Tadesse <nebysma@gmail.com>"
 tags: [ "hardfoc", "motor-control", "hal", "driver", "esp-idf", "foc", "bldc" ]
 
 # ESP-IDF SoCs officially verified in CI
@@ -30,9 +29,9 @@ dependencies:
   espressif/driver: "*"
 
   # Core system libs used privately inside hf-hal
-  idf::freertos: "*"
-  idf::hal: "*"
-  idf::esp_timer: "*"
+  freertos: "*"
+  hal: "*"
+  esp_timer: "*"
 
 # ─── Packaging rules – keep download size minimal ────────────────────────────
 files:
@@ -40,7 +39,6 @@ files:
   use_gitignore: true
   exclude:
     - "**/docs/**"
-    - "**/Datasheet/**"
     - "**/datasheet/**"
     - "**/examples/**"
     - "**/tests/**"
