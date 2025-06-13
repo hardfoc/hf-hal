@@ -14,10 +14,6 @@ tags: [ "hardfoc", "motor-control", "hal", "driver", "esp-idf", "foc", "bldc" ]
 
 # ESP-IDF SoCs officially verified in CI
 targets:
-  - esp32
-  - esp32s3
-  - esp32s2
-  - esp32c3
   - esp32c6
 
 # ─── Dependencies ────────────────────────────────────────────────────────────
@@ -27,8 +23,6 @@ dependencies:
 
 # ─── Packaging rules – keep download size minimal ────────────────────────────
 files:
-  # Obey .gitignore for object files, build artefacts, etc.
-  use_gitignore: true
   exclude:
     - "**/docs/**"
     - "**/datasheet/**"
