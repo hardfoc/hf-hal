@@ -15,7 +15,7 @@ set(_SRC_GLOBS
     "${HF_HAL_ROOT}/*.S"  "${HF_HAL_ROOT}/**/*.c" "${HF_HAL_ROOT}/**/*.cpp"
     "${HF_HAL_ROOT}/**/*.cc" "${HF_HAL_ROOT}/**/*.S"
 )
-file(GLOB_RECURSE _ALL_SRCS CONFIGURE_DEPENDS ${_SRC_GLOBS})
+file(GLOB_RECURSE _ALL_SRCS ${_SRC_GLOBS})
 
 set(_EXCLUDE_REGEX "/docs/|/Datasheet/|/datasheet/|/examples/|/tests/")
 
@@ -29,9 +29,8 @@ endforeach()
 # ─── 2 · Collect every directory that owns a header we kept ───────────────────
 #
 file(GLOB_RECURSE _ALL_HDRS
-     CONFIGURE_DEPENDS
-     "${HF_HAL_ROOT}/*.h"    "${HF_HAL_ROOT}/*.hpp"
-     "${HF_HAL_ROOT}/**/*.h" "${HF_HAL_ROOT}/**/*.hpp"
+    "${HF_HAL_ROOT}/*.h"    "${HF_HAL_ROOT}/*.hpp"
+    "${HF_HAL_ROOT}/**/*.h" "${HF_HAL_ROOT}/**/*.hpp"
 )
 
 foreach(_h IN LISTS _ALL_HDRS)
