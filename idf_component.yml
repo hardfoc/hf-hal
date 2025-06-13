@@ -25,14 +25,6 @@ dependencies:
   # The IDF tool-chain (any v5 or later)
   idf: ">=5.0.0"
 
-  # ESP-IDF peripheral driver component (public → users link against it too)
-  idf::driver: "*"
-
-  # Core system libs used privately inside hf-hal
-  idf::freertos: "*"
-  idf::hal: "*"
-  idf::esp_timer: "*"
-
 # ─── Packaging rules – keep download size minimal ────────────────────────────
 files:
   # Obey .gitignore for object files, build artefacts, etc.
