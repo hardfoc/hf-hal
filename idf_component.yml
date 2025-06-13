@@ -1,0 +1,50 @@
+###############################################################################
+#  HardFOC HAL – Component-Manager manifest
+###############################################################################
+
+version: "0.1.0"                  # ↱ bump patch on bug-fix, minor on new APIs
+description: "HardFOC hardware-abstraction layer - drivers, utilities and MCU wrappers in one component"
+url: "https://github.com/hardfoc/hf-hal"   # repository home
+documentation: "https://hardfoc.dev/docs/hal"  # (adjust if you host docs)
+
+license: "GPL-3.0-or-later"
+maintainers:
+  - "Nebiyu Tadesse <nebysma@gmail.com>"
+tags: [ "hardfoc", "motor-control", "hal", "driver", "esp-idf", "foc", "bldc" ]
+
+# ESP-IDF SoCs officially verified in CI
+targets:
+  - esp32
+  - esp32s3
+  - esp32s2
+  - esp32c3
+  - esp32c6
+
+# ─── Dependencies ────────────────────────────────────────────────────────────
+dependencies:
+  # The IDF tool-chain (any v5 or later)
+  idf: ">=5.0.0"
+
+  # ESP-IDF peripheral driver component (public → users link against it too)
+  idf::driver: "*"
+
+  # Core system libs used privately inside hf-hal
+  idf::freertos: "*"
+  idf::hal: "*"
+  idf::esp_timer: "*"
+
+# ─── Packaging rules – keep download size minimal ────────────────────────────
+files:
+  # Obey .gitignore for object files, build artefacts, etc.
+  use_gitignore: true
+  exclude:
+    - "**/docs/**"
+    - "**/datasheet/**"
+    - "**/examples/**"
+    - "**/tests/**"
+    - "**/.github/**"
+    - "**/*.md"          # if you don’t want READMEs in the archive
+
+###############################################################################
+#  End of manifest
+###############################################################################
