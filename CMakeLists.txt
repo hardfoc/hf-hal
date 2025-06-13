@@ -7,6 +7,8 @@ cmake_minimum_required(VERSION 3.16)
 
 set(HF_HAL_ROOT ${CMAKE_CURRENT_LIST_DIR})
 
+add_subdirectory("utils-and-drivers/hf-core-drivers/external/hf-ws2812-rmt-driver")
+
 # Expose optional WS2812 driver so its headers are available when the HAL is
 # consumed as a component. The driver lives under utils-and-drivers and is
 # treated as an extra component to keep the HAL self-contained.
