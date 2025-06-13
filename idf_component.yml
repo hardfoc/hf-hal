@@ -26,12 +26,12 @@ dependencies:
   idf: ">=5.0.0"
 
   # ESP-IDF peripheral driver component (public → users link against it too)
-  espressif/driver: "*"
+  idf::driver: "*"
 
   # Core system libs used privately inside hf-hal
-  freertos: "*"
-  hal: "*"
-  esp_timer: "*"
+  idf::freertos: "*"
+  idf::hal: "*"
+  idf::esp_timer: "*"
 
 # ─── Packaging rules – keep download size minimal ────────────────────────────
 files:
