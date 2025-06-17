@@ -1,7 +1,7 @@
 ###############################################################################
 #  HardFOC HAL – Component-Manager manifest
 ###############################################################################
-
+name: hf-hal                      # ↱ component name, must be unique
 version: "0.1.0"                  # ↱ bump patch on bug-fix, minor on new APIs
 description: "HardFOC hardware-abstraction layer - drivers, utilities and MCU wrappers in one component"
 url: "https://github.com/hardfoc/hf-hal"   # repository home
