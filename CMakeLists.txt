@@ -58,10 +58,10 @@ idf_component_register(
     # PUBLIC deps: anything the *application* must also link against.
     # (change to taste – these are the most common for a HAL).
     #
-    REQUIRES      driver freertos hf-ws2812-rmt-driver
+    REQUIRES      driver freertos hf-ws2812-rmt-driver nvs_flash
     # PRIVATE deps: used only while building this lib.
     #
-    PRIV_REQUIRES hal esp_timer
+    PRIV_REQUIRES hal esp_timer esp_adc 
 )
 
 #
