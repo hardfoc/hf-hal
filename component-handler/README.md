@@ -4,7 +4,7 @@ A comprehensive ADC and GPIO management system designed for the HardFOC motor co
 
 ## Overview
 
-This system provides a unified, thread-safe interface for all ADC and GPIO operations in the HardFOC system. It follows the same architectural patterns as the ConMed AdcData system but is adapted for embedded ESP32-C6 development with ESP-IDF.
+This system provides a unified, thread-safe interface for all ADC and GPIO operations in the HardFOC system. It follows the same architectural patterns as the AdcData system but is adapted for embedded ESP32-C6 development with ESP-IDF.
 
 ## Key Features
 
