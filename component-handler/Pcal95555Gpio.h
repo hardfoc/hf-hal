@@ -1,10 +1,10 @@
 #ifndef COMPONENT_HANDLER_PCAL95555GPIO_H_
 #define COMPONENT_HANDLER_PCAL95555GPIO_H_
 
-#include "component-handler/GpioHandler.h"
-#include "utils-and-drivers/hf-core-drivers/external/hf-pcal95555-driver/src/pacl95555.hpp"
-#include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/DigitalGpio.h"
-#include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/SfI2cBus.h"
+#include "GpioHandler.h"
+#include "PCAL95555.hpp"
+#include "DigitalGpio.h"
+#include "SfI2cBus.h"
 #include <array>
 #include <string_view>
 
@@ -16,10 +16,10 @@
 
 /**
  * @class SfPcal95555Bus
- * @brief Adapter implementing PACL95555::i2cBus using SfI2cBus for
+ * @brief Adapter implementing PCAL95555::i2cBus using SfI2cBus for
  *        thread-safe transfers.
  */
-class SfPcal95555Bus : public PACL95555::i2cBus {
+class SfPcal95555Bus : public PCAL95555::i2cBus {
 public:
   explicit SfPcal95555Bus(SfI2cBus &bus) noexcept : bus_(bus) {}
 
@@ -48,8 +48,8 @@ private:
  */
 class Pcal95555Pin : public DigitalGpio {
 public:
-  Pcal95555Pin(PACL95555 &chip, uint8_t index, ActiveState act,
-               PACL95555::GPIODir dir = PACL95555::GPIODir::Input) noexcept
+  Pcal95555Pin(PCAL95555 &chip, uint8_t index, ActiveState act,
+               PCAL95555::GPIODir dir = PCAL95555::GPIODir::Input) noexcept
       : DigitalGpio(GPIO_NUM_NC, act), chip_(chip), index_(index), dir_(dir) {}
 
   bool Initialize() noexcept override {
@@ -76,9 +76,9 @@ public:
   }
 
 private:
-  PACL95555 &chip_;
+  PCAL95555 &chip_;
   uint8_t index_;
-  PACL95555::GPIODir dir_;
+  PCAL95555::GPIODir dir_;
 };
 
 /**
@@ -120,12 +120,12 @@ public:
     return ok;
   }
 
-  PACL95555 &Device() noexcept { return device_; }
+  PCAL95555 &Device() noexcept { return device_; }
   Pcal95555Pin &Pin(std::size_t i) noexcept { return pins_[i]; }
 
 private:
   SfPcal95555Bus adapter_;
-  PACL95555 device_;
+  PCAL95555 device_;
   std::array<Pcal95555Pin, kPinCount> pins_;
 };
 
