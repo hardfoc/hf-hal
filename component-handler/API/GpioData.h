@@ -7,8 +7,8 @@
 #include <mutex>
 #include <vector>
 
-#include "CommonIDs.h"
-#include "ThingsToString.h"
+#include "../CommonIDs.h"
+#include "../ThingsToString.h"
 #include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/DigitalGpio.h"
 
 /**

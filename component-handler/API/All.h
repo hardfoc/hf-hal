@@ -11,12 +11,12 @@
  */
 
 // Core data types and enums
-#include "CommonIDs.h"
-#include "ThingsToString.h"
+#include "../CommonIDs.h"
+#include "../ThingsToString.h"
 
 // Multi-reading support
-#include "MultiReadings.h"
-#include "AdcMultiCountReading.h"
+#include "../MultiReadings.h"
+#include "../AdcMultiCountReading.h"
 
 // Core data management systems
 #include "AdcData.h"
@@ -27,11 +27,11 @@
 #include "HardFocIntegration.h"
 
 // Legacy compatibility wrappers (deprecated)
-#include "AdcHandler.h"
-#include "GpioHandler.h"
+#include "../AdcHandler.h"
+#include "../GpioHandler.h"
 
 // GPIO expander support
-#include "Pcal95555Gpio.h"
+#include "../Pcal95555Gpio.h"
 
 // Hardware configuration
 #include "utils-and-drivers/hf-core-drivers/internal/hf-pincfg/include/hf_gpio_config.hpp"

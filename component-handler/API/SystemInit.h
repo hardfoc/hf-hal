@@ -3,7 +3,7 @@
 
 #include "AdcData.h"
 #include "GpioData.h"
-#include "CommonIDs.h"
+#include "../CommonIDs.h"
 #include "utils-and-drivers/hf-core-drivers/internal/hf-pincfg/include/hf_gpio_config.hpp"
 #include "utils-and-drivers/hf-core-drivers/internal/hf-pincfg/include/hf_ext_pins_enum.hpp"
 

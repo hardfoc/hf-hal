@@ -6,10 +6,10 @@
 #include <atomic>
 #include <mutex>
 
-#include "CommonIDs.h"
-#include "ThingsToString.h"
-#include "AdcMultiCountReading.h"
-#include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/BaseAdc.h"
+#include "../CommonIDs.h"
+#include "../ThingsToString.h"
+#include "../AdcMultiCountReading.h"
+#include "BaseAdc.h"
 
 /**
  * @file AdcData.h
