@@ -3,8 +3,7 @@
 
 #include "AdcData.h"
 #include "GpioData.h"
-#include "Tmc9660MotorController.h"
-#include "CommonIDs.h"
+#include "../CommonIDs.h"
 #include "utils-and-drivers/hf-core-drivers/internal/hf-pincfg/include/hf_gpio_config.hpp"
 #include "utils-and-drivers/hf-core-drivers/internal/hf-pincfg/include/hf_ext_pins_enum.hpp"
 
@@ -57,17 +56,12 @@ public:
      * @return true if all channels registered successfully, false otherwise.
      */
     static bool RegisterInternalAdcChannels() noexcept;
-      /**
+    
+    /**
      * @brief Register all external ADC channels.
      * @return true if all channels registered successfully, false otherwise.
      */
     static bool RegisterExternalAdcChannels() noexcept;
-    
-    /**
-     * @brief Initialize the TMC9660 motor controller subsystem.
-     * @return true if initialization successful, false otherwise.
-     */
-    static bool InitializeTmc9660System() noexcept;
     
     /**
      * @brief Run system self-test.
