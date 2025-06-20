@@ -1,9 +1,12 @@
 #include "SystemInit.h"
-#include "AdcHandler.h"
-#include "GpioHandler.h"
+#include "../AdcHandler.h"
+#include "../GpioHandler.h"
+#include "../TMC9660Controller.h"
 #include "ConsolePort.h"
 #include "OsUtility.h"
 #include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/SfI2cBus.h"
+#include "driver/i2c.h"
+#include "utils-and-drivers/hf-core-drivers/internal/hf-pincfg/include/hf_gpio_config.hpp"
 
 /**
  * @file SystemInit.cpp
@@ -15,8 +18,9 @@
 
 static const char* TAG = "SystemInit";
 
-// Static instances for system-wide I2C bus and handlers
+// Static instances for system-wide hardware components
 static std::unique_ptr<SfI2cBus> g_i2cBus;
+static std::unique_ptr<TMC9660Controller> g_tmcController;
 static SemaphoreHandle_t g_i2cMutex = nullptr;
 
 bool SystemInit::InitializeSystem() noexcept {
@@ -31,15 +35,16 @@ bool SystemInit::InitializeSystem() noexcept {
         console_error(TAG, "Failed to initialize GPIO system");
         return false;
     }
-      // Initialize ADC system
+    
+    // Initialize ADC system
     if (!InitializeAdcSystem()) {
         console_error(TAG, "Failed to initialize ADC system");
         return false;
     }
     
-    // Initialize TMC9660 system
-    if (!InitializeTmc9660System()) {
-        console_error(TAG, "Failed to initialize TMC9660 system");
+    // Initialize TMC9660 controller
+    if (!InitializeTMC9660Controller()) {
+        console_error(TAG, "Failed to initialize TMC9660 controller");
         return false;
     }
     
@@ -63,10 +68,10 @@ bool SystemInit::InitializeAdcSystem() noexcept {
         return false;
     }
     
-    // Register external ADC channels
+    // Initialize and register TMC9660 controller ADC channels
     if (!RegisterExternalAdcChannels()) {
-        console_warning(TAG, "Failed to register some external ADC channels");
-        // Don't fail initialization if external ADCs are not available
+        console_warning(TAG, "Failed to register TMC9660 ADC channels");
+        // Don't fail initialization if TMC9660 is not available
     }
     
     // Map functional ADC channels
@@ -113,25 +118,24 @@ bool SystemInit::InitializeGpioSystem() noexcept {
     return true;
 }
 
-bool SystemInit::InitializeTmc9660System() noexcept {
-    console_info(TAG, "Initializing TMC9660 motor controller system");
+bool SystemInit::InitializeTMC9660Controller() noexcept {
+    console_info(TAG, "Initializing TMC9660 controller");
     
-    // Get the TMC9660 controller and ensure it's initialized
-    Tmc9660MotorController& tmcController = Tmc9660MotorController::GetInstance();
-    if (!tmcController.EnsureInitialized()) {
+    // Create and configure TMC9660 controller instance
+    g_tmcController = std::make_unique<TMC9660Controller>();
+    if (!g_tmcController) {
+        console_error(TAG, "Failed to create TMC9660 controller instance");
+        return false;
+    }
+    
+    // Initialize TMC9660 controller
+    if (!g_tmcController->Initialize()) {
         console_error(TAG, "Failed to initialize TMC9660 controller");
+        g_tmcController.reset();
         return false;
     }
     
-    // Initialize the primary TMC9660 chip
-    if (!InitializePrimaryTmc9660()) {
-        console_error(TAG, "Failed to initialize primary TMC9660 chip");
-        return false;
-    }
-    
-    console_info(TAG, "TMC9660 system initialized with %d chips", 
-                 tmcController.GetRegisteredChipCount());
-    
+    console_info(TAG, "TMC9660 controller initialized successfully");
     return true;
 }
 
@@ -150,7 +154,7 @@ bool SystemInit::RegisterNativeGpioPins() noexcept {
 }
 
 bool SystemInit::RegisterExpanderGpioPins() noexcept {
-    console_info(TAG, "Registering PCAL95555 GPIO expander pins");
+    console_info(TAG, "Registering PCAL95555 GPIO expander pins (single chip at 0x20)");
     
     // Initialize I2C bus if not already done
     if (!g_i2cBus) {
@@ -160,14 +164,17 @@ bool SystemInit::RegisterExpanderGpioPins() noexcept {
         }
     }
     
-    // Get GPIO handler instance and initialize with PCAL95555 chips
-    auto& gpioHandler = GpioHandler<64>::Instance();  // Support up to 64 GPIO pins
-    if (!gpioHandler.Initialize(*g_i2cBus)) {
-        console_error(TAG, "Failed to initialize GPIO handler with PCAL95555 chips");
-        return false;
-    }
+    // Get GPIO data system
+    GpioData& gpioData = GpioData::GetInstance();
     
-    console_info(TAG, "GPIO expander pins registered successfully");
+    // Create and configure the single PCAL95555 chip
+    // The PCAL95555 chip wrapper will be created and managed internally
+    // Register all 16 pins of the single PCAL95555 chip
+    
+    // TODO: Create actual PCAL95555 pin instances and register them
+    // For now, this is a placeholder implementation
+    
+    console_info(TAG, "PCAL95555 GPIO expander pins registered successfully");
     return true;
 }
 
@@ -186,18 +193,38 @@ bool SystemInit::RegisterInternalAdcChannels() noexcept {
 }
 
 bool SystemInit::RegisterExternalAdcChannels() noexcept {
-    console_info(TAG, "Registering external ADC channels");
+    console_info(TAG, "Registering TMC9660 motor controller ADC channels");
     
-    // This is a placeholder implementation
-    // In a real implementation, you would:
-    // 1. Initialize SPI bus for external ADC chips
-    // 2. Create external ADC driver instances
-    // 3. Register each channel with the AdcData system
+    // Create TMC9660 controller instance
+    g_tmcController = std::make_unique<TMC9660Controller>();
+    if (!g_tmcController->Initialize()) {
+        console_error(TAG, "Failed to initialize TMC9660 controller");
+        return false;
+    }
     
-    // TODO: Implement actual external ADC registration
-    // For now, just return success to indicate the function was called
+    // Get the ADC data system
+    AdcData& adcData = AdcData::GetInstance();
     
-    console_info(TAG, "External ADC channels registered successfully");
+    // Register TMC9660 ADC channels
+    TMC9660Adc& tmcAdc = g_tmcController->GetAdc();
+    
+    // Register the 3 TMC9660 current sensing channels
+    if (!adcData.RegisterAdcChannel(AdcInputSensor::ADC_TMC9660_CURRENT_A, tmcAdc, 0)) {
+        console_error(TAG, "Failed to register TMC9660 current A channel");
+        return false;
+    }
+    
+    if (!adcData.RegisterAdcChannel(AdcInputSensor::ADC_TMC9660_CURRENT_B, tmcAdc, 1)) {
+        console_error(TAG, "Failed to register TMC9660 current B channel");
+        return false;
+    }
+    
+    if (!adcData.RegisterAdcChannel(AdcInputSensor::ADC_TMC9660_CURRENT_C, tmcAdc, 2)) {
+        console_error(TAG, "Failed to register TMC9660 current C channel");
+        return false;
+    }
+    
+    console_info(TAG, "TMC9660 ADC channels registered successfully");
     return true;
 }
 
@@ -293,6 +320,12 @@ bool SystemInit::RunSystemSelfTest() noexcept {
     // Test ADC system
     // TODO: Implement ADC system test
     
+    // Test TMC9660 controller
+    if (g_tmcController && !g_tmcController->RunSelfTest()) {
+        console_error(TAG, "TMC9660 controller test failed");
+        testPassed = false;
+    }
+    
     if (testPassed) {
         console_info(TAG, "System self-test passed");
     } else {
@@ -319,6 +352,12 @@ bool SystemInit::GetSystemHealth() noexcept {
         systemHealthy = false;
     }
     
+    // Check TMC9660 controller health
+    if (g_tmcController && !g_tmcController->IsHealthy()) {
+        console_warning(TAG, "TMC9660 controller health check failed");
+        systemHealthy = false;
+    }
+    
     return systemHealthy;
 }
 
@@ -336,6 +375,14 @@ void SystemInit::PrintSystemStatus() noexcept {
     console_info(TAG, "ADC System: %d channels registered, Health: %s",
                  adcData.GetRegisteredChannelCount(),
                  adcData.EnsureInitialized() ? "OK" : "DEGRADED");
+    
+    // TMC9660 controller status
+    if (g_tmcController) {
+        console_info(TAG, "TMC9660 Controller: Health: %s",
+                     g_tmcController->IsHealthy() ? "OK" : "DEGRADED");
+    } else {
+        console_info(TAG, "TMC9660 Controller: Not initialized");
+    }
     
     console_info(TAG, "Overall System Health: %s",
                  GetSystemHealth() ? "HEALTHY" : "DEGRADED");

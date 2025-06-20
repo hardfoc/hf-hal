@@ -4,7 +4,7 @@
 #include "SystemInit.h"
 #include "AdcData.h"
 #include "GpioData.h"
-#include "AdcMultiCountReading.h"
+#include "../AdcMultiCountReading.h"
 
 /**
  * @file HardFocIntegration.h

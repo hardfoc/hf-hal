@@ -5,8 +5,10 @@
 #include "CommonIDs.h"
 #include "ThingsToString.h"
 #include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/BaseAdc.h"
+#include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/Esp32C6Adc.h"
 #include <array>
 #include <string_view>
+#include <memory>
 
 /**
  * @file AdcHandler.h
@@ -38,6 +40,29 @@ public:
 
   AdcHandler(const AdcHandler &) = delete;
   AdcHandler &operator=(const AdcHandler &) = delete;
+
+  /**
+   * @brief Initialize the ADC handler and all associated hardware.
+   * @return true if initialization successful, false otherwise.
+   */
+  bool Initialize() noexcept {
+    if (initialized_) {
+      return true;  // Already initialized
+    }
+
+    // Initialize ESP32-C6 internal ADC units
+    if (!InitializeEsp32C6Adcs()) {
+      return false;
+    }
+
+    // Register ESP32-C6 ADC channels with the ADC system
+    if (!RegisterEsp32C6Channels()) {
+      return false;
+    }
+
+    initialized_ = true;
+    return true;
+  }
 
   /**
    * @brief Register a channel with a name.
@@ -77,6 +102,113 @@ public:
 private:
   AdcHandler() = default;
 
+  /**
+   * @brief Initialize ESP32-C6 internal ADC units.
+   * @return true if successful, false otherwise.
+   */
+  bool InitializeEsp32C6Adcs() noexcept {
+    try {
+      // Create ESP32-C6 ADC Unit 1 (typically used for analog inputs)
+      esp32c6_adc1_ = std::make_unique<Esp32C6Adc>(
+        ADC_UNIT_1, 
+        ADC_ATTEN_DB_11,  // 0-3.1V range
+        ADC_BITWIDTH_12   // 12-bit resolution
+      );
+
+      // Create ESP32-C6 ADC Unit 2 (if needed for additional channels)
+      esp32c6_adc2_ = std::make_unique<Esp32C6Adc>(
+        ADC_UNIT_2,
+        ADC_ATTEN_DB_11,  // 0-3.1V range  
+        ADC_BITWIDTH_12   // 12-bit resolution
+      );
+
+      // Initialize the ADC units
+      if (!esp32c6_adc1_->Initialize()) {
+        return false;
+      }
+
+      if (!esp32c6_adc2_->Initialize()) {
+        return false;
+      }
+
+      return true;
+    } catch (...) {
+      return false;
+    }
+  }
+
+  /**
+   * @brief Register ESP32-C6 ADC channels with the ADC system.
+   * @return true if successful, false otherwise.
+   */
+  bool RegisterEsp32C6Channels() noexcept {
+    AdcData& adcData = AdcData::GetInstance();
+    bool success = true;
+
+    // Register ADC1 channels (ADC1_CHANNEL_0 through ADC1_CHANNEL_6)
+    if (esp32c6_adc1_) {
+      success &= RegisterAdc1Channels(adcData);
+    }
+
+    // Register ADC2 channels (ADC2_CHANNEL_0 through ADC2_CHANNEL_5)  
+    if (esp32c6_adc2_) {
+      success &= RegisterAdc2Channels(adcData);
+    }
+
+    return success;
+  }
+
+  /**
+   * @brief Register ESP32-C6 ADC Unit 1 channels.
+   * @param adcData Reference to ADC data system.
+   * @return true if successful, false otherwise.
+   */
+  bool RegisterAdc1Channels(AdcData& adcData) noexcept {
+    bool success = true;
+
+    // ESP32-C6 ADC1 has channels 0-6
+    const std::array<std::pair<AdcInputSensor, uint8_t>, 7> adc1Channels = {{
+      {AdcInputSensor::ADC_INTERNAL_CH0, 0},
+      {AdcInputSensor::ADC_INTERNAL_CH1, 1},
+      {AdcInputSensor::ADC_INTERNAL_CH2, 2},
+      {AdcInputSensor::ADC_INTERNAL_CH3, 3},
+      {AdcInputSensor::ADC_INTERNAL_CH4, 4},
+      {AdcInputSensor::ADC_INTERNAL_CH5, 5},
+      {AdcInputSensor::ADC_INTERNAL_CH6, 6}
+    }};
+
+    for (const auto& [sensor, channel] : adc1Channels) {
+      success &= adcData.RegisterAdcChannel(sensor, *esp32c6_adc1_, channel);
+    }
+
+    return success;
+  }
+
+  /**
+   * @brief Register ESP32-C6 ADC Unit 2 channels.
+   * @param adcData Reference to ADC data system.
+   * @return true if successful, false otherwise.
+   */
+  bool RegisterAdc2Channels(AdcData& adcData) noexcept {
+    bool success = true;
+
+    // ESP32-C6 ADC2 has channels 0-5
+    const std::array<std::pair<AdcInputSensor, uint8_t>, 6> adc2Channels = {{
+      {AdcInputSensor::ADC_INTERNAL_CH7, 0},   // Map to ADC2_CHANNEL_0
+      {AdcInputSensor::ADC_INTERNAL_CH8, 1},   // Map to ADC2_CHANNEL_1
+      {AdcInputSensor::ADC_INTERNAL_CH9, 2},   // Map to ADC2_CHANNEL_2
+      {AdcInputSensor::ADC_INTERNAL_CH10, 3},  // Map to ADC2_CHANNEL_3
+      {AdcInputSensor::ADC_INTERNAL_CH11, 4},  // Map to ADC2_CHANNEL_4
+      {AdcInputSensor::ADC_INTERNAL_CH12, 5}   // Map to ADC2_CHANNEL_5
+    }};
+
+    for (const auto& [sensor, channel] : adc2Channels) {
+      success &= adcData.RegisterAdcChannel(sensor, *esp32c6_adc2_, channel);
+    }
+
+    return success;
+  }
+
   ChannelInfo *Find(std::string_view name) noexcept {
     for (std::size_t i = 0; i < count_; ++i)
       if (channels_[i].name == name)
@@ -93,6 +225,11 @@ private:
 
   std::array<ChannelInfo, N> channels_{};
   std::size_t count_ = 0;
+  
+  // ESP32-C6 ADC management
+  bool initialized_ = false;                          ///< Initialization status
+  std::unique_ptr<Esp32C6Adc> esp32c6_adc1_;        ///< ESP32-C6 ADC Unit 1
+  std::unique_ptr<Esp32C6Adc> esp32c6_adc2_;        ///< ESP32-C6 ADC Unit 2
 };
 
 template <std::size_t N>
