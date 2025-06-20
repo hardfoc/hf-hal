@@ -33,9 +33,12 @@ constexpr std::string_view AdcInputSensorToString(AdcInputSensor sensor) noexcep
         case AdcInputSensor::ADC_EXTERNAL_CH6: return "ADC_EXTERNAL_CH6";
         case AdcInputSensor::ADC_EXTERNAL_CH7: return "ADC_EXTERNAL_CH7";
         case AdcInputSensor::ADC_EXTERNAL_CH8: return "ADC_EXTERNAL_CH8";
-        case AdcInputSensor::ADC_EXTERNAL_CH9: return "ADC_EXTERNAL_CH9";
-        case AdcInputSensor::ADC_EXTERNAL_CH10: return "ADC_EXTERNAL_CH10";
+        case AdcInputSensor::ADC_EXTERNAL_CH9: return "ADC_EXTERNAL_CH9";        case AdcInputSensor::ADC_EXTERNAL_CH10: return "ADC_EXTERNAL_CH10";
         case AdcInputSensor::ADC_EXTERNAL_CH11: return "ADC_EXTERNAL_CH11";
+        
+        case AdcInputSensor::ADC_TMC9660_AIN1: return "ADC_TMC9660_AIN1";
+        case AdcInputSensor::ADC_TMC9660_AIN2: return "ADC_TMC9660_AIN2";
+        case AdcInputSensor::ADC_TMC9660_AIN3: return "ADC_TMC9660_AIN3";
         
         case AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_A: return "ADC_MOTOR_CURRENT_PHASE_A";
         case AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_B: return "ADC_MOTOR_CURRENT_PHASE_B";
@@ -126,8 +129,15 @@ constexpr std::string_view GpioPinToString(GpioPin pin) noexcept {
         
         case GpioPin::GPIO_CAN_TX: return "GPIO_CAN_TX";
         case GpioPin::GPIO_CAN_RX: return "GPIO_CAN_RX";
+          case GpioPin::GPIO_WS2812_DATA: return "GPIO_WS2812_DATA";
         
-        case GpioPin::GPIO_WS2812_DATA: return "GPIO_WS2812_DATA";
+        case GpioPin::GPIO_TMC_GPIO17: return "GPIO_TMC_GPIO17";
+        case GpioPin::GPIO_TMC_GPIO18: return "GPIO_TMC_GPIO18";
+        case GpioPin::GPIO_TMC_nFAULT_STATUS: return "GPIO_TMC_nFAULT_STATUS";
+        case GpioPin::GPIO_TMC_DRV_EN: return "GPIO_TMC_DRV_EN";
+        case GpioPin::GPIO_TMC_RST_CTRL: return "GPIO_TMC_RST_CTRL";
+        case GpioPin::GPIO_TMC_SPI_COMM_nEN: return "GPIO_TMC_SPI_COMM_nEN";
+        case GpioPin::GPIO_TMC_nWAKE_CTRL: return "GPIO_TMC_nWAKE_CTRL";
         
         case GpioPin::GPIO_MOTOR_ENABLE: return "GPIO_MOTOR_ENABLE";
         case GpioPin::GPIO_MOTOR_FAULT: return "GPIO_MOTOR_FAULT";
@@ -156,8 +166,8 @@ constexpr std::string_view AdcChipToString(AdcChip chip) noexcept {
     switch (chip) {
         case AdcChip::ADC_ESP32_INTERNAL: return "ADC_ESP32_INTERNAL";
         case AdcChip::ADC_EXTERNAL_SPI_CHIP_1: return "ADC_EXTERNAL_SPI_CHIP_1";
-        case AdcChip::ADC_EXTERNAL_SPI_CHIP_2: return "ADC_EXTERNAL_SPI_CHIP_2";
-        case AdcChip::ADC_EXTERNAL_I2C_CHIP_1: return "ADC_EXTERNAL_I2C_CHIP_1";
+        case AdcChip::ADC_EXTERNAL_SPI_CHIP_2: return "ADC_EXTERNAL_SPI_CHIP_2";        case AdcChip::ADC_EXTERNAL_I2C_CHIP_1: return "ADC_EXTERNAL_I2C_CHIP_1";
+        case AdcChip::ADC_TMC9660_CHIP_1: return "ADC_TMC9660_CHIP_1";
         case AdcChip::ADC_CHIP_COUNT: return "ADC_CHIP_COUNT";
         default: return "UNKNOWN_ADC_CHIP";
     }
@@ -171,10 +181,40 @@ constexpr std::string_view AdcChipToString(AdcChip chip) noexcept {
 constexpr std::string_view GpioChipToString(GpioChip chip) noexcept {
     switch (chip) {
         case GpioChip::GPIO_ESP32_INTERNAL: return "GPIO_ESP32_INTERNAL";
-        case GpioChip::GPIO_PCAL95555_CHIP_1: return "GPIO_PCAL95555_CHIP_1";
-        case GpioChip::GPIO_PCAL95555_CHIP_2: return "GPIO_PCAL95555_CHIP_2";
+        case GpioChip::GPIO_PCAL95555_CHIP_1: return "GPIO_PCAL95555_CHIP_1";        case GpioChip::GPIO_PCAL95555_CHIP_2: return "GPIO_PCAL95555_CHIP_2";
+        case GpioChip::GPIO_TMC9660_CHIP_1: return "GPIO_TMC9660_CHIP_1";
         case GpioChip::GPIO_CHIP_COUNT: return "GPIO_CHIP_COUNT";
         default: return "UNKNOWN_GPIO_CHIP";
+    }
+}
+
+/**
+ * @brief Convert Tmc9660ChipId enum to string.
+ * @param chipId The TMC9660 chip ID enum value.
+ * @return String representation of the chip ID.
+ */
+constexpr std::string_view Tmc9660ChipIdToString(Tmc9660ChipId chipId) noexcept {
+    switch (chipId) {
+        case Tmc9660ChipId::TMC9660_CHIP_1: return "TMC9660_CHIP_1";
+        case Tmc9660ChipId::TMC9660_CHIP_2: return "TMC9660_CHIP_2";
+        case Tmc9660ChipId::TMC9660_CHIP_3: return "TMC9660_CHIP_3";
+        case Tmc9660ChipId::TMC9660_CHIP_4: return "TMC9660_CHIP_4";
+        case Tmc9660ChipId::TMC9660_CHIP_COUNT: return "TMC9660_CHIP_COUNT";
+        default: return "UNKNOWN_TMC9660_CHIP";
+    }
+}
+
+/**
+ * @brief Convert Tmc9660CommInterface enum to string.
+ * @param interface The TMC9660 communication interface enum value.
+ * @return String representation of the interface.
+ */
+constexpr std::string_view Tmc9660CommInterfaceToString(Tmc9660CommInterface interface) noexcept {
+    switch (interface) {
+        case Tmc9660CommInterface::TMC_COMM_SPI: return "TMC_COMM_SPI";
+        case Tmc9660CommInterface::TMC_COMM_UART: return "TMC_COMM_UART";
+        case Tmc9660CommInterface::TMC_COMM_COUNT: return "TMC_COMM_COUNT";
+        default: return "UNKNOWN_TMC_COMM_INTERFACE";
     }
 }
 

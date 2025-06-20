@@ -22,6 +22,9 @@
 #include "AdcData.h"
 #include "GpioData.h"
 
+// Motor controller systems
+#include "Tmc9660MotorController.h"
+
 // System initialization and configuration
 #include "SystemInit.h"
 #include "HardFocIntegration.h"
@@ -41,19 +44,20 @@
  * @brief Namespace containing all HardFOC component handler functionality.
  */
 namespace HardFocComponentHandler {
-    
-    // Type aliases for easy access
+      // Type aliases for easy access
     using AdcSystem = AdcData;
     using GpioSystem = GpioData;
+    using MotorController = Tmc9660MotorController;
     using SystemInitializer = SystemInit;
     using Integration = HardFocIntegration;
-    
-    // Commonly used types
+      // Commonly used types
     using AdcSensor = AdcInputSensor;
     using GpioPin = ::GpioPin;
     using AdcChip = ::AdcChip;
     using GpioChip = ::GpioChip;
     using TimeUnit = ::TimeUnit;
+    using Tmc9660ChipId = ::Tmc9660ChipId;
+    using Tmc9660CommInterface = ::Tmc9660CommInterface;
     
     // Multi-reading types
     template<uint8_t N>
@@ -83,12 +87,28 @@ namespace HardFocComponentHandler {
     inline bool IsHealthy() noexcept {
         return GetQuickHealthStatus();
     }
+      /**
+     * @brief Quick initialization function for the entire system.
+     * @return true if successful, false otherwise.
+     */
+    inline bool Initialize() noexcept {
+        return SystemInit::InitializeSystem() && InitializePrimaryTmc9660();
+    }
+    
+    /**
+     * @brief Quick health check function.
+     * @return true if system is healthy, false otherwise.
+     */
+    inline bool IsHealthy() noexcept {
+        return GetHardFocSystemStatus() && Tmc9660SystemHealthy();
+    }
     
     /**
      * @brief Quick periodic maintenance function.
      */
     inline void Maintain() noexcept {
         RunPeriodicSystemMaintenance();
+        GetTmc9660Controller().TestCommunication();
     }
     
     /**
@@ -98,13 +118,20 @@ namespace HardFocComponentHandler {
     inline AdcSystem& GetAdcSystem() noexcept {
         return AdcData::GetInstance();
     }
-    
-    /**
+      /**
      * @brief Get the GPIO system instance.
      * @return Reference to the GPIO system.
      */
     inline GpioSystem& GetGpioSystem() noexcept {
         return GpioData::GetInstance();
+    }
+    
+    /**
+     * @brief Get the motor controller system instance.
+     * @return Reference to the motor controller system.
+     */
+    inline MotorController& GetMotorController() noexcept {
+        return Tmc9660MotorController::GetInstance();
     }
     
     /**

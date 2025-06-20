@@ -20,8 +20,7 @@ enum class AdcInputSensor : uint8_t {
     ADC_INTERNAL_CH4,
     ADC_INTERNAL_CH5,
     ADC_INTERNAL_CH6,
-    
-    // External ADC channels (e.g., via SPI ADC chips)
+      // External ADC channels (e.g., via SPI ADC chips)
     ADC_EXTERNAL_CH0,
     ADC_EXTERNAL_CH1,
     ADC_EXTERNAL_CH2,
@@ -34,6 +33,11 @@ enum class AdcInputSensor : uint8_t {
     ADC_EXTERNAL_CH9,
     ADC_EXTERNAL_CH10,
     ADC_EXTERNAL_CH11,
+    
+    // TMC9660 specific ADC channels
+    ADC_TMC9660_AIN1,         ///< TMC9660 Analog Input 1
+    ADC_TMC9660_AIN2,         ///< TMC9660 Analog Input 2
+    ADC_TMC9660_AIN3,         ///< TMC9660 Analog Input 3
     
     // Motor control specific sensors
     ADC_MOTOR_CURRENT_PHASE_A,
@@ -125,8 +129,16 @@ enum class GpioPin : uint8_t {
     
     GPIO_CAN_TX,
     GPIO_CAN_RX,
+      GPIO_WS2812_DATA,
     
-    GPIO_WS2812_DATA,
+    // TMC9660 specific pins  
+    GPIO_TMC_GPIO17,          ///< TMC9660 GPIO17 (via PCAL95555)
+    GPIO_TMC_GPIO18,          ///< TMC9660 GPIO18 (via PCAL95555)
+    GPIO_TMC_nFAULT_STATUS,   ///< TMC9660 fault status (active low)
+    GPIO_TMC_DRV_EN,          ///< TMC9660 driver enable
+    GPIO_TMC_RST_CTRL,        ///< TMC9660 reset control
+    GPIO_TMC_SPI_COMM_nEN,    ///< TMC9660 SPI communication enable (active low)
+    GPIO_TMC_nWAKE_CTRL,      ///< TMC9660 wake control (active low)
     
     // Motor control pins
     GPIO_MOTOR_ENABLE,
@@ -155,6 +167,7 @@ enum class AdcChip : uint8_t {
     ADC_EXTERNAL_SPI_CHIP_1,
     ADC_EXTERNAL_SPI_CHIP_2,
     ADC_EXTERNAL_I2C_CHIP_1,
+    ADC_TMC9660_CHIP_1,          ///< TMC9660 integrated ADC
     ADC_CHIP_COUNT
 };
 
@@ -165,7 +178,28 @@ enum class GpioChip : uint8_t {
     GPIO_ESP32_INTERNAL = 0,
     GPIO_PCAL95555_CHIP_1,
     GPIO_PCAL95555_CHIP_2,
+    GPIO_TMC9660_CHIP_1,         ///< TMC9660 integrated GPIO
     GPIO_CHIP_COUNT
+};
+
+/**
+ * @brief Enumeration for TMC9660 chip instances.
+ */
+enum class Tmc9660ChipId : uint8_t {
+    TMC9660_CHIP_1 = 0,          ///< Primary TMC9660 on SPI0/UART0
+    TMC9660_CHIP_2,              ///< Secondary TMC9660 (future expansion)
+    TMC9660_CHIP_3,              ///< Third TMC9660 (future expansion)
+    TMC9660_CHIP_4,              ///< Fourth TMC9660 (future expansion)
+    TMC9660_CHIP_COUNT
+};
+
+/**
+ * @brief Communication interface types for TMC9660.
+ */
+enum class Tmc9660CommInterface : uint8_t {
+    TMC_COMM_SPI = 0,            ///< SPI communication
+    TMC_COMM_UART,               ///< UART communication
+    TMC_COMM_COUNT
 };
 
 /**

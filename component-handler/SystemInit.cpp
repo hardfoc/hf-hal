@@ -24,10 +24,15 @@ bool SystemInit::InitializeSystem() noexcept {
         console_error(TAG, "Failed to initialize GPIO system");
         return false;
     }
-    
-    // Initialize ADC system
+      // Initialize ADC system
     if (!InitializeAdcSystem()) {
         console_error(TAG, "Failed to initialize ADC system");
+        return false;
+    }
+    
+    // Initialize TMC9660 system
+    if (!InitializeTmc9660System()) {
+        console_error(TAG, "Failed to initialize TMC9660 system");
         return false;
     }
     
@@ -97,6 +102,28 @@ bool SystemInit::InitializeGpioSystem() noexcept {
     
     console_info(TAG, "GPIO system initialized with %d pins", 
                  gpioData.GetRegisteredPinCount());
+    
+    return true;
+}
+
+bool SystemInit::InitializeTmc9660System() noexcept {
+    console_info(TAG, "Initializing TMC9660 motor controller system");
+    
+    // Get the TMC9660 controller and ensure it's initialized
+    Tmc9660MotorController& tmcController = Tmc9660MotorController::GetInstance();
+    if (!tmcController.EnsureInitialized()) {
+        console_error(TAG, "Failed to initialize TMC9660 controller");
+        return false;
+    }
+    
+    // Initialize the primary TMC9660 chip
+    if (!InitializePrimaryTmc9660()) {
+        console_error(TAG, "Failed to initialize primary TMC9660 chip");
+        return false;
+    }
+    
+    console_info(TAG, "TMC9660 system initialized with %d chips", 
+                 tmcController.GetRegisteredChipCount());
     
     return true;
 }
