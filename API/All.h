@@ -6,47 +6,56 @@
  * @brief Master include file for the HardFOC component handler system.
  * 
  * This file includes all the necessary headers for the comprehensive
- * ADC and GPIO management system. Include this single header to get
- * access to all the functionality.
+ * ADC and multi-source GPIO management system. Include this single header 
+ * to get access to all functionality including ESP32-C6, PCAL95555, and 
+ * TMC9660 GPIO sources.
  */
 
 // Core data types and enums
-#include "../CommonIDs.h"
-#include "../ThingsToString.h"
+#include "../component-handler/CommonIDs.h"
+#include "../component-handler/ThingsToString.h"
 
 // Multi-reading support
-#include "../MultiReadings.h"
-#include "../AdcMultiCountReading.h"
+#include "../component-handler/MultiReadings.h"
+#include "../component-handler/AdcMultiCountReading.h"
 
 // Core data management systems
-#include "AdcData.h"
-#include "GpioData.h"
+#include "../component-handler/AdcData.h"
+#include "../component-handler/GpioData.h"
+#include "../component-handler/GpioHandler.h"// Comprehensive multi-source GPIO system
 
 // Motor controller systems
-#include "Tmc9660MotorController.h"
-
-// System initialization and configuration
-#include "SystemInit.h"
-#include "HardFocIntegration.h"
-
-// Legacy compatibility wrappers (deprecated)
-#include "../AdcHandler.h"
-#include "../GpioHandler.h"
+#include "../component-handler/Tmc9660MotorController.h"
+#include "../component-handler/Tmc9660Gpio.h"
 
 // GPIO expander support
-#include "../Pcal95555Gpio.h"
+#include "../component-handler/Pcal95555Gpio.h"
 
-// Hardware configuration
+// ESP32-C6 GPIO support
+#include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/Esp32C6Gpio.h"
+
+// System initialization and configuration
+#include "../component-handler/SystemInit.h"
+#include "../component-handler/HardFocIntegration.h"
+
+// Testing and validation
+#include "../component-handler/GpioSystemIntegrationTest.h"
+
+// Hardware configuration with safety validation
 #include "utils-and-drivers/hf-core-drivers/internal/hf-pincfg/include/hf_gpio_config.hpp"
-#include "utils-and-drivers/hf-core-drivers/internal/hf-pincfg/include/hf_ext_pins_enum.hpp"
+#include "../component-handler/hf_ext_pins_enum.hpp"
+
+// Legacy compatibility wrappers (deprecated but maintained)
+#include "../component-handler/AdcHandler.h"
+#include "../component-handler/GpioHandler.h"
 
 /**
  * @brief Namespace containing all HardFOC component handler functionality.
  */
 namespace HardFocComponentHandler {
-      // Type aliases for easy access
+    // Type aliases for easy access
     using AdcSystem = AdcData;
-    using GpioSystem = GpioData;
+    using GpioSystem = GpioDataNew;
     using MotorController = Tmc9660MotorController;
     using SystemInitializer = SystemInit;
     using Integration = HardFocIntegration;
@@ -117,13 +126,12 @@ namespace HardFocComponentHandler {
      */
     inline AdcSystem& GetAdcSystem() noexcept {
         return AdcData::GetInstance();
-    }
-      /**
+    }    /**
      * @brief Get the GPIO system instance.
      * @return Reference to the GPIO system.
      */
     inline GpioSystem& GetGpioSystem() noexcept {
-        return GpioData::GetInstance();
+        return GpioDataNew::GetInstance();
     }
     
     /**

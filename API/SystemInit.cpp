@@ -89,7 +89,7 @@ bool SystemInit::InitializeGpioSystem() noexcept {
     console_info(TAG, "Initializing GPIO system");
     
     // Get the GPIO data singleton and ensure it's initialized
-    GpioData& gpioData = GpioData::GetInstance();
+    GpioHandler& gpioData = GpioHandler::GetInstance();
     if (!gpioData.EnsureInitialized()) {
         console_error(TAG, "Failed to initialize GPIO data system");
         return false;
@@ -165,7 +165,7 @@ bool SystemInit::RegisterExpanderGpioPins() noexcept {
     }
     
     // Get GPIO data system
-    GpioData& gpioData = GpioData::GetInstance();
+    GpioHandler& gpioData = GpioHandler::GetInstance();
     
     // Create and configure the single PCAL95555 chip
     // The PCAL95555 chip wrapper will be created and managed internally
@@ -311,7 +311,7 @@ bool SystemInit::RunSystemSelfTest() noexcept {
     bool testPassed = true;
     
     // Test GPIO system
-    GpioData& gpioData = GpioData::GetInstance();
+    GpioHandler& gpioData = GpioHandler::GetInstance();
     if (!gpioData.RunGpioTest()) {
         console_error(TAG, "GPIO system test failed");
         testPassed = false;
@@ -339,7 +339,7 @@ bool SystemInit::GetSystemHealth() noexcept {
     bool systemHealthy = true;
     
     // Check GPIO system health
-    GpioData& gpioData = GpioData::GetInstance();
+    GpioHandler& gpioData = GpioHandler::GetInstance();
     if (!gpioData.GetSystemHealth()) {
         console_warning(TAG, "GPIO system health check failed");
         systemHealthy = false;
@@ -365,7 +365,7 @@ void SystemInit::PrintSystemStatus() noexcept {
     console_info(TAG, "=== HardFOC System Status ===");
     
     // GPIO system status
-    GpioData& gpioData = GpioData::GetInstance();
+    GpioHandler& gpioData = GpioHandler::GetInstance();
     console_info(TAG, "GPIO System: %d pins registered, Health: %s",
                  gpioData.GetRegisteredPinCount(),
                  gpioData.GetSystemHealth() ? "OK" : "DEGRADED");

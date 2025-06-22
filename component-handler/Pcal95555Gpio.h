@@ -1,7 +1,7 @@
 #ifndef COMPONENT_HANDLER_PCAL95555GPIO_H_
 #define COMPONENT_HANDLER_PCAL95555GPIO_H_
 
-#include "GpioHandler.h"
+#include "CommonIDs.h"
 #include "PCAL95555.hpp"
 #include "DigitalGpio.h"
 #include "SfI2cBus.h"
@@ -11,7 +11,17 @@
 /**
  * @file Pcal95555Gpio.h
  * @brief Wrapper classes to integrate the PCAL95555 GPIO expander with the
- *        internal SfI2cBus driver and GpioHandler aggregation.
+ *        internal SfI2cBus driver and GpioData system.
+ * 
+ * This file provides comprehensive integration for a single PCAL95555 GPIO 
+ * expander chip, providing 16 additional GPIO pins via I2C communication.
+ * 
+ * Features:
+ * - Single PCAL95555 chip support (address 0x20)
+ * - Thread-safe I2C communication via SfI2cBus
+ * - Full DigitalGpio interface compatibility
+ * - Automatic error handling and recovery
+ * - Pin direction and state management
  */
 
 /**
@@ -109,16 +119,23 @@ public:
             Pcal95555Pin(device_, 14, ActiveState::High),
             Pcal95555Pin(device_, 15, ActiveState::High),
         } {}
+  /**
+   * @brief Register all PCAL95555 pins with the GpioData system.
+   * @return true if all pins registered successfully, false otherwise
+   */
+  bool RegisterAllPins() noexcept;
 
-  template <std::size_t N>
-  bool RegisterAll(GpioHandler<N> &handler,
-                   const std::array<std::string_view, kPinCount> &names) {
-    bool ok = true;
-    for (std::size_t i = 0; i < kPinCount; ++i) {
-      ok &= handler.RegisterPin(names[i], pins_[i]);
-    }
-    return ok;
-  }
+  /**
+   * @brief Initialize the PCAL95555 device.
+   * @return true if initialization successful, false otherwise
+   */
+  bool Initialize() noexcept;
+
+  /**
+   * @brief Check if the PCAL95555 device is communicating.
+   * @return true if device responds, false otherwise
+   */
+  bool IsHealthy() noexcept;
 
   PCAL95555 &Device() noexcept { return device_; }
   Pcal95555Pin &Pin(std::size_t i) noexcept { return pins_[i]; }

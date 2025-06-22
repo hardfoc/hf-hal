@@ -33,7 +33,7 @@ public:
    * @brief Access the singleton instance.
    * @deprecated Use AdcData::GetInstance() instead.
    */
-  static AdcHandler &Instance() noexcept {
+  static AdcHandler &GetInstance() noexcept {
     static AdcHandler inst;
     return inst;
   }
@@ -74,60 +74,47 @@ public:
    */
   bool RegisterChannel(std::string_view name, BaseAdc &adc,
                        uint8_t channel) noexcept;
-
   /**
    * @brief Read channel voltage.
    * @deprecated Use AdcData::GetVolt() instead.
    */
-  BaseAdc::AdcErr ReadChannelV(std::string_view name, float &v,
-                               uint8_t samples = 1,
-                               uint32_t delay_ms = 0) noexcept;
+  HfAdcErr ReadChannelV(std::string_view name, float &v,
+                        uint8_t samples = 1,
+                        uint32_t delay_ms = 0) noexcept;
 
   /**
    * @brief Read channel count.
    * @deprecated Use AdcData::GetCount() instead.
    */
-  BaseAdc::AdcErr ReadChannelCount(std::string_view name, uint32_t &count,
-                                   uint8_t samples = 1,
-                                   uint32_t delay_ms = 0) noexcept;
+  HfAdcErr ReadChannelCount(std::string_view name, uint32_t &count,
+                            uint8_t samples = 1,
+                            uint32_t delay_ms = 0) noexcept;
 
   /**
    * @brief Read channel count and voltage.
    * @deprecated Use AdcData::GetCountAndVolt() instead.
    */
-  BaseAdc::AdcErr ReadChannel(std::string_view name, uint32_t &count, float &v,
-                              uint8_t samples = 1,
-                              uint32_t delay_ms = 0) noexcept;
+  HfAdcErr ReadChannel(std::string_view name, uint32_t &count, float &v,
+                       uint8_t samples = 1,
+                       uint32_t delay_ms = 0) noexcept;
 
 private:
   AdcHandler() = default;
-
   /**
    * @brief Initialize ESP32-C6 internal ADC units.
    * @return true if successful, false otherwise.
    */
   bool InitializeEsp32C6Adcs() noexcept {
     try {
-      // Create ESP32-C6 ADC Unit 1 (typically used for analog inputs)
+      // Create ESP32-C6 ADC Unit 1 (only ADC1 is available on ESP32-C6)
       esp32c6_adc1_ = std::make_unique<Esp32C6Adc>(
         ADC_UNIT_1, 
         ADC_ATTEN_DB_11,  // 0-3.1V range
         ADC_BITWIDTH_12   // 12-bit resolution
       );
 
-      // Create ESP32-C6 ADC Unit 2 (if needed for additional channels)
-      esp32c6_adc2_ = std::make_unique<Esp32C6Adc>(
-        ADC_UNIT_2,
-        ADC_ATTEN_DB_11,  // 0-3.1V range  
-        ADC_BITWIDTH_12   // 12-bit resolution
-      );
-
-      // Initialize the ADC units
+      // Initialize the ADC unit
       if (!esp32c6_adc1_->Initialize()) {
-        return false;
-      }
-
-      if (!esp32c6_adc2_->Initialize()) {
         return false;
       }
 
@@ -136,7 +123,6 @@ private:
       return false;
     }
   }
-
   /**
    * @brief Register ESP32-C6 ADC channels with the ADC system.
    * @return true if successful, false otherwise.
@@ -150,14 +136,8 @@ private:
       success &= RegisterAdc1Channels(adcData);
     }
 
-    // Register ADC2 channels (ADC2_CHANNEL_0 through ADC2_CHANNEL_5)  
-    if (esp32c6_adc2_) {
-      success &= RegisterAdc2Channels(adcData);
-    }
-
     return success;
   }
-
   /**
    * @brief Register ESP32-C6 ADC Unit 1 channels.
    * @param adcData Reference to ADC data system.
@@ -178,37 +158,12 @@ private:
     }};
 
     for (const auto& [sensor, channel] : adc1Channels) {
-      success &= adcData.RegisterAdcChannel(sensor, *esp32c6_adc1_, channel);
+      HfAdcErr result = adcData.RegisterAdcChannel(sensor, *esp32c6_adc1_, channel);
+      success &= (result == HfAdcErr::ADC_SUCCESS);
     }
 
     return success;
   }
-
-  /**
-   * @brief Register ESP32-C6 ADC Unit 2 channels.
-   * @param adcData Reference to ADC data system.
-   * @return true if successful, false otherwise.
-   */
-  bool RegisterAdc2Channels(AdcData& adcData) noexcept {
-    bool success = true;
-
-    // ESP32-C6 ADC2 has channels 0-5
-    const std::array<std::pair<AdcInputSensor, uint8_t>, 6> adc2Channels = {{
-      {AdcInputSensor::ADC_INTERNAL_CH7, 0},   // Map to ADC2_CHANNEL_0
-      {AdcInputSensor::ADC_INTERNAL_CH8, 1},   // Map to ADC2_CHANNEL_1
-      {AdcInputSensor::ADC_INTERNAL_CH9, 2},   // Map to ADC2_CHANNEL_2
-      {AdcInputSensor::ADC_INTERNAL_CH10, 3},  // Map to ADC2_CHANNEL_3
-      {AdcInputSensor::ADC_INTERNAL_CH11, 4},  // Map to ADC2_CHANNEL_4
-      {AdcInputSensor::ADC_INTERNAL_CH12, 5}   // Map to ADC2_CHANNEL_5
-    }};
-
-    for (const auto& [sensor, channel] : adc2Channels) {
-      success &= adcData.RegisterAdcChannel(sensor, *esp32c6_adc2_, channel);
-    }
-
-    return success;
-  }
-
   ChannelInfo *Find(std::string_view name) noexcept {
     for (std::size_t i = 0; i < count_; ++i)
       if (channels_[i].name == name)
@@ -225,11 +180,9 @@ private:
 
   std::array<ChannelInfo, N> channels_{};
   std::size_t count_ = 0;
-  
-  // ESP32-C6 ADC management
+    // ESP32-C6 ADC management
   bool initialized_ = false;                          ///< Initialization status
-  std::unique_ptr<Esp32C6Adc> esp32c6_adc1_;        ///< ESP32-C6 ADC Unit 1
-  std::unique_ptr<Esp32C6Adc> esp32c6_adc2_;        ///< ESP32-C6 ADC Unit 2
+  std::unique_ptr<Esp32C6Adc> esp32c6_adc1_;        ///< ESP32-C6 ADC Unit 1 (only ADC1 exists)
 };
 
 template <std::size_t N>
@@ -237,13 +190,13 @@ bool AdcHandler<N>::RegisterChannel(std::string_view name, BaseAdc &adc,
                                     uint8_t channel) noexcept {
   if (count_ >= N)
     return false;
-    
-  // Map the name to a sensor ID
+      // Map the name to a sensor ID
   AdcInputSensor sensor = MapNameToSensor(name);
   
   // Register with the new AdcData system
   AdcData& adcData = AdcData::GetInstance();
-  if (!adcData.RegisterAdcChannel(sensor, adc, channel)) {
+  HfAdcErr result = adcData.RegisterAdcChannel(sensor, adc, channel);
+  if (result != HfAdcErr::ADC_SUCCESS) {
     return false;
   }
   
@@ -253,45 +206,39 @@ bool AdcHandler<N>::RegisterChannel(std::string_view name, BaseAdc &adc,
 }
 
 template <std::size_t N>
-BaseAdc::AdcErr AdcHandler<N>::ReadChannelV(std::string_view name, float &v,
-                                            uint8_t samples,
-                                            uint32_t delay_ms) noexcept {
+HfAdcErr AdcHandler<N>::ReadChannelV(std::string_view name, float &v,
+                                     uint8_t samples,
+                                     uint32_t delay_ms) noexcept {
   auto info = Find(name);
   if (!info)
-    return BaseAdc::AdcErr::ADC_ERR_CHANNEL_NOT_FOUND;
+    return HfAdcErr::ADC_ERR_CHANNEL_NOT_FOUND;
     
   AdcData& adcData = AdcData::GetInstance();
-  bool success = adcData.GetVolt(info->sensor, v, samples, delay_ms, TimeUnit::TIME_UNIT_MS);
-  
-  return success ? BaseAdc::AdcErr::ADC_SUCCESS : BaseAdc::AdcErr::ADC_ERR_CHANNEL_READ_ERR;
+  return adcData.GetVolt(info->sensor, v, samples, delay_ms, TimeUnit::TIME_UNIT_MS);
 }
 
 template <std::size_t N>
-BaseAdc::AdcErr
+HfAdcErr
 AdcHandler<N>::ReadChannelCount(std::string_view name, uint32_t &count,
                                 uint8_t samples, uint32_t delay_ms) noexcept {
   auto info = Find(name);
   if (!info)
-    return BaseAdc::AdcErr::ADC_ERR_CHANNEL_NOT_FOUND;
+    return HfAdcErr::ADC_ERR_CHANNEL_NOT_FOUND;
     
   AdcData& adcData = AdcData::GetInstance();
-  bool success = adcData.GetCount(info->sensor, count, samples, delay_ms, TimeUnit::TIME_UNIT_MS);
-  
-  return success ? BaseAdc::AdcErr::ADC_SUCCESS : BaseAdc::AdcErr::ADC_ERR_CHANNEL_READ_ERR;
+  return adcData.GetCount(info->sensor, count, samples, delay_ms, TimeUnit::TIME_UNIT_MS);
 }
 
 template <std::size_t N>
-BaseAdc::AdcErr
+HfAdcErr
 AdcHandler<N>::ReadChannel(std::string_view name, uint32_t &count, float &v,
                            uint8_t samples, uint32_t delay_ms) noexcept {
   auto info = Find(name);
   if (!info)
-    return BaseAdc::AdcErr::ADC_ERR_CHANNEL_NOT_FOUND;
+    return HfAdcErr::ADC_ERR_CHANNEL_NOT_FOUND;
     
   AdcData& adcData = AdcData::GetInstance();
-  bool success = adcData.GetCountAndVolt(info->sensor, count, v, samples, delay_ms, TimeUnit::TIME_UNIT_MS);
-  
-  return success ? BaseAdc::AdcErr::ADC_SUCCESS : BaseAdc::AdcErr::ADC_ERR_CHANNEL_READ_ERR;
+  return adcData.GetCountAndVolt(info->sensor, count, v, samples, delay_ms, TimeUnit::TIME_UNIT_MS);
 }
 
 template <std::size_t N>
@@ -305,7 +252,6 @@ AdcInputSensor AdcHandler<N>::MapNameToSensor(std::string_view name) noexcept {
   if (name == "motor_temp") return AdcInputSensor::ADC_MOTOR_TEMPERATURE;
   if (name == "system_3v3") return AdcInputSensor::ADC_SYSTEM_VOLTAGE_3V3;
   if (name == "system_5v") return AdcInputSensor::ADC_SYSTEM_VOLTAGE_5V;
-  if (name == "system_12v") return AdcInputSensor::ADC_SYSTEM_VOLTAGE_12V;
   if (name == "system_temp") return AdcInputSensor::ADC_SYSTEM_TEMPERATURE;
   if (name == "user_input_1") return AdcInputSensor::ADC_USER_INPUT_1;
   if (name == "user_input_2") return AdcInputSensor::ADC_USER_INPUT_2;

@@ -81,12 +81,24 @@ bool SystemInit::InitializeAdcSystem() noexcept {
 }
 
 bool SystemInit::InitializeGpioSystem() noexcept {
-    console_info(TAG, "Initializing GPIO system");
+    console_info(TAG, "Initializing comprehensive GPIO system");
     
-    // Get the GPIO data singleton and ensure it's initialized
-    GpioData& gpioData = GpioData::GetInstance();
-    if (!gpioData.EnsureInitialized()) {
-        console_error(TAG, "Failed to initialize GPIO data system");
+    // Ensure I2C bus is available
+    if (!g_i2cBus) {
+        console_error(TAG, "I2C bus not initialized - cannot initialize GPIO system");
+        return false;
+    }
+    
+    // Get TMC9660 controller instance
+    Tmc9660MotorController& tmcController = Tmc9660MotorController::GetInstance();
+    if (!tmcController.EnsureInitialized()) {
+        console_warning(TAG, "TMC9660 controller not initialized - GPIO will work with limited functionality");
+    }
+    
+    // Get the new GPIO data system and initialize with dependencies
+    GpioHandler& gpioData = GpioHandler::GetInstance();
+    if (!gpioData.Initialize(*g_i2cBus, tmcController)) {
+        console_error(TAG, "Failed to initialize comprehensive GPIO data system");
         return false;
     }
     
@@ -107,7 +119,7 @@ bool SystemInit::InitializeGpioSystem() noexcept {
         console_warning(TAG, "Failed to map some functional pins");
     }
     
-    console_info(TAG, "GPIO system initialized with %d pins", 
+    console_info(TAG, "Comprehensive GPIO system initialized with %d pins", 
                  gpioData.GetRegisteredPinCount());
     
     return true;
@@ -280,11 +292,10 @@ bool SystemInit::InitializeI2cBus() noexcept {
 
 bool SystemInit::RunSystemSelfTest() noexcept {
     console_info(TAG, "Running system self-test");
-    
-    bool testPassed = true;
+      bool testPassed = true;
     
     // Test GPIO system
-    GpioData& gpioData = GpioData::GetInstance();
+    GpioHandler& gpioData = GpioHandler::GetInstance();
     if (!gpioData.RunGpioTest()) {
         console_error(TAG, "GPIO system test failed");
         testPassed = false;
@@ -306,7 +317,7 @@ bool SystemInit::GetSystemHealth() noexcept {
     bool systemHealthy = true;
     
     // Check GPIO system health
-    GpioData& gpioData = GpioData::GetInstance();
+    GpioHandler& gpioData = GpioHandler::GetInstance();
     if (!gpioData.GetSystemHealth()) {
         console_warning(TAG, "GPIO system health check failed");
         systemHealthy = false;
@@ -326,7 +337,7 @@ void SystemInit::PrintSystemStatus() noexcept {
     console_info(TAG, "=== HardFOC System Status ===");
     
     // GPIO system status
-    GpioData& gpioData = GpioData::GetInstance();
+    GpioHandler& gpioData = GpioHandler::GetInstance();
     console_info(TAG, "GPIO System: %d pins registered, Health: %s",
                  gpioData.GetRegisteredPinCount(),
                  gpioData.GetSystemHealth() ? "OK" : "DEGRADED");

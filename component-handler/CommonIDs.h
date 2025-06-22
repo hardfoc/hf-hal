@@ -10,22 +10,18 @@
 
 /**
  * @brief Enumeration for ADC input sensors/channels.
+ * @note ESP32-C6 only has ADC1 with channels 0-6 (7 channels total)
+ *       GPIO0-GPIO6 are mapped to ADC1_CHANNEL_0 through ADC1_CHANNEL_6
  */
 enum class AdcInputSensor : uint8_t {
-    // ESP32-C6 Internal ADC channels (ADC1: 0-6, ADC2: 0-5 mapped to 7-12)
-    ADC_INTERNAL_CH0 = 0,
-    ADC_INTERNAL_CH1,
-    ADC_INTERNAL_CH2,
-    ADC_INTERNAL_CH3,
-    ADC_INTERNAL_CH4,
-    ADC_INTERNAL_CH5,
-    ADC_INTERNAL_CH6,
-    ADC_INTERNAL_CH7,    // ADC2_CHANNEL_0
-    ADC_INTERNAL_CH8,    // ADC2_CHANNEL_1
-    ADC_INTERNAL_CH9,    // ADC2_CHANNEL_2
-    ADC_INTERNAL_CH10,   // ADC2_CHANNEL_3
-    ADC_INTERNAL_CH11,   // ADC2_CHANNEL_4
-    ADC_INTERNAL_CH12,   // ADC2_CHANNEL_5
+    // ESP32-C6 Internal ADC1 channels (only ADC1 exists, channels 0-6)
+    ADC_INTERNAL_CH0 = 0,    // GPIO0 -> ADC1_CHANNEL_0
+    ADC_INTERNAL_CH1,        // GPIO1 -> ADC1_CHANNEL_1  
+    ADC_INTERNAL_CH2,        // GPIO2 -> ADC1_CHANNEL_2
+    ADC_INTERNAL_CH3,        // GPIO3 -> ADC1_CHANNEL_3
+    ADC_INTERNAL_CH4,        // GPIO4 -> ADC1_CHANNEL_4
+    ADC_INTERNAL_CH5,        // GPIO5 -> ADC1_CHANNEL_5
+    ADC_INTERNAL_CH6,        // GPIO6 -> ADC1_CHANNEL_6
     
     // TMC9660 Motor Controller ADC channels (3 channels for current sensing)
     ADC_TMC9660_CURRENT_A,
@@ -33,10 +29,17 @@ enum class AdcInputSensor : uint8_t {
     ADC_TMC9660_CURRENT_C,
     
     // System monitoring channels (mapped to internal ADC channels)
-    ADC_SYSTEM_VOLTAGE_3V3,
-    ADC_SYSTEM_VOLTAGE_5V,
-    ADC_SYSTEM_TEMPERATURE,
-    ADC_SYSTEM_VREF,
+    ADC_SYSTEM_VOLTAGE_3V3,  // Mapped to one of the internal channels
+    ADC_SYSTEM_VOLTAGE_5V,   // Mapped to one of the internal channels
+    ADC_SYSTEM_TEMPERATURE,  // Mapped to one of the internal channels
+    ADC_SYSTEM_VREF,         // Internal voltage reference
+    
+    // Motor current sensing (aliases for TMC9660 or mapped to internal ADC)
+    ADC_MOTOR_CURRENT_PHASE_A = ADC_TMC9660_CURRENT_A,
+    ADC_MOTOR_CURRENT_PHASE_B = ADC_TMC9660_CURRENT_B,
+    ADC_MOTOR_CURRENT_PHASE_C = ADC_TMC9660_CURRENT_C,
+    ADC_MOTOR_VOLTAGE_BUS,   // Motor bus voltage
+    ADC_MOTOR_TEMPERATURE,   // Motor temperature sensor
     
     // User expansion (if needed)
     ADC_USER_INPUT_1,

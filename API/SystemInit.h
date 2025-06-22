@@ -2,7 +2,7 @@
 #define COMPONENT_HANDLER_SYSTEM_INIT_H_
 
 #include "AdcData.h"
-#include "GpioData.h"
+#include "GpioHandler.h"
 #include "../CommonIDs.h"
 #include "utils-and-drivers/hf-core-drivers/internal/hf-pincfg/include/hf_gpio_config.hpp"
 #include "utils-and-drivers/hf-core-drivers/internal/hf-pincfg/include/hf_ext_pins_enum.hpp"

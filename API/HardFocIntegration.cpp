@@ -61,40 +61,37 @@ void HardFocIntegration::DemoAdcUsage() noexcept {
     console_info(TAG, "ADC demo completed");
 }
 
-void HardFocIntegration::DemoGpioUsage() noexcept {
-    if (!IsSystemInitialized()) return;
+void HardFocIntegration::DemoGpioUsage() noexcept {    if (!IsSystemInitialized()) return;
+      console_info(TAG, "=== GPIO Usage Demo ===");
     
-    console_info(TAG, "=== GPIO Usage Demo ===");
-    
-    GpioData& gpioData = GpioData::GetInstance();
-    
-    // Set motor enable pin
-    if (gpioData.SetActive(GpioPin::GPIO_MOTOR_ENABLE)) {
+    GpioHandler& gpioHandler = GpioHandler::GetInstance();
+      // Set motor enable pin
+    if (gpioHandler.SetActive(GpioPin::GPIO_MOTOR_ENABLE)) {
         console_info(TAG, "Motor enabled");
     }
     
     os_delay_msec(1000);
     
     // Toggle status LED
-    if (gpioData.Toggle(GpioPin::GPIO_LED_STATUS)) {
+    if (gpioHandler.Toggle(GpioPin::GPIO_LED_STATUS)) {
         console_info(TAG, "Status LED toggled");
     }
     
     // Check if motor fault is active
-    if (gpioData.IsActive(GpioPin::GPIO_MOTOR_FAULT)) {
+    if (gpioHandler.IsActive(GpioPin::GPIO_MOTOR_FAULT)) {
         console_warning(TAG, "Motor fault detected!");
     }
     
     // Set motor brake
-    if (gpioData.SetActive(GpioPin::GPIO_MOTOR_BRAKE)) {
+    if (gpioHandler.SetActive(GpioPin::GPIO_MOTOR_BRAKE)) {
         console_info(TAG, "Motor brake applied");
     }
     
     os_delay_msec(500);
     
     // Release brake and disable motor
-    gpioData.SetInactive(GpioPin::GPIO_MOTOR_BRAKE);
-    gpioData.SetInactive(GpioPin::GPIO_MOTOR_ENABLE);
+    gpioHandler.SetInactive(GpioPin::GPIO_MOTOR_BRAKE);
+    gpioHandler.SetInactive(GpioPin::GPIO_MOTOR_ENABLE);
     
     console_info(TAG, "GPIO demo completed");
 }
@@ -133,10 +130,9 @@ void HardFocIntegration::DemoMultiChannelAdc() noexcept {
 
 void HardFocIntegration::DemoMultiPinGpio() noexcept {
     if (!IsSystemInitialized()) return;
+      console_info(TAG, "=== Multi-Pin GPIO Demo ===");
     
-    console_info(TAG, "=== Multi-Pin GPIO Demo ===");
-    
-    GpioData& gpioData = GpioData::GetInstance();
+    GpioHandler& gpioData = GpioHandler::GetInstance();
     
     // Set multiple LEDs active
     std::vector<GpioPin> leds = {
@@ -144,7 +140,7 @@ void HardFocIntegration::DemoMultiPinGpio() noexcept {
         GpioPin::GPIO_LED_COMM
     };
     
-    if (gpioData.SetMultipleActive(leds)) {
+    if (gpioHandler.SetMultipleActive(leds)) {
         console_info(TAG, "Multiple LEDs activated");
     }
     
@@ -159,7 +155,7 @@ void HardFocIntegration::DemoMultiPinGpio() noexcept {
     
     // Pattern: 101 (status and comm on, error off)
     uint32_t pattern = 0b101;
-    if (gpioData.SetPinPattern(ledPins, pattern)) {
+    if (gpioHandler.SetPinPattern(ledPins, pattern)) {
         console_info(TAG, "LED pattern set: 0x%02lX", pattern);
     }
     
@@ -167,12 +163,12 @@ void HardFocIntegration::DemoMultiPinGpio() noexcept {
     
     // Read pin pattern
     uint32_t readPattern;
-    if (gpioData.GetPinPattern(ledPins, readPattern)) {
+    if (gpioHandler.GetPinPattern(ledPins, readPattern)) {
         console_info(TAG, "Current LED pattern: 0x%02lX", readPattern);
     }
     
     // Turn off all LEDs
-    gpioData.SetMultipleInactive(ledPins);
+    gpioHandler.SetMultipleInactive(ledPins);
     
     console_info(TAG, "Multi-pin GPIO demo completed");
 }
@@ -186,8 +182,8 @@ void HardFocIntegration::RunSystemDiagnostics() noexcept {
     SystemInit::PrintSystemStatus();
     
     // Run GPIO test
-    GpioData& gpioData = GpioData::GetInstance();
-    if (gpioData.RunGpioTest()) {
+    GpioHandler& gpioData = GpioHandler::GetInstance();
+    if (gpioHandler.RunGpioTest()) {
         console_info(TAG, "GPIO diagnostics: PASS");
     } else {
         console_error(TAG, "GPIO diagnostics: FAIL");
@@ -213,11 +209,11 @@ void HardFocIntegration::RunSystemDiagnostics() noexcept {
 void HardFocIntegration::UpdateStatusLeds() noexcept {
     if (!IsSystemInitialized()) return;
     
-    GpioData& gpioData = GpioData::GetInstance();
+    GpioHandler& gpioData = GpioHandler::GetInstance();
     
     // Get system health
     bool systemHealthy = GetHardFocSystemStatus();
-    bool gpioHealthy = gpioData.GetSystemHealth();
+    bool gpioHealthy = gpioHandler.GetSystemHealth();
     
     AdcData& adcData = AdcData::GetInstance();
     bool adcHealthy = adcData.EnsureInitialized();
@@ -227,7 +223,7 @@ void HardFocIntegration::UpdateStatusLeds() noexcept {
     bool errorLed = !systemHealthy || !gpioHealthy || !adcHealthy;
     bool commLed = true; // Assume communication is working if we can toggle LEDs
     
-    gpioData.SetLedStatus(
+    gpioHandler.SetLedStatus(
         GpioPin::GPIO_LED_STATUS,
         GpioPin::GPIO_LED_ERROR,
         GpioPin::GPIO_LED_COMM,
@@ -257,20 +253,20 @@ bool HardFocIntegration::ReadMotorSensors(float& current_a, float& current_b, fl
 bool HardFocIntegration::SetMotorControl(bool enable, bool brake) noexcept {
     if (!IsSystemInitialized()) return false;
     
-    GpioData& gpioData = GpioData::GetInstance();
+    GpioHandler& gpioData = GpioHandler::GetInstance();
     
     bool success = true;
     
     if (enable) {
-        success &= gpioData.SetActive(GpioPin::GPIO_MOTOR_ENABLE);
+        success &= gpioHandler.SetActive(GpioPin::GPIO_MOTOR_ENABLE);
     } else {
-        success &= gpioData.SetInactive(GpioPin::GPIO_MOTOR_ENABLE);
+        success &= gpioHandler.SetInactive(GpioPin::GPIO_MOTOR_ENABLE);
     }
     
     if (brake) {
-        success &= gpioData.SetActive(GpioPin::GPIO_MOTOR_BRAKE);
+        success &= gpioHandler.SetActive(GpioPin::GPIO_MOTOR_BRAKE);
     } else {
-        success &= gpioData.SetInactive(GpioPin::GPIO_MOTOR_BRAKE);
+        success &= gpioHandler.SetInactive(GpioPin::GPIO_MOTOR_BRAKE);
     }
     
     return success;

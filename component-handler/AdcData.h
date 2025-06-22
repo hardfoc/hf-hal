@@ -6,9 +6,9 @@
 #include <atomic>
 #include <mutex>
 
-#include "../CommonIDs.h"
-#include "../ThingsToString.h"
-#include "../AdcMultiCountReading.h"
+#include "CommonIDs.h"
+#include "ThingsToString.h"
+#include "AdcMultiCountReading.h"
 #include "BaseAdc.h"
 
 /**
@@ -16,19 +16,41 @@
  * @brief Comprehensive ADC data management for the HardFOC system.
  * 
  * This class provides a unified interface for all ADC operations in the system,
- * supporting both internal ESP32-C6 ADC and external ADC chips.
+ * supporting both internal ADC and external ADC chips.
  */
 
 /**
  * @brief Structure containing ADC channel information.
  */
 struct AdcInfo {
-    AdcInputSensor sensor;        ///< Sensor identifier
+    AdcInputSensor sensor;       ///< Sensor identifier
     BaseAdc& adc;                ///< Reference to the ADC driver
     uint8_t channel;             ///< Hardware channel number
+    bool isValid;                ///< Validity flag
     
-    AdcInfo(AdcInputSensor s, BaseAdc& a, uint8_t ch) 
-        : sensor(s), adc(a), channel(ch) {}
+    AdcInfo() = delete;  // Force explicit construction
+    
+    AdcInfo(AdcInputSensor s, BaseAdc& a, uint8_t ch) noexcept
+        : sensor(s), adc(a), channel(ch), isValid(true) {}
+    
+    // Copy constructor
+    AdcInfo(const AdcInfo& other) noexcept
+        : sensor(other.sensor), adc(other.adc), channel(other.channel), isValid(other.isValid) {}
+    
+    // Assignment operator
+    AdcInfo& operator=(const AdcInfo& other) noexcept {
+        if (this != &other) {
+            sensor = other.sensor;
+            // Note: Cannot reassign reference, so we assume adc compatibility
+            channel = other.channel;
+            isValid = other.isValid;
+        }
+        return *this;
+    }
+    
+    // Move operations (default is fine since we have a reference member)
+    AdcInfo(AdcInfo&&) = delete;
+    AdcInfo& operator=(AdcInfo&&) = delete;
 };
 
 /**
@@ -43,18 +65,27 @@ struct AdcInputSensorReadSpec {
     uint8_t numberOfSuccessfulReadings;
     
     /// Constructor to initialize the struct
-    AdcInputSensorReadSpec(AdcInputSensor sensorArg, uint8_t samplesPerReadings)
+    explicit AdcInputSensorReadSpec(AdcInputSensor sensorArg, uint8_t samplesPerReadings = 1) noexcept
         : sensor(sensorArg),
           numberOfSampleToAvgPerReadings(samplesPerReadings),
           channelAvgReadingCountStorage(0U),
           channelAvgReadingVoltageStorage(0.0F),
           numberOfSuccessfulReadings(0U)
-    {}
+    {
+        // Validate input parameters
+        if (samplesPerReadings == 0) {
+            numberOfSampleToAvgPerReadings = 1;  // Safe default
+        }
+    }
     
-    void Reset() {
+    void Reset() noexcept {
         channelAvgReadingCountStorage = 0U;
         channelAvgReadingVoltageStorage = 0.0F;
         numberOfSuccessfulReadings = 0U;
+    }
+    
+    [[nodiscard]] bool IsValid() const noexcept {
+        return numberOfSampleToAvgPerReadings > 0;
     }
 };
 
@@ -87,8 +118,7 @@ public:
      * @return true if initialization successful, false otherwise.
      */
     bool EnsureInitialized() noexcept;
-    
-    //=====================================================================//
+      //=====================================================================//
     /// SINGLE SENSOR READERS
     //=====================================================================//
     
@@ -99,12 +129,12 @@ public:
      * @param num_of_samples_to_avg Number of samples to average (default 1).
      * @param timeBetweenSamples Time between samples in milliseconds (default 0).
      * @param timeUnit Time unit for the delay (default milliseconds).
-     * @return true if successful, false otherwise.
+     * @return HfAdcErr error code.
      */
-    bool GetCount(AdcInputSensor sensor, uint32_t& count, 
-                  uint8_t num_of_samples_to_avg = 1, 
-                  uint32_t timeBetweenSamples = 0, 
-                  TimeUnit timeUnit = TimeUnit::TIME_UNIT_MS) noexcept;
+    [[nodiscard]] HfAdcErr GetCount(AdcInputSensor sensor, uint32_t& count, 
+                                    uint8_t num_of_samples_to_avg = 1, 
+                                    uint32_t timeBetweenSamples = 0, 
+                                    TimeUnit timeUnit = TimeUnit::TIME_UNIT_MS) noexcept;
     
     /**
      * @brief Get ADC voltage from a sensor.
@@ -113,12 +143,12 @@ public:
      * @param num_of_samples_to_avg Number of samples to average (default 1).
      * @param timeBetweenSamples Time between samples in milliseconds (default 0).
      * @param timeUnit Time unit for the delay (default milliseconds).
-     * @return true if successful, false otherwise.
+     * @return HfAdcErr error code.
      */
-    bool GetVolt(AdcInputSensor sensor, float& adc_volts, 
-                 uint8_t num_of_samples_to_avg = 1, 
-                 uint32_t timeBetweenSamples = 0, 
-                 TimeUnit timeUnit = TimeUnit::TIME_UNIT_MS) noexcept;
+    [[nodiscard]] HfAdcErr GetVolt(AdcInputSensor sensor, float& adc_volts, 
+                                   uint8_t num_of_samples_to_avg = 1, 
+                                   uint32_t timeBetweenSamples = 0, 
+                                   TimeUnit timeUnit = TimeUnit::TIME_UNIT_MS) noexcept;
     
     /**
      * @brief Get both ADC count and voltage from a sensor.
@@ -128,14 +158,13 @@ public:
      * @param num_of_samples_to_avg Number of samples to average (default 1).
      * @param timeBetweenSamples Time between samples in milliseconds (default 0).
      * @param timeUnit Time unit for the delay (default milliseconds).
-     * @return true if successful, false otherwise.
+     * @return HfAdcErr error code.
      */
-    bool GetCountAndVolt(AdcInputSensor sensor, uint32_t& count, float& adc_volts,
-                         uint8_t num_of_samples_to_avg = 1, 
-                         uint32_t timeBetweenSamples = 0,
-                         TimeUnit timeUnit = TimeUnit::TIME_UNIT_MS) noexcept;
-    
-    //=====================================================================//
+    [[nodiscard]] HfAdcErr GetCountAndVolt(AdcInputSensor sensor, uint32_t& count, float& adc_volts,
+                                           uint8_t num_of_samples_to_avg = 1, 
+                                           uint32_t timeBetweenSamples = 0,
+                                           TimeUnit timeUnit = TimeUnit::TIME_UNIT_MS) noexcept;
+      //=====================================================================//
     /// MULTI SENSOR READERS
     //=====================================================================//
     
@@ -145,12 +174,12 @@ public:
      * @param num_of_readings_to_avg Number of readings to average (default 1).
      * @param timeBetweenReadings Time between readings in milliseconds (default 0).
      * @param timeUnit Time unit for the delay (default milliseconds).
-     * @return true if successful, false otherwise.
+     * @return HfAdcErr error code.
      */
-    bool GetMultiCount(std::vector<AdcInputSensorReadSpec>& sensorReadSpec, 
-                       uint8_t num_of_readings_to_avg = 1, 
-                       uint32_t timeBetweenReadings = 0, 
-                       TimeUnit timeUnit = TimeUnit::TIME_UNIT_MS) noexcept;
+    [[nodiscard]] HfAdcErr GetMultiCount(std::vector<AdcInputSensorReadSpec>& sensorReadSpec, 
+                                         uint8_t num_of_readings_to_avg = 1, 
+                                         uint32_t timeBetweenReadings = 0, 
+                                         TimeUnit timeUnit = TimeUnit::TIME_UNIT_MS) noexcept;
     
     /**
      * @brief Get multiple ADC voltages.
@@ -158,12 +187,12 @@ public:
      * @param num_of_readings_to_avg Number of readings to average (default 1).
      * @param timeBetweenReadings Time between readings in milliseconds (default 0).
      * @param timeUnit Time unit for the delay (default milliseconds).
-     * @return true if successful, false otherwise.
+     * @return HfAdcErr error code.
      */
-    bool GetMultiVolt(std::vector<AdcInputSensorReadSpec>& sensorReadSpec, 
-                      uint8_t num_of_readings_to_avg = 1, 
-                      uint32_t timeBetweenReadings = 0, 
-                      TimeUnit timeUnit = TimeUnit::TIME_UNIT_MS) noexcept;
+    [[nodiscard]] HfAdcErr GetMultiVolt(std::vector<AdcInputSensorReadSpec>& sensorReadSpec, 
+                                        uint8_t num_of_readings_to_avg = 1, 
+                                        uint32_t timeBetweenReadings = 0, 
+                                        TimeUnit timeUnit = TimeUnit::TIME_UNIT_MS) noexcept;
     
     //=====================================================================//
     /// STATUS AND HEALTH CHECKS
@@ -182,28 +211,52 @@ public:
      * @return true if responding, false otherwise.
      */
     bool IsResponding(AdcInputSensor adcInputSensor) noexcept;
-    
-    /**
+      /**
      * @brief Register an ADC channel.
      * @param sensor The sensor identifier.
      * @param adc Reference to the ADC driver.
      * @param channel Hardware channel number.
-     * @return true if registered successfully, false otherwise.
+     * @return HfAdcErr error code.
      */
-    bool RegisterAdcChannel(AdcInputSensor sensor, BaseAdc& adc, uint8_t channel) noexcept;
+    [[nodiscard]] HfAdcErr RegisterAdcChannel(AdcInputSensor sensor, BaseAdc& adc, uint8_t channel) noexcept;
     
     /**
+     * @brief Unregister an ADC channel.
+     * @param sensor The sensor identifier to unregister.
+     * @return HfAdcErr error code.
+     */
+    [[nodiscard]] HfAdcErr UnregisterAdcChannel(AdcInputSensor sensor) noexcept;
+    
+    /**
+     * @brief Unregister all ADC channels.
+     * @return HfAdcErr error code.
+     */
+    [[nodiscard]] HfAdcErr UnregisterAllChannels() noexcept;
+      /**
      * @brief Get the total number of registered channels.
      * @return Number of registered channels.
      */
-    uint8_t GetRegisteredChannelCount() const noexcept;
+    [[nodiscard]] uint8_t GetRegisteredChannelCount() const noexcept;
     
     /**
      * @brief Get channel information by sensor ID.
      * @param sensor The sensor identifier.
      * @return Pointer to AdcInfo or nullptr if not found.
      */
-    const AdcInfo* GetChannelInfo(AdcInputSensor sensor) const noexcept;
+    [[nodiscard]] const AdcInfo* GetChannelInfo(AdcInputSensor sensor) const noexcept;
+    
+    /**
+     * @brief Check if a sensor is registered.
+     * @param sensor The sensor identifier to check.
+     * @return true if registered, false otherwise.
+     */
+    [[nodiscard]] bool IsSensorRegistered(AdcInputSensor sensor) const noexcept;
+    
+    /**
+     * @brief Get list of all registered sensors.
+     * @return Vector of registered sensor IDs.
+     */
+    [[nodiscard]] std::vector<AdcInputSensor> GetRegisteredSensors() const noexcept;
     
 private:
     /**
@@ -223,6 +276,14 @@ private:
      * @return Pointer to AdcInfo or nullptr if not found.
      */
     AdcInfo* FindAdcInfo(AdcInputSensor sensor) noexcept;
+      /**
+     * @brief Validate input parameters for operations.
+     * @param sensor The sensor to validate.
+     * @param num_of_samples_to_avg Number of samples to validate.
+     * @return HfAdcErr validation result.
+     */
+    [[nodiscard]] HfAdcErr ValidateParameters(AdcInputSensor sensor, 
+                                              uint8_t num_of_samples_to_avg) const noexcept;
     
     /**
      * @brief Convert time unit and delay to milliseconds.
@@ -230,7 +291,7 @@ private:
      * @param timeUnit The time unit.
      * @return Delay in milliseconds.
      */
-    uint32_t ConvertToMilliseconds(uint32_t delay, TimeUnit timeUnit) const noexcept;
+    [[nodiscard]] uint32_t ConvertToMilliseconds(uint32_t delay, TimeUnit timeUnit) const noexcept;
     
     /**
      * @brief Perform delay based on time unit.
@@ -243,12 +304,9 @@ private:
     mutable std::mutex mutex_;                      ///< Mutex for thread safety
     std::atomic<bool> initialized_;                 ///< Initialization status
     
-    std::array<AdcInfo, static_cast<uint32_t>(AdcInputSensor::ADC_INPUT_COUNT)> adcTable_;
-    uint8_t registeredChannelCount_;                ///< Number of registered channels
-    
-    // Constants for different ADC references
-    static constexpr float esp32_internal_adc_vref_ = 3.3F;
-    static constexpr float external_adc_vref_ = 2.5F;
+    // Use vector instead of fixed array for better flexibility
+    std::vector<AdcInfo> adcTable_;                 ///< Registered ADC channels
+    static constexpr uint8_t MAX_CHANNELS = static_cast<uint8_t>(AdcInputSensor::ADC_INPUT_COUNT);
 };
 
 #endif // COMPONENT_HANDLER_ADC_DATA_H_

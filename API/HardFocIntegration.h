@@ -3,7 +3,7 @@
 
 #include "SystemInit.h"
 #include "AdcData.h"
-#include "GpioData.h"
+#include "GpioHandler.h"
 #include "../AdcMultiCountReading.h"
 
 /**
