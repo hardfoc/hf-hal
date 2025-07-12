@@ -7,7 +7,7 @@
  */
 
 #include "Pcal95555Gpio.h"
-#include "GpioData.h"
+#include "GpioManager.h"
 #include "utils-and-drivers/hf-core-utils/hf-utils-general/include/ConsolePort.h"
 
 static const char* TAG = "Pcal95555Gpio";
@@ -17,7 +17,7 @@ static const char* TAG = "Pcal95555Gpio";
 //==============================================================================
 
 bool Pcal95555Chip::RegisterAllPins() noexcept {
-    console_info(TAG, "Registering PCAL95555 pins with GpioData system...");
+    console_info(TAG, "Registering PCAL95555 pins with GpioManager system...");
 
     // Pin mapping for single PCAL95555 chip
     const std::array<std::pair<GpioPin, std::string_view>, kPinCount> pinMapping = {{
@@ -39,12 +39,17 @@ bool Pcal95555Chip::RegisterAllPins() noexcept {
         {GpioPin::GPIO_PCAL95555_PIN_15, "external_input_2"}
     }};
 
-    GpioData& gpioData = GpioData::GetInstance();
+    GpioManager& gpioManager = GpioManager::GetInstance();
     bool success = true;
     uint8_t registeredCount = 0;
 
     for (size_t i = 0; i < kPinCount; ++i) {
-        if (gpioData.RegisterGpioPin(pinMapping[i].first, pins_[i], pinMapping[i].second)) {
+        // Determine pin direction based on name (inputs vs outputs)
+        bool isInput = pinMapping[i].second.find("input") != std::string_view::npos ||
+                       pinMapping[i].second.find("fault") != std::string_view::npos;
+        
+        auto registerResult = gpioManager.RegisterPin(pinMapping[i].first, isInput, false);
+        if (registerResult.IsSuccess()) {
             registeredCount++;
         } else {
             console_error(TAG, "Failed to register PCAL95555 pin %d (%s)", 

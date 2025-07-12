@@ -1,7 +1,7 @@
 #include "Tmc9660MotorController.h"
 #include "ConsolePort.h"
 #include "OsUtility.h"
-#include "utils-and-drivers/hf-core-drivers/internal/hf-pincfg/include/hf_gpio_config.hpp"
+#include "utils-and-drivers/hf-core-drivers/internal/hf-pincfg/include/hf_platform_config.hpp"
 #include "utils-and-drivers/hf-core-drivers/internal/hf-pincfg/include/hf_ext_pins_enum.hpp"
 
 /**
@@ -51,13 +51,13 @@ bool Tmc9660MotorController::Initialize() noexcept {
         return true;
     }
     
-    // Get references to ADC and GPIO systems
-    adcSystem_ = &AdcData::GetInstance();
-    gpioSystem_ = &GpioData::GetInstance();
+    // Get references to ADC and GPIO manager systems
+    adcSystem_ = &AdcManager::GetInstance();
+    gpioSystem_ = &GpioManager::GetInstance();
     
     // Ensure the underlying systems are initialized
-    if (!adcSystem_->EnsureInitialized()) {
-        console_error(TAG, "Failed to initialize ADC system");
+    if (!adcSystem_->IsInitialized()) {
+        console_error(TAG, "ADC system not initialized");
         return false;
     }
     

@@ -3,7 +3,7 @@
 
 #include "CommonIDs.h"
 #include "PCAL95555.hpp"
-#include "DigitalGpio.h"
+#include "BaseGpio.h"
 #include "SfI2cBus.h"
 #include <array>
 #include <string_view>
@@ -54,13 +54,15 @@ private:
 
 /**
  * @class Pcal95555Pin
- * @brief Represents a single PCAL95555 GPIO as a DigitalGpio instance.
+ * @brief Represents a single PCAL95555 GPIO as a BaseGpio instance.
  */
-class Pcal95555Pin : public DigitalGpio {
-public:
-  Pcal95555Pin(PCAL95555 &chip, uint8_t index, ActiveState act,
+class Pcal95555Pin : public BaseGpio {
+public:  Pcal95555Pin(PCAL95555 &chip, uint8_t index, ActiveState act,
                PCAL95555::GPIODir dir = PCAL95555::GPIODir::Input) noexcept
-      : DigitalGpio(GPIO_NUM_NC, act), chip_(chip), index_(index), dir_(dir) {}
+      : BaseGpio(GPIO_NUM_NC, 
+                 (dir == PCAL95555::GPIODir::Input) ? Direction::Input : Direction::Output,
+                 act), 
+        chip_(chip), index_(index), dir_(dir) {}
 
   bool Initialize() noexcept override {
     return chip_.setPinDirection(index_, dir_);

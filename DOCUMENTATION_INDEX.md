@@ -4,7 +4,7 @@ This document provides an index of all available documentation for the HardFOC s
 
 ## Primary Documentation
 
-### 🎯 GPIO and ADC System Documentation
+### 🎯 Core System Documentation
 **[docs/HARDFOC_GPIO_ADC_SYSTEM.md](docs/HARDFOC_GPIO_ADC_SYSTEM.md)**
 - **Comprehensive guide** for the GPIO and ADC data sourcing system
 - **System architecture** and design principles  
@@ -21,16 +21,60 @@ This document provides an index of all available documentation for the HardFOC s
 - **Core class overview**
 - **Hardware support summary**
 
+### 🏗️ Internal Interface Architecture
+**[docs/INTERNAL_INTERFACE_WRAPPER_DEEP_DIVE_ANALYSIS.md](docs/INTERNAL_INTERFACE_WRAPPER_DEEP_DIVE_ANALYSIS.md)**
+- **Deep architectural analysis** of internal interface wrappers
+- **Base classes** and ESP32-C6 implementations
+- **Performance rankings** and recommendations
+- **Advanced features** and DMA support analysis
+
+### 🧪 Test Suite Documentation
+**[tests/README.md](tests/README.md)**
+- **Consolidated test suite** structure and usage
+- **Component handler, interface wrapper, and external driver tests**
+- **Build and execution instructions**
+- **Test contribution guidelines**
+
+## Architecture Documentation
+
+### Core Hardware Abstraction
+**[docs/HARDFOC_HARDWARE_ABSTRACTION_ARCHITECTURE.md](docs/HARDFOC_HARDWARE_ABSTRACTION_ARCHITECTURE.md)**
+- Complete hardware abstraction layer architecture
+- Component interactions and design patterns
+- System-wide architectural decisions
+
+### GPIO System Architecture
+**[docs/GPIO_ARCHITECTURE_FINAL.md](docs/GPIO_ARCHITECTURE_FINAL.md)**
+- Final GPIO system architecture and implementation
+- Multi-source GPIO management
+- Interrupt handling and safety features
+
+### PWM System Architecture  
+**[docs/PWM_ARCHITECTURE.md](docs/PWM_ARCHITECTURE.md)**
+- PWM system design and implementation
+- Channel management and configuration
+- Performance characteristics
+
+### Unified GPIO Interrupt Architecture
+**[docs/UNIFIED_GPIO_INTERRUPT_ARCHITECTURE.md](docs/UNIFIED_GPIO_INTERRUPT_ARCHITECTURE.md)**
+- Modern GPIO interrupt handling system
+- Event-driven architecture
+- Safety and performance optimizations
+
+### Final Implementation Report
+**[docs/FINAL_IMPLEMENTATION_REPORT.md](docs/FINAL_IMPLEMENTATION_REPORT.md)**
+- Complete implementation status and summary
+- System testing results and validation
+- Known limitations and future improvements
+
 ## Code Organization
 
 ### Core Components
 ```
 hf-hal/
 ├── component-handler/          # Main GPIO and ADC handling components
-│   ├── GpioData.h/cpp         # Pure GPIO data management
-│   ├── GpioHandler.h/cpp      # Main GPIO interface with health monitoring
-│   ├── AdcData.h/cpp          # Pure ADC data management
-│   ├── AdcHandler.h/cpp       # Main ADC interface with health monitoring
+│   ├── GpioManager.h/cpp       # Modern consolidated GPIO management
+│   ├── AdcManager.h/cpp        # Modern consolidated ADC management
 │   ├── CommonIDs.h            # System-wide enumerations and constants
 │   ├── SystemInit.h/cpp       # System initialization utilities
 │   └── All.h                  # Master include file
@@ -38,8 +82,20 @@ hf-hal/
 │   ├── All.h                  # Public API master include
 │   ├── HardFocIntegration.h/cpp # Integration examples
 │   └── SystemInit.h/cpp       # Public system initialization
-└── docs/                       # Documentation
-    └── HARDFOC_GPIO_ADC_SYSTEM.md # Comprehensive system documentation
+├── docs/                       # Documentation
+│   ├── HARDFOC_GPIO_ADC_SYSTEM.md              # Comprehensive system documentation
+│   ├── INTERNAL_INTERFACE_WRAPPER_DEEP_DIVE_ANALYSIS.md # Architecture analysis
+│   ├── GPIO_ARCHITECTURE_FINAL.md              # GPIO architecture
+│   ├── PWM_ARCHITECTURE.md                     # PWM architecture
+│   ├── HARDFOC_HARDWARE_ABSTRACTION_ARCHITECTURE.md # Core hardware abstraction
+│   ├── UNIFIED_GPIO_INTERRUPT_ARCHITECTURE.md  # Interrupt architecture
+│   └── FINAL_IMPLEMENTATION_REPORT.md         # Implementation status
+└── tests/                      # Consolidated test suite
+    ├── README.md               # Test suite documentation
+    ├── CMakeLists.txt          # Master test build configuration
+    ├── component-handler/      # Component handler tests
+    ├── interface-wrapper/      # Internal interface wrapper tests
+    └── external-drivers/       # External driver tests
 ```
 
 ### Hardware Drivers
@@ -50,6 +106,13 @@ hf-hal/utils-and-drivers/hf-core-drivers/
 │   └── hf-tmc9660-driver/     # TMC9660 motor controller
 └── internal/                   # Internal ESP32-C6 drivers
     ├── hf-internal-interface-wrap/ # Hardware abstraction layer
+    │   ├── include/            # Header files organized by functionality
+    │   │   ├── base/           # Abstract base classes
+    │   │   ├── mcu/            # MCU-specific implementations
+    │   │   ├── thread_safe/    # Thread-safe wrappers
+    │   │   └── utils/          # Utility classes
+    │   ├── src/                # Implementation files
+    │   └── docs/               # Internal interface documentation
     └── hf-pincfg/             # Pin configuration and safety validation
 ```
 
@@ -67,23 +130,23 @@ auto& i2cBus = SfI2cBus::GetInstance();
 // Configure and initialize I2C bus
 
 // Initialize GPIO system
-auto& gpioHandler = GpioHandler::GetInstance();  
-gpioHandler.Initialize(i2cBus);
+auto& gpioManager = GpioManager::GetInstance();  
+gpioManager.Initialize(i2cBus);
 
 // Initialize ADC system
-auto& adcHandler = AdcHandler::GetInstance();
-adcHandler.Initialize();
+auto& adcManager = AdcManager::GetInstance();
+adcManager.Initialize();
 ```
 
 ### 3. Use GPIO and ADC
 ```cpp
 // GPIO operations
-gpioHandler.SetPin(GPIO_ESP32_PIN_2, true);
-bool state = gpioHandler.GetPin(GPIO_PCAL95555_CHIP1_PIN_0);
+gpioManager.SetPin(GPIO_ESP32_PIN_2, true);
+bool state = gpioManager.GetPin(GPIO_PCAL95555_CHIP1_PIN_0);
 
-// ADC operations  
-uint16_t rawValue = adcHandler.ReadRaw(ADC_ESP32_ADC1_CH0);
-float voltage = adcHandler.ReadVoltage(ADC_ESP32_ADC1_CH0);
+// ADC operations
+uint16_t rawValue = adcManager.ReadRaw(ADC_ESP32_ADC1_CH0);
+float voltage = adcManager.ReadVoltage(ADC_ESP32_ADC1_CH0);
 ```
 
 ## System Features

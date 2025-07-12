@@ -38,60 +38,69 @@ void HardFocIntegration::DemoAdcUsage() noexcept {
     
     console_info(TAG, "=== ADC Usage Demo ===");
     
-    AdcData& adcData = AdcData::GetInstance();
+    AdcManager& adcManager = AdcManager::GetInstance();
     
-    // Read single ADC channels
-    uint32_t count;
-    float voltage;
-    
-    // Read motor current phase A
-    if (adcData.GetCount(AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_A, count, 10, 1)) {
-        console_info(TAG, "Motor Current Phase A: %lu counts", count);
+    // Read motor current phase A (raw count)
+    auto rawResult = adcManager.ReadRawValue(AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_A);
+    if (rawResult.IsSuccess()) {
+        console_info(TAG, "Motor Current Phase A: %lu counts", rawResult.GetValue());
     }
     
-    if (adcData.GetVolt(AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_A, voltage, 10, 1)) {
-        console_info(TAG, "Motor Current Phase A: %.3f V", voltage);
+    // Read motor current phase A (voltage)
+    auto readingResult = adcManager.ReadChannel(AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_A);
+    if (readingResult.IsSuccess()) {
+        const auto& reading = readingResult.GetValue();
+        console_info(TAG, "Motor Current Phase A: %.3f V", reading.voltage);
     }
     
     // Read system 3.3V rail
-    if (adcData.GetCountAndVolt(AdcInputSensor::ADC_SYSTEM_VOLTAGE_3V3, count, voltage, 5, 2)) {
-        console_info(TAG, "3.3V Rail: %lu counts, %.3f V", count, voltage);
+    auto voltageResult = adcManager.ReadChannel(AdcInputSensor::ADC_SYSTEM_VOLTAGE_3V3);
+    if (voltageResult.IsSuccess()) {
+        const auto& reading = voltageResult.GetValue();
+        console_info(TAG, "3.3V Rail: %lu counts, %.3f V", reading.rawValue, reading.voltage);
     }
     
     console_info(TAG, "ADC demo completed");
 }
 
-void HardFocIntegration::DemoGpioUsage() noexcept {    if (!IsSystemInitialized()) return;
-      console_info(TAG, "=== GPIO Usage Demo ===");
+void HardFocIntegration::DemoGpioUsage() noexcept {
+    if (!IsSystemInitialized()) return;
     
-    GpioHandler& gpioHandler = GpioHandler::GetInstance();
-      // Set motor enable pin
-    if (gpioHandler.SetActive(GpioPin::GPIO_MOTOR_ENABLE)) {
+    console_info(TAG, "=== GPIO Usage Demo ===");
+    
+    GpioManager& gpioManager = GpioManager::GetInstance();
+    
+    // Set motor enable pin
+    auto enableResult = gpioManager.SetActive(GpioPin::GPIO_MOTOR_ENABLE);
+    if (enableResult.IsSuccess()) {
         console_info(TAG, "Motor enabled");
     }
     
     os_delay_msec(1000);
     
     // Toggle status LED
-    if (gpioHandler.Toggle(GpioPin::GPIO_LED_STATUS)) {
-        console_info(TAG, "Status LED toggled");
+    auto toggleResult = gpioManager.Toggle(GpioPin::GPIO_LED_STATUS);
+    if (toggleResult.IsSuccess()) {
+        console_info(TAG, "Status LED toggled to %s", toggleResult.GetValue() ? "ON" : "OFF");
     }
     
     // Check if motor fault is active
-    if (gpioHandler.IsActive(GpioPin::GPIO_MOTOR_FAULT)) {
+    auto faultResult = gpioManager.IsActive(GpioPin::GPIO_MOTOR_FAULT);
+    if (faultResult.IsSuccess() && faultResult.GetValue()) {
         console_warning(TAG, "Motor fault detected!");
     }
     
     // Set motor brake
-    if (gpioHandler.SetActive(GpioPin::GPIO_MOTOR_BRAKE)) {
+    auto brakeResult = gpioManager.SetActive(GpioPin::GPIO_MOTOR_BRAKE);
+    if (brakeResult.IsSuccess()) {
         console_info(TAG, "Motor brake applied");
     }
     
     os_delay_msec(500);
     
     // Release brake and disable motor
-    gpioHandler.SetInactive(GpioPin::GPIO_MOTOR_BRAKE);
-    gpioHandler.SetInactive(GpioPin::GPIO_MOTOR_ENABLE);
+    gpioManager.SetInactive(GpioPin::GPIO_MOTOR_BRAKE);
+    gpioManager.SetInactive(GpioPin::GPIO_MOTOR_ENABLE);
     
     console_info(TAG, "GPIO demo completed");
 }
@@ -101,25 +110,30 @@ void HardFocIntegration::DemoMultiChannelAdc() noexcept {
     
     console_info(TAG, "=== Multi-Channel ADC Demo ===");
     
-    AdcData& adcData = AdcData::GetInstance();
+    AdcManager& adcManager = AdcManager::GetInstance();
     
-    // Create a vector of ADC read specifications
-    std::vector<AdcInputSensorReadSpec> readSpecs = {
-        AdcInputSensorReadSpec(AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_A, 10),
-        AdcInputSensorReadSpec(AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_B, 10),
-        AdcInputSensorReadSpec(AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_C, 10),
-        AdcInputSensorReadSpec(AdcInputSensor::ADC_MOTOR_VOLTAGE_BUS, 5),
-        AdcInputSensorReadSpec(AdcInputSensor::ADC_MOTOR_TEMPERATURE, 3)
+    // Create a vector of ADC sensors to read
+    std::vector<AdcInputSensor> sensors = {
+        AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_A,
+        AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_B,
+        AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_C,
+        AdcInputSensor::ADC_MOTOR_VOLTAGE_BUS,
+        AdcInputSensor::ADC_MOTOR_TEMPERATURE
     };
     
     // Read all channels simultaneously
-    if (adcData.GetMultiVolt(readSpecs, 3, 5, TimeUnit::TIME_UNIT_MS)) {
+    auto batchResult = adcManager.BatchRead(sensors);
+    if (batchResult.IsSuccess()) {
+        const auto& batch = batchResult.GetValue();
         console_info(TAG, "Multi-channel ADC read successful:");
-        for (const auto& spec : readSpecs) {
-            console_info(TAG, "  %s: %.3f V (%d successful readings)",
-                        AdcInputSensorToString(spec.sensor).data(),
-                        spec.channelAvgReadingVoltageStorage,
-                        spec.numberOfSuccessfulReadings);
+        
+        for (size_t i = 0; i < batch.sensors.size(); ++i) {
+            if (batch.results[i] == ResultCode::SUCCESS) {
+                console_info(TAG, "  %s: %.3f V (%lu counts)",
+                            AdcInputSensorToString(batch.sensors[i]).data(),
+                            batch.readings[i].voltage,
+                            batch.readings[i].rawValue);
+            }
         }
     } else {
         console_error(TAG, "Multi-channel ADC read failed");
@@ -130,9 +144,10 @@ void HardFocIntegration::DemoMultiChannelAdc() noexcept {
 
 void HardFocIntegration::DemoMultiPinGpio() noexcept {
     if (!IsSystemInitialized()) return;
-      console_info(TAG, "=== Multi-Pin GPIO Demo ===");
     
-    GpioHandler& gpioData = GpioHandler::GetInstance();
+    console_info(TAG, "=== Multi-Pin GPIO Demo ===");
+    
+    GpioManager& gpioManager = GpioManager::GetInstance();
     
     // Set multiple LEDs active
     std::vector<GpioPin> leds = {
@@ -140,35 +155,42 @@ void HardFocIntegration::DemoMultiPinGpio() noexcept {
         GpioPin::GPIO_LED_COMM
     };
     
-    if (gpioHandler.SetMultipleActive(leds)) {
+    auto multiActiveResult = gpioManager.SetMultipleActive(leds);
+    if (multiActiveResult.IsSuccess()) {
         console_info(TAG, "Multiple LEDs activated");
     }
     
     os_delay_msec(1000);
     
-    // Set LED pattern using bitmask
+    // Pattern control using individual operations
     std::vector<GpioPin> ledPins = {
         GpioPin::GPIO_LED_STATUS,
         GpioPin::GPIO_LED_ERROR,
         GpioPin::GPIO_LED_COMM
     };
     
-    // Pattern: 101 (status and comm on, error off)
-    uint32_t pattern = 0b101;
-    if (gpioHandler.SetPinPattern(ledPins, pattern)) {
-        console_info(TAG, "LED pattern set: 0x%02lX", pattern);
-    }
+    // Set pattern: status and comm on, error off
+    gpioManager.SetActive(GpioPin::GPIO_LED_STATUS);
+    gpioManager.SetInactive(GpioPin::GPIO_LED_ERROR);
+    gpioManager.SetActive(GpioPin::GPIO_LED_COMM);
+    console_info(TAG, "LED pattern set: Status ON, Error OFF, Comm ON");
     
     os_delay_msec(1000);
     
-    // Read pin pattern
-    uint32_t readPattern;
-    if (gpioHandler.GetPinPattern(ledPins, readPattern)) {
-        console_info(TAG, "Current LED pattern: 0x%02lX", readPattern);
+    // Read pin states to verify pattern
+    auto batchReadResult = gpioManager.BatchRead(ledPins);
+    if (batchReadResult.IsSuccess()) {
+        const auto& batch = batchReadResult.GetValue();
+        console_info(TAG, "Current LED states:");
+        for (size_t i = 0; i < batch.pins.size(); ++i) {
+            console_info(TAG, "  %s: %s", 
+                        GpioPinToString(batch.pins[i]).data(),
+                        batch.states[i] ? "ON" : "OFF");
+        }
     }
     
     // Turn off all LEDs
-    gpioHandler.SetMultipleInactive(ledPins);
+    gpioManager.SetMultipleInactive(ledPins);
     
     console_info(TAG, "Multi-pin GPIO demo completed");
 }
@@ -181,27 +203,38 @@ void HardFocIntegration::RunSystemDiagnostics() noexcept {
     // Print system status
     SystemInit::PrintSystemStatus();
     
-    // Run GPIO test
-    GpioHandler& gpioData = GpioHandler::GetInstance();
-    if (gpioHandler.RunGpioTest()) {
-        console_info(TAG, "GPIO diagnostics: PASS");
+    // Check GPIO system health
+    GpioManager& gpioManager = GpioManager::GetInstance();
+    auto gpioHealthResult = gpioManager.GetSystemHealth();
+    if (gpioHealthResult.IsSuccess()) {
+        console_info(TAG, "GPIO system health: HEALTHY");
     } else {
-        console_error(TAG, "GPIO diagnostics: FAIL");
+        console_error(TAG, "GPIO system health: DEGRADED");
     }
     
-    // Check ADC health
-    AdcData& adcData = AdcData::GetInstance();
-    console_info(TAG, "ADC system health: %s", 
-                adcData.EnsureInitialized() ? "HEALTHY" : "DEGRADED");
+    // Check ADC system health
+    AdcManager& adcManager = AdcManager::GetInstance();
+    auto adcHealthResult = adcManager.GetSystemHealth();
+    if (adcHealthResult.IsSuccess()) {
+        console_info(TAG, "ADC system health: HEALTHY");
+    } else {
+        console_error(TAG, "ADC system health: DEGRADED");
+    }
     
-    // Check individual ADC channels
+    // Check individual ADC channels responsiveness
     for (int i = 0; i < static_cast<int>(AdcInputSensor::ADC_INPUT_COUNT); ++i) {
         AdcInputSensor sensor = static_cast<AdcInputSensor>(i);
-        if (adcData.IsResponding(sensor)) {
-            console_info(TAG, "ADC %s: RESPONDING", 
-                        AdcInputSensorToString(sensor).data());
+        if (adcManager.IsChannelRegistered(sensor)) {
+            auto readResult = adcManager.ReadChannel(sensor);
+            if (readResult.IsSuccess()) {
+                console_info(TAG, "ADC %s: RESPONDING", 
+                            AdcInputSensorToString(sensor).data());
+            }
         }
     }
+    
+    console_info(TAG, "System diagnostics completed");
+}
     
     console_info(TAG, "System diagnostics completed");
 }
@@ -209,43 +242,85 @@ void HardFocIntegration::RunSystemDiagnostics() noexcept {
 void HardFocIntegration::UpdateStatusLeds() noexcept {
     if (!IsSystemInitialized()) return;
     
-    GpioHandler& gpioData = GpioHandler::GetInstance();
+    GpioManager& gpioManager = GpioManager::GetInstance();
     
     // Get system health
     bool systemHealthy = GetHardFocSystemStatus();
-    bool gpioHealthy = gpioHandler.GetSystemHealth();
     
-    AdcData& adcData = AdcData::GetInstance();
-    bool adcHealthy = adcData.EnsureInitialized();
+    auto gpioHealthResult = gpioManager.GetSystemHealth();
+    bool gpioHealthy = gpioHealthResult.IsSuccess();
+    
+    AdcManager& adcManager = AdcManager::GetInstance();
+    auto adcHealthResult = adcManager.GetSystemHealth();
+    bool adcHealthy = adcHealthResult.IsSuccess();
     
     // Update status LEDs
     bool statusLed = systemHealthy && gpioHealthy && adcHealthy;
     bool errorLed = !systemHealthy || !gpioHealthy || !adcHealthy;
     bool commLed = true; // Assume communication is working if we can toggle LEDs
     
-    gpioHandler.SetLedStatus(
-        GpioPin::GPIO_LED_STATUS,
-        GpioPin::GPIO_LED_ERROR,
-        GpioPin::GPIO_LED_COMM,
-        statusLed,
-        errorLed,
-        commLed
-    );
+    // Set LED states individually
+    if (statusLed) {
+        gpioManager.SetActive(GpioPin::GPIO_LED_STATUS);
+    } else {
+        gpioManager.SetInactive(GpioPin::GPIO_LED_STATUS);
+    }
+    
+    if (errorLed) {
+        gpioManager.SetActive(GpioPin::GPIO_LED_ERROR);
+    } else {
+        gpioManager.SetInactive(GpioPin::GPIO_LED_ERROR);
+    }
+    
+    if (commLed) {
+        gpioManager.SetActive(GpioPin::GPIO_LED_COMM);
+    } else {
+        gpioManager.SetInactive(GpioPin::GPIO_LED_COMM);
+    }
 }
 
 bool HardFocIntegration::ReadMotorSensors(float& current_a, float& current_b, float& current_c,
                                           float& bus_voltage, float& temperature) noexcept {
     if (!IsSystemInitialized()) return false;
     
-    AdcData& adcData = AdcData::GetInstance();
+    AdcManager& adcManager = AdcManager::GetInstance();
     
     bool success = true;
     
-    success &= adcData.GetVolt(AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_A, current_a, 10, 1);
-    success &= adcData.GetVolt(AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_B, current_b, 10, 1);
-    success &= adcData.GetVolt(AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_C, current_c, 10, 1);
-    success &= adcData.GetVolt(AdcInputSensor::ADC_MOTOR_VOLTAGE_BUS, bus_voltage, 5, 2);
-    success &= adcData.GetVolt(AdcInputSensor::ADC_MOTOR_TEMPERATURE, temperature, 3, 5);
+    auto currentAResult = adcManager.ReadChannel(AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_A);
+    if (currentAResult.IsSuccess()) {
+        current_a = currentAResult.GetValue().voltage;
+    } else {
+        success = false;
+    }
+    
+    auto currentBResult = adcManager.ReadChannel(AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_B);
+    if (currentBResult.IsSuccess()) {
+        current_b = currentBResult.GetValue().voltage;
+    } else {
+        success = false;
+    }
+    
+    auto currentCResult = adcManager.ReadChannel(AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_C);
+    if (currentCResult.IsSuccess()) {
+        current_c = currentCResult.GetValue().voltage;
+    } else {
+        success = false;
+    }
+    
+    auto busVoltageResult = adcManager.ReadChannel(AdcInputSensor::ADC_MOTOR_VOLTAGE_BUS);
+    if (busVoltageResult.IsSuccess()) {
+        bus_voltage = busVoltageResult.GetValue().voltage;
+    } else {
+        success = false;
+    }
+    
+    auto temperatureResult = adcManager.ReadChannel(AdcInputSensor::ADC_MOTOR_TEMPERATURE);
+    if (temperatureResult.IsSuccess()) {
+        temperature = temperatureResult.GetValue().voltage;
+    } else {
+        success = false;
+    }
     
     return success;
 }
@@ -253,20 +328,24 @@ bool HardFocIntegration::ReadMotorSensors(float& current_a, float& current_b, fl
 bool HardFocIntegration::SetMotorControl(bool enable, bool brake) noexcept {
     if (!IsSystemInitialized()) return false;
     
-    GpioHandler& gpioData = GpioHandler::GetInstance();
+    GpioManager& gpioManager = GpioManager::GetInstance();
     
     bool success = true;
     
-    if (enable) {
-        success &= gpioHandler.SetActive(GpioPin::GPIO_MOTOR_ENABLE);
-    } else {
-        success &= gpioHandler.SetInactive(GpioPin::GPIO_MOTOR_ENABLE);
+    auto enableResult = enable ? 
+        gpioManager.SetActive(GpioPin::GPIO_MOTOR_ENABLE) :
+        gpioManager.SetInactive(GpioPin::GPIO_MOTOR_ENABLE);
+    
+    if (!enableResult.IsSuccess()) {
+        success = false;
     }
     
-    if (brake) {
-        success &= gpioHandler.SetActive(GpioPin::GPIO_MOTOR_BRAKE);
-    } else {
-        success &= gpioHandler.SetInactive(GpioPin::GPIO_MOTOR_BRAKE);
+    auto brakeResult = brake ?
+        gpioManager.SetActive(GpioPin::GPIO_MOTOR_BRAKE) :
+        gpioManager.SetInactive(GpioPin::GPIO_MOTOR_BRAKE);
+    
+    if (!brakeResult.IsSuccess()) {
+        success = false;
     }
     
     return success;
@@ -275,13 +354,30 @@ bool HardFocIntegration::SetMotorControl(bool enable, bool brake) noexcept {
 bool HardFocIntegration::MonitorSystemVoltages(float& voltage_3v3, float& voltage_5v, float& voltage_12v) noexcept {
     if (!IsSystemInitialized()) return false;
     
-    AdcData& adcData = AdcData::GetInstance();
+    AdcManager& adcManager = AdcManager::GetInstance();
     
     bool success = true;
     
-    success &= adcData.GetVolt(AdcInputSensor::ADC_SYSTEM_VOLTAGE_3V3, voltage_3v3, 5, 2);
-    success &= adcData.GetVolt(AdcInputSensor::ADC_SYSTEM_VOLTAGE_5V, voltage_5v, 5, 2);
-    success &= adcData.GetVolt(AdcInputSensor::ADC_SYSTEM_VOLTAGE_12V, voltage_12v, 5, 2);
+    auto voltage3v3Result = adcManager.ReadChannel(AdcInputSensor::ADC_SYSTEM_VOLTAGE_3V3);
+    if (voltage3v3Result.IsSuccess()) {
+        voltage_3v3 = voltage3v3Result.GetValue().voltage;
+    } else {
+        success = false;
+    }
+    
+    auto voltage5vResult = adcManager.ReadChannel(AdcInputSensor::ADC_SYSTEM_VOLTAGE_5V);
+    if (voltage5vResult.IsSuccess()) {
+        voltage_5v = voltage5vResult.GetValue().voltage;
+    } else {
+        success = false;
+    }
+    
+    auto voltage12vResult = adcManager.ReadChannel(AdcInputSensor::ADC_SYSTEM_VOLTAGE_12V);
+    if (voltage12vResult.IsSuccess()) {
+        voltage_12v = voltage12vResult.GetValue().voltage;
+    } else {
+        success = false;
+    }
     
     return success;
 }

@@ -1,4 +1,4 @@
-#ifndef COMPONENT_HANDLER_ALL_H_
+0#ifndef COMPONENT_HANDLER_ALL_H_
 #define COMPONENT_HANDLER_ALL_H_
 
 /**
@@ -17,12 +17,9 @@
 
 // Multi-reading support
 #include "../component-handler/MultiReadings.h"
-#include "../component-handler/AdcMultiCountReading.h"
-
 // Core data management systems
-#include "../component-handler/AdcData.h"
-#include "../component-handler/GpioData.h"
-#include "../component-handler/GpioHandler.h"// Comprehensive multi-source GPIO system
+#include "../component-handler/AdcManager.h"
+#include "../component-handler/GpioManager.h"
 
 // Motor controller systems
 #include "../component-handler/Tmc9660MotorController.h"
@@ -32,7 +29,7 @@
 #include "../component-handler/Pcal95555Gpio.h"
 
 // ESP32-C6 GPIO support
-#include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/Esp32C6Gpio.h"
+#include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/include/mcu/McuDigitalGpio.h"
 
 // System initialization and configuration
 #include "../component-handler/SystemInit.h"
@@ -42,12 +39,12 @@
 #include "../component-handler/GpioSystemIntegrationTest.h"
 
 // Hardware configuration with safety validation
-#include "utils-and-drivers/hf-core-drivers/internal/hf-pincfg/include/hf_gpio_config.hpp"
+#include "utils-and-drivers/hf-core-drivers/internal/hf-pincfg/include/hf_platform_config.hpp"
 #include "../component-handler/hf_ext_pins_enum.hpp"
 
 // Legacy compatibility wrappers (deprecated but maintained)
-#include "../component-handler/AdcHandler.h"
-#include "../component-handler/GpioHandler.h"
+#include "../component-handler/AdcManager.h"
+#include "../component-handler/GpioManager.h"
 
 /**
  * @brief Namespace containing all HardFOC component handler functionality.
@@ -125,13 +122,15 @@ namespace HardFocComponentHandler {
      * @return Reference to the ADC system.
      */
     inline AdcSystem& GetAdcSystem() noexcept {
-        return AdcData::GetInstance();
-    }    /**
+        return AdcManager::GetInstance();
+    }
+    
+    /**
      * @brief Get the GPIO system instance.
      * @return Reference to the GPIO system.
      */
     inline GpioSystem& GetGpioSystem() noexcept {
-        return GpioDataNew::GetInstance();
+        return GpioManager::GetInstance();
     }
     
     /**

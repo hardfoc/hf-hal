@@ -1,9 +1,9 @@
 #include "SystemInit.h"
-#include "AdcHandler.h"
-#include "GpioHandler.h"
+#include "AdcManager.h"
+#include "GpioManager.h"
 #include "ConsolePort.h"
 #include "OsUtility.h"
-#include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/SfI2cBus.h"
+#include "thread_safe/SfI2cBus.h"
 
 /**
  * @file SystemInit.cpp
@@ -15,7 +15,7 @@
 
 static const char* TAG = "SystemInit";
 
-// Static instances for system-wide I2C bus and handlers
+// Static instances for system-wide I2C bus and managers
 static std::unique_ptr<SfI2cBus> g_i2cBus;
 static SemaphoreHandle_t g_i2cMutex = nullptr;
 
@@ -24,7 +24,7 @@ bool SystemInit::InitializeSystem() noexcept {
     
     // Initialize hardware pin configuration first
     console_info(TAG, "Configuring hardware pins");
-    init_mcu_pinconfig();
+    HardFOC::init_platform_hardware();
     
     // Initialize GPIO system
     if (!InitializeGpioSystem()) {
@@ -49,11 +49,10 @@ bool SystemInit::InitializeSystem() noexcept {
 
 bool SystemInit::InitializeAdcSystem() noexcept {
     console_info(TAG, "Initializing ADC system");
-    
-    // Get the ADC data singleton and ensure it's initialized
-    AdcData& adcData = AdcData::GetInstance();
-    if (!adcData.EnsureInitialized()) {
-        console_error(TAG, "Failed to initialize ADC data system");
+      // Get the ADC manager singleton and ensure it's initialized
+    AdcManager& adcManager = AdcManager::GetInstance();
+    if (!adcManager.EnsureInitialized()) {
+        console_error(TAG, "Failed to initialize ADC manager system");
         return false;
     }
     
@@ -73,9 +72,8 @@ bool SystemInit::InitializeAdcSystem() noexcept {
     if (!MapFunctionalAdcChannels()) {
         console_warning(TAG, "Failed to map some functional ADC channels");
     }
-    
-    console_info(TAG, "ADC system initialized with %d channels", 
-                 adcData.GetRegisteredChannelCount());
+      console_info(TAG, "ADC system initialized with %d channels", 
+                 adcManager.GetRegisteredChannelCount());
     
     return true;
 }
@@ -94,11 +92,10 @@ bool SystemInit::InitializeGpioSystem() noexcept {
     if (!tmcController.EnsureInitialized()) {
         console_warning(TAG, "TMC9660 controller not initialized - GPIO will work with limited functionality");
     }
-    
-    // Get the new GPIO data system and initialize with dependencies
-    GpioHandler& gpioData = GpioHandler::GetInstance();
-    if (!gpioData.Initialize(*g_i2cBus, tmcController)) {
-        console_error(TAG, "Failed to initialize comprehensive GPIO data system");
+      // Get the new GPIO manager and initialize with dependencies
+    GpioManager& gpioManager = GpioManager::GetInstance();
+    if (!gpioManager.Initialize(*g_i2cBus, tmcController)) {
+        console_error(TAG, "Failed to initialize comprehensive GPIO manager system");
         return false;
     }
     
@@ -152,7 +149,7 @@ bool SystemInit::RegisterNativeGpioPins() noexcept {
     
     // This is a placeholder implementation
     // In a real implementation, you would create ESP32GpioPin objects
-    // and register them with the GpioData system
+    // and register them with the GpioManager system
     
     // TODO: Implement actual ESP32 native GPIO registration
     // For now, just return success to indicate the function was called
@@ -171,11 +168,10 @@ bool SystemInit::RegisterExpanderGpioPins() noexcept {
             return false;
         }
     }
-    
-    // Get GPIO handler instance and initialize with PCAL95555 chips
-    auto& gpioHandler = GpioHandler<64>::Instance();  // Support up to 64 GPIO pins
-    if (!gpioHandler.Initialize(*g_i2cBus)) {
-        console_error(TAG, "Failed to initialize GPIO handler with PCAL95555 chips");
+      // Get GPIO manager instance and initialize with PCAL95555 chips
+    auto& gpioManager = GpioManager<64>::Instance();  // Support up to 64 GPIO pins
+    if (!gpioManager.Initialize(*g_i2cBus)) {
+        console_error(TAG, "Failed to initialize GPIO manager with PCAL95555 chips");
         return false;
     }
     
@@ -185,11 +181,10 @@ bool SystemInit::RegisterExpanderGpioPins() noexcept {
 
 bool SystemInit::RegisterInternalAdcChannels() noexcept {
     console_info(TAG, "Registering ESP32-C6 internal ADC channels");
-    
-    // Get ADC handler instance and initialize with ESP32-C6 ADCs
-    auto& adcHandler = AdcHandler<32>::Instance();  // Support up to 32 ADC channels
-    if (!adcHandler.Initialize()) {
-        console_error(TAG, "Failed to initialize ADC handler with ESP32-C6 ADCs");
+      // Get ADC manager instance and initialize with ESP32-C6 ADCs
+    auto& adcManager = AdcManager<32>::Instance();  // Support up to 32 ADC channels
+    if (!adcManager.Initialize()) {
+        console_error(TAG, "Failed to initialize ADC manager with ESP32-C6 ADCs");
         return false;
     }
     
@@ -204,7 +199,7 @@ bool SystemInit::RegisterExternalAdcChannels() noexcept {
     // In a real implementation, you would:
     // 1. Initialize SPI bus for external ADC chips
     // 2. Create external ADC driver instances
-    // 3. Register each channel with the AdcData system
+    // 3. Register each channel with the AdcManager system
     
     // TODO: Implement actual external ADC registration
     // For now, just return success to indicate the function was called
@@ -293,10 +288,9 @@ bool SystemInit::InitializeI2cBus() noexcept {
 bool SystemInit::RunSystemSelfTest() noexcept {
     console_info(TAG, "Running system self-test");
       bool testPassed = true;
-    
-    // Test GPIO system
-    GpioHandler& gpioData = GpioHandler::GetInstance();
-    if (!gpioData.RunGpioTest()) {
+      // Test GPIO system
+    GpioManager& gpioManager = GpioManager::GetInstance();
+    if (!gpioManager.RunGpioTest()) {
         console_error(TAG, "GPIO system test failed");
         testPassed = false;
     }
@@ -315,17 +309,15 @@ bool SystemInit::RunSystemSelfTest() noexcept {
 
 bool SystemInit::GetSystemHealth() noexcept {
     bool systemHealthy = true;
-    
-    // Check GPIO system health
-    GpioHandler& gpioData = GpioHandler::GetInstance();
-    if (!gpioData.GetSystemHealth()) {
+      // Check GPIO system health
+    GpioManager& gpioManager = GpioManager::GetInstance();
+    if (!gpioManager.GetSystemHealth()) {
         console_warning(TAG, "GPIO system health check failed");
         systemHealthy = false;
     }
-    
-    // Check ADC system health
-    AdcData& adcData = AdcData::GetInstance();
-    if (!adcData.EnsureInitialized()) {
+      // Check ADC system health
+    AdcManager& adcManager = AdcManager::GetInstance();
+    if (!adcManager.EnsureInitialized()) {
         console_warning(TAG, "ADC system health check failed");
         systemHealthy = false;
     }
@@ -335,18 +327,17 @@ bool SystemInit::GetSystemHealth() noexcept {
 
 void SystemInit::PrintSystemStatus() noexcept {
     console_info(TAG, "=== HardFOC System Status ===");
-    
-    // GPIO system status
-    GpioHandler& gpioData = GpioHandler::GetInstance();
+      // GPIO system status
+    GpioManager& gpioManager = GpioManager::GetInstance();
     console_info(TAG, "GPIO System: %d pins registered, Health: %s",
-                 gpioData.GetRegisteredPinCount(),
-                 gpioData.GetSystemHealth() ? "OK" : "DEGRADED");
+                 gpioManager.GetRegisteredPinCount(),
+                 gpioManager.GetSystemHealth() ? "OK" : "DEGRADED");
     
     // ADC system status
-    AdcData& adcData = AdcData::GetInstance();
+    AdcManager& adcManager = AdcManager::GetInstance();
     console_info(TAG, "ADC System: %d channels registered, Health: %s",
-                 adcData.GetRegisteredChannelCount(),
-                 adcData.EnsureInitialized() ? "OK" : "DEGRADED");
+                 adcManager.GetRegisteredChannelCount(),
+                 adcManager.EnsureInitialized() ? "OK" : "DEGRADED");
     
     console_info(TAG, "Overall System Health: %s",
                  GetSystemHealth() ? "HEALTHY" : "DEGRADED");

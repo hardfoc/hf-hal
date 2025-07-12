@@ -8,7 +8,7 @@
 
 #include "Tmc9660Gpio.h"
 #include "Tmc9660MotorController.h"
-#include "GpioData.h"
+#include "GpioManager.h"
 #include "ThingsToString.h"
 #include <cstdio>
 #include <cstring>
@@ -97,7 +97,7 @@ bool Tmc9660GpioPin::IsActive() noexcept {
     }
 }
 
-DigitalGpio::State Tmc9660GpioPin::GetState() noexcept {
+BaseGpio::State Tmc9660GpioPin::GetState() noexcept {
     if (IsActive()) {
         return State::Active;
     } else {
@@ -301,7 +301,7 @@ bool Tmc9660GpioManager::CreateGpioPins() noexcept {
 }
 
 bool Tmc9660GpioManager::RegisterChipPins(Tmc9660ChipId chipId) noexcept {
-    GpioData& gpioData = GpioData::GetInstance();
+    GpioManager& gpioManager = GpioManager::GetInstance();
     bool success = true;
 
     // Register GPIO17 and GPIO18 for this chip
@@ -318,8 +318,9 @@ bool Tmc9660GpioManager::RegisterChipPins(Tmc9660ChipId chipId) noexcept {
             char pinName[32];
             GeneratePinName(chipId, gpioNumber, pinName, sizeof(pinName));
             
-            // Register with GPIO data system
-            if (gpioData.RegisterGpioPin(mappedPin, *pin, pinName)) {
+            // Register with GPIO manager system (assume output pins initially)
+            auto registerResult = gpioManager.RegisterPin(mappedPin, false, false);
+            if (registerResult.IsSuccess()) {
                 registeredPinCount_++;
             } else {
                 success = false;

@@ -2,9 +2,8 @@
 #define COMPONENT_HANDLER_HARDFOC_INTEGRATION_H_
 
 #include "SystemInit.h"
-#include "AdcData.h"
-#include "GpioHandler.h"
-#include "../AdcMultiCountReading.h"
+#include "../AdcManager.h"
+#include "../GpioManager.h"
 
 /**
  * @file HardFocIntegration.h

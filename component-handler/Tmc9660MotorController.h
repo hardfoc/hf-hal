@@ -9,11 +9,11 @@
 
 #include "CommonIDs.h"
 #include "ThingsToString.h"
-#include "AdcData.h"
-#include "GpioData.h"
+#include "AdcManager.h"
+#include "GpioManager.h"
 #include "utils-and-drivers/hf-core-drivers/external/hf-tmc9660-driver/inc/TMC9660.h"
-#include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/BaseAdc.h"
-#include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/DigitalGpio.h"
+#include "base/BaseAdc.h"
+#include "mcu/McuDigitalGpio.h"
 
 /**
  * @file Tmc9660MotorController.h
@@ -346,8 +346,8 @@ private:
     uint8_t registeredChipCount_;                                     ///< Number of registered chips
     
     // System references
-    AdcData* adcSystem_;                                              ///< ADC system reference
-    GpioData* gpioSystem_;                                            ///< GPIO system reference
+    AdcManager* adcSystem_;                                           ///< ADC manager system reference
+    GpioManager* gpioSystem_;                                         ///< GPIO manager system reference
 };
 
 /**

@@ -10,7 +10,7 @@
  * pins that can be controlled via SPI registers.
  */
 
-#include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/DigitalGpio.h"
+#include "base/BaseGpio.h"
 #include "CommonIDs.h"
 #include <memory>
 
@@ -24,7 +24,7 @@ class Tmc9660MotorController;
  * This class wraps a TMC9660 GPIO pin and provides the standard DigitalGpio
  * interface for use with the unified GPIO system.
  */
-class Tmc9660GpioPin : public DigitalGpio {
+class Tmc9660GpioPin : public BaseGpio {
 public:
     /**
      * @brief Constructor for TMC9660 GPIO pin.

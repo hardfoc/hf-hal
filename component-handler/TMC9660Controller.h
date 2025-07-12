@@ -1,8 +1,8 @@
 #ifndef COMPONENT_HANDLER_TMC9660_CONTROLLER_H_
 #define COMPONENT_HANDLER_TMC9660_CONTROLLER_H_
 
-#include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/BaseAdc.h"
-#include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/DigitalGpio.h"
+#include "base/BaseAdc.h"
+#include "mcu/McuDigitalGpio.h"
 #include "CommonIDs.h"
 #include <cstdint>
 #include <string_view>
