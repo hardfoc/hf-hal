@@ -40,7 +40,7 @@
 #include "base/BaseGpio.h"
 #include "SfI2cBus.h"
 #include "Tmc9660MotorController.h"
-#include "Pcal95555GpioWrapper.h"
+#include "Pcal95555Handler.h"
 #include "utils-and-drivers/hf-core-drivers/internal/hf-pincfg/include/hf_platform_mapping.hpp"
 #include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/mcu/esp32/McuDigitalGpio.h"
 
@@ -57,7 +57,7 @@
 // FORWARD DECLARATIONS
 //==============================================================================
 
-class Pcal95555GpioWrapper;
+class Pcal95555Handler;
 
 //==============================================================================
 // GPIO INFORMATION STRUCTURES
@@ -526,7 +526,7 @@ private:
     // Hardware interfaces
     SfI2cBus* i2c_bus_{nullptr};
     Tmc9660MotorController* tmc9660_controller_{nullptr};
-    std::shared_ptr<Pcal95555GpioWrapper> pcal95555_wrapper_;
+    std::shared_ptr<Pcal95555Handler> pcal95555_handler_;
     
     // Pin registry
     std::unordered_map<HardFOC::FunctionalGpioPin, std::unique_ptr<GpioInfo>> pin_registry_;

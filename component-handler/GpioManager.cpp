@@ -62,7 +62,7 @@ Result<void> GpioManager::Initialize(SfI2cBus& i2cBus, Tmc9660MotorController& t
         return esp32_result;
     }
     
-    auto pcal_result = InitializePcal95555GpioWrapper();
+    auto pcal_result = InitializePcal95555Handler();
     if (pcal_result.IsError()) {
         console_error(TAG, "Failed to initialize PCAL95555 GPIO wrapper: %s", pcal_result.GetDescription().data());
         return pcal_result;
@@ -110,7 +110,7 @@ Result<void> GpioManager::Shutdown() noexcept {
     pin_registry_.clear();
     
     // Reset hardware interfaces
-    pcal95555_wrapper_.reset();
+    pcal95555_handler_.reset();
     tmc9660_controller_ = nullptr;
     i2c_bus_ = nullptr;
     
@@ -1028,7 +1028,7 @@ Result<void> GpioManager::InitializeEsp32Gpio() noexcept {
     return HARDFOC_SUCCESS();
 }
 
-Result<void> GpioManager::InitializePcal95555GpioWrapper() noexcept {
+Result<void> GpioManager::InitializePcal95555Handler() noexcept {
     console_info(TAG, "Initializing PCAL95555 GPIO wrapper");
     
     if (!i2c_bus_) {
@@ -1038,8 +1038,8 @@ Result<void> GpioManager::InitializePcal95555GpioWrapper() noexcept {
     
     try {
         // Create PCAL95555 wrapper using the BaseI2c interface
-        pcal95555_wrapper_ = CreatePcal95555GpioWrapper(*i2c_bus_, GetDefaultPcal95555I2cAddress());
-        if (!pcal95555_wrapper_ || !pcal95555_wrapper_->IsHealthy()) {
+        pcal95555_handler_ = std::make_unique<Pcal95555Handler>(*i2c_bus_, GetDefaultPcal95555I2cAddress());
+        if (!pcal95555_handler_->IsHealthy()) {
             return Result<void>::Error(ResultCode::ERROR_INIT_FAILED,
                                       "Failed to create or initialize PCAL95555 GPIO wrapper");
         }
@@ -1110,7 +1110,7 @@ Result<std::unique_ptr<BaseGpio>> GpioManager::CreateEsp32GpioDriver(uint8_t pin
 }
 
 Result<std::unique_ptr<BaseGpio>> GpioManager::CreatePcal95555GpioDriver(uint8_t pin_id, bool direction) noexcept {
-    if (!pcal95555_wrapper_) {
+    if (!pcal95555_handler_) {
         return Result<std::unique_ptr<BaseGpio>>::Error(ResultCode::ERROR_DEPENDENCY_MISSING,
                                                        "PCAL95555 wrapper not initialized");
     }
@@ -1118,7 +1118,7 @@ Result<std::unique_ptr<BaseGpio>> GpioManager::CreatePcal95555GpioDriver(uint8_t
     try {
         // Create pin using the wrapper
         auto chip_pin = static_cast<Pcal95555Chip1Pin>(pin_id);
-        auto gpio = pcal95555_wrapper_->CreateGpioPin(chip_pin);
+        auto gpio = pcal95555_handler_->CreateGpioPin(chip_pin);
         
         if (!gpio) {
             return Result<std::unique_ptr<BaseGpio>>::Error(ResultCode::ERROR_INIT_FAILED,

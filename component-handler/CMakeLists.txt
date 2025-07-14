@@ -11,7 +11,6 @@ set(COMPONENT_SOURCES
     # Core system files
     SystemInit.cpp
     Result.h
-    Result_corrected.h
     CommonIDs.h
     ThingsToString.h
     
