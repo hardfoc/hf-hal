@@ -36,7 +36,7 @@ BaseGpio (Unified Base Class)
 │   └── GetInterruptStatus() / ClearInterruptStats()
 └── Derived Implementations
     ├── McuDigitalGpio (ESP32C6 with full interrupt support)
-    ├── Pcal95555DigitalGpio (I2C expander with optional interrupt forwarding)
+    ├── Pcal95555GpioWrapper (I2C expander with optional interrupt forwarding)
     └── [Future implementations]
 ```
 
@@ -51,7 +51,7 @@ BaseGpio (Unified Base Class)
 - All trigger types supported
 
 ### Level 2: Forwarded Interrupt Support  
-**Example**: `Pcal95555DigitalGpio` with interrupt pin
+**Example**: `Pcal95555GpioWrapper` with interrupt pin
 - GPIO expander interrupt pin connected to MCU interrupt pin
 - Single shared interrupt for all expander pins
 - Software demultiplexing of interrupt sources
@@ -135,7 +135,8 @@ private:
 // Usage with mixed GPIO types
 InputManager manager;
 manager.AddInput(std::make_unique<McuDigitalGpio>(GPIO_NUM_0), "Button1");
-manager.AddInput(std::make_unique<Pcal95555DigitalGpio>(...), "Button2");
+auto pcal_wrapper = CreatePcal95555GpioWrapper(i2c_bus, 0x20);
+manager.AddInput(pcal_wrapper->CreateGpioPin(Pcal95555Chip1Pin::BUTTON_2), "Button2");
 ```
 
 ## Interrupt Trigger Types
@@ -187,7 +188,7 @@ private:
 
 ### For I2C GPIO Expander Implementations
 ```cpp
-class Pcal95555DigitalGpio : public BaseGpio {
+class Pcal95555GpioWrapper {
 public:
     bool SupportsInterrupts() const noexcept override {
         return has_interrupt_pin_;  // Only if hardware interrupt pin connected

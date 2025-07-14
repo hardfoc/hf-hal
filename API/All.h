@@ -26,7 +26,7 @@
 #include "../component-handler/Tmc9660Gpio.h"
 
 // GPIO expander support
-#include "../component-handler/Pcal95555Gpio.h"
+#include "../component-handler/Pcal95555GpioWrapper.h"
 
 // ESP32-C6 GPIO support
 #include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/include/mcu/McuDigitalGpio.h"

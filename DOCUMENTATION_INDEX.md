@@ -14,6 +14,14 @@ This document provides an index of all available documentation for the HardFOC s
 - **Health monitoring** and error handling
 - **Performance considerations** and troubleshooting
 
+**[component-handler/GPIO_MANAGER_README.md](component-handler/GPIO_MANAGER_README.md)**
+- **Complete documentation** for the new GpioManager system
+- **Multi-chip GPIO management** (ESP32, PCAL95555, TMC9660)
+- **Platform mapping integration** with functional pin identifiers
+- **Thread-safe operations** and advanced features
+- **TMC9660 motor controller integration** with GPIO control
+- **Comprehensive examples** and troubleshooting guide
+
 ### 📚 Component Handler Quick Reference  
 **[component-handler/README.md](component-handler/README.md)**
 - **Quick reference** for the component handler system
@@ -74,9 +82,13 @@ This document provides an index of all available documentation for the HardFOC s
 hf-hal/
 ├── component-handler/          # Main GPIO and ADC handling components
 │   ├── GpioManager.h/cpp       # Modern consolidated GPIO management
+│   ├── Pcal95555GpioWrapper.h/cpp # PCAL95555 I2C GPIO expander wrapper
+│   ├── Tmc9660Gpio.h/cpp       # TMC9660 GPIO integration
+│   ├── Tmc9660MotorController.h/cpp # TMC9660 motor controller with GPIO
 │   ├── AdcManager.h/cpp        # Modern consolidated ADC management
 │   ├── CommonIDs.h            # System-wide enumerations and constants
 │   ├── SystemInit.h/cpp       # System initialization utilities
+│   ├── GPIO_MANAGER_README.md # Complete GPIO manager documentation
 │   └── All.h                  # Master include file
 ├── API/                        # Public API interfaces
 │   ├── All.h                  # Public API master include
@@ -152,21 +164,23 @@ float voltage = adcManager.ReadVoltage(ADC_ESP32_ADC1_CH0);
 ## System Features
 
 ### GPIO Sources Supported
-- ✅ **ESP32-C6 Native GPIO**: 40+ pins with safety validation
-- ✅ **PCAL95555 I2C Expanders**: Up to 2 chips (32 additional pins)  
-- ✅ **TMC9660 Motor Controller**: Specialized GPIO pins for motor control
+- ✅ **ESP32-C6 Native GPIO**: 40+ pins with safety validation and platform mapping
+- ✅ **PCAL95555 I2C Expanders**: Up to 2 chips (32 additional pins) with full I2C integration
+- ✅ **TMC9660 Motor Controller**: Specialized GPIO pins for motor control with fault handling
 
 ### ADC Sources Supported
 - ✅ **ESP32-C6 Internal ADC**: ADC1 and ADC2 units with calibration
 - ✅ **TMC9660 Motor Controller**: AIN1, AIN2, AIN3 analog inputs
 
 ### Key Features
-- 🔒 **Thread-safe operation** with mutex protection
-- 🏥 **Health monitoring** for all hardware sources
-- ⚡ **Performance optimized** with batch operations
-- 🛡️ **Pin safety validation** for ESP32-C6
-- 🔧 **Comprehensive error handling** and diagnostics
-- 📊 **Real-time system status** monitoring
+- 🔒 **Thread-safe operation** with mutex protection and atomic operations
+- 🏥 **Health monitoring** for all hardware sources with detailed diagnostics
+- ⚡ **Performance optimized** with batch operations and interrupt handling
+- 🛡️ **Pin safety validation** for ESP32-C6 with platform mapping integration
+- 🔧 **Comprehensive error handling** and diagnostics with fault recovery
+- 📊 **Real-time system status** monitoring with chip-specific statistics
+- 🔄 **GPIO interrupts** with edge-triggered callbacks and event handling
+- 🎯 **Functional pin identifiers** with automatic hardware resource discovery
 
 ## Documentation Guidelines
 

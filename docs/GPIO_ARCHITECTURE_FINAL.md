@@ -28,7 +28,7 @@ The HardFOC GPIO architecture has been successfully modernized and unified under
 ```
 BaseGpio (Unified Base Class)
 ├── McuDigitalGpio (ESP32C6, STM32, etc.)
-├── Pcal95555DigitalGpio (I2C GPIO Expander)
+├── Pcal95555GpioWrapper (I2C GPIO Expander)
 ├── Tmc9660GpioPin (TMC Motor Controller)
 ├── DigitalExternalIRQ (Interrupt-capable GPIO)
 ├── PwmOutput (PWM-capable GPIO)
@@ -44,7 +44,7 @@ BaseGpio (Unified Base Class)
 - `DigitalExternalIRQ.h/.cpp` - External interrupt support
 
 ### Hardware-Specific Files
-- `Pcal95555DigitalGpio.h/.cpp` - PCAL95555 I2C GPIO expander
+- `Pcal95555GpioWrapper.h/.cpp` - PCAL95555 I2C GPIO expander wrapper
 - `Tmc9660Gpio.h/.cpp` - TMC9660 motor controller GPIO
 - `PwmOutput.h/.cpp` - PWM output functionality
 
@@ -135,7 +135,7 @@ led.Initialize();
 led.SetActive();  // Turn on LED
 ```
 
-### Pcal95555DigitalGpio
+### Pcal95555GpioWrapper
 
 **Purpose**: I2C GPIO expander support
 
@@ -147,8 +147,8 @@ led.SetActive();  // Turn on LED
 
 **Usage**:
 ```cpp
-auto pcal_gpio = std::make_unique<Pcal95555DigitalGpio>(
-    0, pcal_driver, 0x20, BaseGpio::Direction::Output);
+auto pcal_wrapper = CreatePcal95555GpioWrapper(i2c_bus, 0x20);
+auto pcal_gpio = pcal_wrapper->CreateGpioPin(Pcal95555Chip1Pin::LED_STATUS_GREEN);
 pcal_gpio->Initialize();
 pcal_gpio->SetActive();
 ```

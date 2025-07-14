@@ -28,7 +28,7 @@ The component handler provides a clean, hardware-agnostic interface for all GPIO
 - **`Tmc9660MotorController.h/.cpp`** - TMC9660 motor controller integration
 - **`TMC9660Controller.h/.cpp`** - TMC9660 specific implementation
 - **`Tmc9660Gpio.h/.cpp`** - TMC9660 GPIO wrapper
-- **`Pcal95555Gpio.h/.cpp`** - PCAL95555 GPIO expander wrapper
+- **`Pcal95555GpioWrapper.h/.cpp`** - PCAL95555 GPIO expander wrapper
 
 ### Support Files
 - **`CommonIDs.h`** - Legacy compatibility and convenience aliases

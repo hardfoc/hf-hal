@@ -7,7 +7,7 @@
  */
 
 #include "McuDigitalGpio.h"
-#include "Pcal95555DigitalGpio.h"
+#include "component-handler/Pcal95555GpioWrapper.h"
 #include "GpioGuard.h"
 #include <memory>
 #include <vector>
@@ -105,13 +105,9 @@ void UnifiedGpioExample() {
     );
     
     // Create I2C GPIO expander instance (PCAL95555 pin)
-    // Note: In real implementation, you'd share the PCAL95555 driver instance
-    auto pcal_status_led = std::make_unique<Pcal95555DigitalGpio>(
-        6,  // PCAL95555 pin 6
-        /* pcal_driver */ nullptr,  // Would be actual driver instance
-        0x20,  // I2C address
-        BaseGpio::Direction::Output
-    );
+    // Note: In real implementation, you'd share the PCAL95555 wrapper instance
+    auto pcal_wrapper = CreatePcal95555GpioWrapper(i2c_bus, 0x20);
+    auto pcal_status_led = pcal_wrapper->CreateGpioPin(Pcal95555Chip1Pin::LED_STATUS_GREEN);
     
     // Create motor controller using polymorphic GPIO pins
     MotorController motor(
@@ -182,7 +178,7 @@ void MixedImplementationExample() {
     // Add various GPIO implementations
     gpio_pins.push_back(std::make_unique<McuDigitalGpio>(GPIO_NUM_1));
     gpio_pins.push_back(std::make_unique<McuDigitalGpio>(GPIO_NUM_2));
-    // gpio_pins.push_back(std::make_unique<Pcal95555DigitalGpio>(...));
+    // gpio_pins.push_back(pcal_wrapper->CreateGpioPin(Pcal95555Chip1Pin::LED_STATUS_GREEN));
     
     // Configure each pin polymorphically
     for (auto& pin : gpio_pins) {
