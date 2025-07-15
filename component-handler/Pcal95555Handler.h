@@ -106,64 +106,24 @@ public:
     Pcal95555Handler(Pcal95555Handler&&) = default;
     Pcal95555Handler& operator=(Pcal95555Handler&&) = default;
 
-    /**
-     * @brief Initialize the chip (idempotent).
-     * @return true if successful
-     */
-    hf_bool_t Initialize() noexcept;
+    // Batch operations
+    hf_gpio_err_t SetDirections(uint16_t pin_mask, hf_gpio_direction_t direction) noexcept;
+    hf_gpio_err_t SetOutputs(uint16_t pin_mask, hf_bool_t active) noexcept;
+    hf_gpio_err_t SetPullModes(uint16_t pin_mask, hf_gpio_pull_mode_t pull_mode) noexcept;
 
-    /**
-     * @brief Deinitialize the chip (idempotent).
-     * @return true if successful
-     */
-    hf_bool_t Deinitialize() noexcept;
+    // Get all interrupt masks and status
+    hf_gpio_err_t GetAllInterruptMasks(uint16_t& mask) noexcept;
+    hf_gpio_err_t GetAllInterruptStatus(uint16_t& status) noexcept;
 
-    /**
-     * @brief Set pin direction.
-     * @param pin Pin number (0-15)
-     * @param direction Input or output
-     * @return true if successful
-     */
-    hf_bool_t SetDirection(hf_u8_t pin, hf_gpio_direction_t direction) noexcept;
-
-    /**
-     * @brief Set pin output value.
-     * @param pin Pin number (0-15)
-     * @param active true for active, false for inactive
-     * @return true if successful
-     */
-    hf_bool_t SetOutput(hf_u8_t pin, hf_bool_t active) noexcept;
-
-    /**
-     * @brief Read pin input value.
-     * @param pin Pin number (0-15)
-     * @param active Output: true if active
-     * @return true if successful
-     */
-    hf_bool_t ReadInput(hf_u8_t pin, hf_bool_t& active) noexcept;
-
-    /**
-     * @brief Toggle pin output value.
-     * @param pin Pin number (0-15)
-     * @return true if successful
-     */
-    hf_bool_t Toggle(hf_u8_t pin) noexcept;
-
-    /**
-     * @brief Set pin pull resistor mode.
-     * @param pin Pin number (0-15)
-     * @param pull_mode Pull mode
-     * @return true if successful
-     */
-    hf_bool_t SetPullMode(hf_u8_t pin, hf_gpio_pull_mode_t pull_mode) noexcept;
-
-    /**
-     * @brief Get pin pull resistor mode.
-     * @param pin Pin number (0-15)
-     * @param pull_mode Output: current pull mode
-     * @return true if successful
-     */
-    hf_bool_t GetPullMode(hf_u8_t pin, hf_gpio_pull_mode_t& pull_mode) noexcept;
+    // Update all single-pin methods to return hf_gpio_err_t
+    hf_gpio_err_t Initialize() noexcept;
+    hf_gpio_err_t Deinitialize() noexcept;
+    hf_gpio_err_t SetDirection(hf_u8_t pin, hf_gpio_direction_t direction) noexcept;
+    hf_gpio_err_t SetOutput(hf_u8_t pin, hf_bool_t active) noexcept;
+    hf_gpio_err_t ReadInput(hf_u8_t pin, hf_bool_t& active) noexcept;
+    hf_gpio_err_t Toggle(hf_u8_t pin) noexcept;
+    hf_gpio_err_t SetPullMode(hf_u8_t pin, hf_gpio_pull_mode_t pull_mode) noexcept;
+    hf_gpio_err_t GetPullMode(hf_u8_t pin, hf_gpio_pull_mode_t& pull_mode) noexcept;
 
     /**
      * @brief Get the number of pins (always 16).
