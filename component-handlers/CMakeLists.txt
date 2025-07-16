@@ -25,12 +25,10 @@ set(COMPONENT_SOURCES
     AdcManager.h
     
     # TMC9660 motor controller system
-    Tmc9660MotorController.cpp
-    Tmc9660MotorController.h
-    Tmc9660Gpio.cpp
-    Tmc9660Gpio.h
-    TMC9660Controller.cpp
-    TMC9660Controller.h
+    Tmc9660Handler.cpp
+    Tmc9660Handler.h
+    MotorController.cpp
+    MotorController.h
     
     # Example and test files
     ModernHalExample.cpp
