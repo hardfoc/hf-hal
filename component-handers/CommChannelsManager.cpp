@@ -14,37 +14,103 @@ CommChannelsManager& CommChannelsManager::GetInstance() noexcept {
 }
 
 CommChannelsManager::CommChannelsManager() {
-    //================ SPI =================//
+    // Initialize vectors for managing multiple buses
+    spi_device_indices_.reserve(4); // Reserve space for 4 SPI devices
+    i2c_buses_.reserve(2);   // Reserve space for 2 I2C buses
+    uart_buses_.reserve(2);  // Reserve space for 2 UART buses
+    can_buses_.reserve(2);   // Reserve space for 2 CAN buses
+}
+
+bool CommChannelsManager::Initialize() noexcept {
+
+    //================ UART FOR TMC9660 TMCL COMMUNICATION =================//
+    {
+        ESP_LOGI("CommChannelsManager", "Configuring UART for TMC9660 TMCL communication");
+        
+        hf_uart_config_t uart_config = {};
+        auto* tx_map = GetGpioMapping(HfFunctionalGpioPin::UART_TXD);
+        auto* rx_map = GetGpioMapping(HfFunctionalGpioPin::UART_RXD);
+        
+        if (tx_map && rx_map) {
+            // ESP-IDF v5.5 compliant UART configuration for TMC9660 TMCL protocol
+            uart_config.port_number = 0;                                           // UART0 port
+            uart_config.baud_rate = 115200;                                        // TMC9660 standard baud rate
+            uart_config.data_bits = hf_uart_data_bits_t::HF_UART_DATA_8_BITS;      // 8 data bits per TMCL spec
+            uart_config.parity = hf_uart_parity_t::HF_UART_PARITY_DISABLE;         // No parity for TMCL protocol
+            uart_config.stop_bits = hf_uart_stop_bits_t::HF_UART_STOP_BITS_1;      // 1 stop bit
+            uart_config.flow_control = hf_uart_flow_ctrl_t::HF_UART_HW_FLOWCTRL_DISABLE; // No flow control
+            uart_config.tx_pin = tx_map->physical_pin;                             // TX: GPIO5 (UART_TXD)
+            uart_config.rx_pin = rx_map->physical_pin;                             // RX: GPIO4 (UART_RXD)
+            uart_config.rts_pin = HF_UART_IO_UNUSED;                               // RTS not used
+            uart_config.cts_pin = HF_UART_IO_UNUSED;                               // CTS not used
+            
+            // Buffer configuration optimized for TMC9660 9-byte TMCL datagrams
+            uart_config.tx_buffer_size = 256;                                      // TX buffer (~28 TMCL frames)
+            uart_config.rx_buffer_size = 512;                                      // RX buffer (~56 TMCL frames)
+            uart_config.event_queue_size = 20;                                     // Event queue for interrupts
+            uart_config.operating_mode = hf_uart_operating_mode_t::HF_UART_MODE_INTERRUPT; // Interrupt-driven
+            uart_config.timeout_ms = 100;                                          // Timeout for operations
+            uart_config.enable_pattern_detection = false;                          // Disable for now
+            uart_config.enable_wakeup = false;                                     // No wakeup needed
+            uart_config.enable_loopback = false;                                   // No loopback testing
+            
+            uart_buses_.emplace_back(std::make_unique<EspUart>(uart_config));
+            
+            ESP_LOGI("CommChannelsManager", "UART configured for TMC9660: 115200 8N1, TX=GPIO%d, RX=GPIO%d", 
+                     tx_map->physical_pin, rx_map->physical_pin);
+            ESP_LOGI("CommChannelsManager", "UART buffers: TX=%d bytes, RX=%d bytes (optimized for 9-byte TMCL frames)",
+                     uart_config.tx_buffer_size, uart_config.rx_buffer_size);
+        } else {
+            ESP_LOGE("CommChannelsManager", "UART GPIO mapping missing - TMC9660 communication will not be available");
+            ESP_LOGE("CommChannelsManager", "Required pins: UART_TXD=%s, UART_RXD=%s", 
+                     tx_map ? "OK" : "MISSING", rx_map ? "OK" : "MISSING");
+        }
+    }
+
+    //================ SPI2_HOST =================//
     {
         hf_spi_bus_config_t spi_config = {};
-        auto* miso_map = GetGpioMapping(HfFunctionalGpioPin::SPI0_MISO);
-        auto* mosi_map = GetGpioMapping(HfFunctionalGpioPin::SPI0_MOSI);
-        auto* sck_map  = GetGpioMapping(HfFunctionalGpioPin::SPI0_SCK);
+
+        // Get pin mappings for SPI
+        // Note: This assumes SPI2_MISO, SPI2_MOSI, SPI2_SCK are defined in HfFunctionalGpioPin
+        auto* miso_map = GetGpioMapping(HfFunctionalGpioPin::SPI2_MISO);
+        auto* mosi_map = GetGpioMapping(HfFunctionalGpioPin::SPI2_MOSI);
+        auto* sck_map  = GetGpioMapping(HfFunctionalGpioPin::SPI2_SCK);
+
+        // If all required pins are mapped to a proper structure, create the SPI bus
         if (miso_map && mosi_map && sck_map) {
             spi_config.host = static_cast<hf_spi_host_device_t>(1); // SPI2_HOST
             spi_config.miso_pin = miso_map->physical_pin;
             spi_config.mosi_pin = mosi_map->physical_pin;
             spi_config.sclk_pin = sck_map->physical_pin;
-            spi_config.clock_speed_hz = 10000000; // 10 MHz default
-            spi_config.mode = 0; // SPI mode 0
-            spi_config.bits_per_word = 8;
+            spi_config.dma_channel = 0; // Auto-select DMA channel
             spi_config.timeout_ms = 1000;
+            spi_config.use_iomux = true; // Use IOMUX for better performance
+
             // Create the bus
             spi_bus_ = std::make_unique<EspSpiBus>(spi_config);
             spi_bus_->Initialize();
-            // Now create three devices for three CS pins
-            std::vector<HfFunctionalGpioPin> cs_pins = {
-                HfFunctionalGpioPin::SPI0_CS_TMC9660,
-                HfFunctionalGpioPin::SPI0_CS_DEVICE2,
-                HfFunctionalGpioPin::SPI0_CS_DEVICE3
-            };
-            for (auto cs_pin_enum : cs_pins) {
+
+            // Now create devices for all configured CS pins
+            for (auto cs_pin_enum : kSpiCsPins) {
                 auto* cs_map = GetGpioMapping(cs_pin_enum);
                 if (cs_map) {
                     hf_spi_device_config_t dev_cfg = {};
-                    dev_cfg.spics_io_num = cs_map->physical_pin;
-                    dev_cfg.clock_speed_hz = spi_config.clock_speed_hz;
-                    dev_cfg.mode = spi_config.mode;
+                    dev_cfg.cs_pin = cs_map->physical_pin;
+                    dev_cfg.clock_speed_hz = 10 * 1000000; // 10 MHz max for both devices
+                    
+                    // Configure SPI mode based on device type
+                    if (cs_pin_enum == HfFunctionalGpioPin::SPI2_CS_AS5047) {
+                        // AS5047U: SPI Mode 1 (CPOL=0, CPHA=1) - samples on falling CLK edge
+                        dev_cfg.mode = hf_spi_mode_t::HF_SPI_MODE_1;
+                    } else if (cs_pin_enum == HfFunctionalGpioPin::SPI2_CS_TMC9660) {
+                        // TMC9660: SPI Mode 3 (CPOL=1, CPHA=1) - idle high, sample on falling edge
+                        dev_cfg.mode = hf_spi_mode_t::HF_SPI_MODE_3;
+                    } else {
+                        // Default mode for external GPIO devices
+                        dev_cfg.mode = hf_spi_mode_t::HF_SPI_MODE_0;
+                    }
+                    
                     dev_cfg.queue_size = 7;
                     dev_cfg.flags = 0;
                     dev_cfg.cs_ena_pretrans = 0;
@@ -56,7 +122,12 @@ CommChannelsManager::CommChannelsManager() {
                     dev_cfg.dummy_bits = 0;
                     dev_cfg.pre_cb = nullptr;
                     dev_cfg.post_cb = nullptr;
-                    spi_devices_.emplace_back(spi_bus_->createDevice(dev_cfg));
+                    
+                    // Create device and store its index
+                    int device_index = spi_bus_->CreateDevice(dev_cfg);
+                    if (device_index >= 0) {
+                        spi_device_indices_.push_back(device_index);
+                    }
                 }
             }
         }
@@ -79,23 +150,6 @@ CommChannelsManager::CommChannelsManager() {
         }
     }
 
-    //================ UART =================//
-    {
-        hf_uart_config_t uart_config = {};
-        auto* tx_map = GetGpioMapping(HfFunctionalGpioPin::UART_TXD);
-        auto* rx_map = GetGpioMapping(HfFunctionalGpioPin::UART_RXD);
-        if (tx_map && rx_map) {
-            uart_config.port_number = 0;
-            uart_config.tx_pin = tx_map->physical_pin;
-            uart_config.rx_pin = rx_map->physical_pin;
-            uart_config.baud_rate = 115200;
-            // ... set other config fields as needed
-            uart_buses_.emplace_back(std::make_unique<EspUart>(uart_config));
-        } else {
-            // TODO: Log warning: UART mapping missing, not instantiating UART bus
-        }
-    }
-
     //================ CAN =================//
     {
         hf_esp_can_config_t can_config = {};
@@ -112,17 +166,115 @@ CommChannelsManager::CommChannelsManager() {
             // TODO: Log warning: CAN mapping missing, not instantiating CAN bus
         }
     }
+
+    //================ Initialization =================//
+
+    // If no buses were created, return false
+    if (!spi_bus_ && i2c_buses_.empty() && uart_buses_.empty() && can_buses_.empty()) {
+        // No buses initialized, return false
+        return false;
+    }
+
+    // Track if all buses were successfully initialized
+    bool all_initialized = true;
+
+    // Initialize SPI bus
+    if (spi_bus_ && !spi_bus_->Initialize()) {
+        all_initialized = false;
+    }
+
+    // Initialize other buses
+    for (auto& i2c : i2c_buses_) {
+        if (!i2c->EnsureInitialized()) {
+            all_initialized = false;
+        }
+    }
+    for (auto& uart : uart_buses_) {
+        if (!uart->EnsureInitialized()) {
+            all_initialized = false;
+        }
+    }
+    for (auto& can : can_buses_) {
+        if (!can->EnsureInitialized()) {
+            all_initialized = false;
+        }
+    }
+
+    return all_initialized;
+}
+
+bool CommChannelsManager::Deinitialize() noexcept {
+    if (!initialized_) {
+        return true; // Already deinitialized
+    }
+    
+    // If no buses were created, return false
+    if (!spi_bus_ && i2c_buses_.empty() && uart_buses_.empty() && can_buses_.empty()) {
+        // No buses initialized, return false
+        return false;
+    }
+
+    // Track if all buses were successfully deinitialized
+    bool all_deinitialized = true;
+
+    // Deinitialize SPI bus
+    if (spi_bus_ && !spi_bus_->Deinitialize()) {
+        all_deinitialized = false;
+    }
+
+    // Deinitialize other buses
+    for (auto& i2c : i2c_buses_) {
+        if (!i2c->EnsureDeinitialized()) {
+            all_deinitialized = false;
+        }
+    }
+    for (auto& uart : uart_buses_) {
+        if (!uart->EnsureDeinitialized()) {
+            all_deinitialized = false;
+        }
+    }
+    for (auto& can : can_buses_) {
+        if (!can->EnsureDeinitialized()) {
+            all_deinitialized = false;
+        }
+    }
+
+    return all_deinitialized;
 }
 
 CommChannelsManager::~CommChannelsManager() = default;
 
 //==================== Accessors ====================//
 
-BaseSpi& CommChannelsManager::GetSpi(std::size_t which) noexcept {
-    return *spi_devices_.at(which);
+EspSpiBus& CommChannelsManager::GetSpiBus() noexcept {
+    return *spi_bus_;
 }
-std::size_t CommChannelsManager::GetSpiCount() const noexcept {
-    return spi_devices_.size();
+
+BaseSpi* CommChannelsManager::GetSpiDevice(int device_index) noexcept {
+    if (!spi_bus_) return nullptr;
+    return spi_bus_->GetDevice(device_index);
+}
+
+BaseSpi* CommChannelsManager::GetSpiDevice(SpiDeviceId device_id) noexcept {
+    if (!spi_bus_) return nullptr;
+    int device_index = static_cast<int>(device_id);
+    return spi_bus_->GetDevice(device_index);
+}
+
+EspSpiDevice* CommChannelsManager::GetEspSpiDevice(int device_index) noexcept {
+    if (!spi_bus_) return nullptr;
+    return spi_bus_->GetEspDevice(device_index);
+}
+
+EspSpiDevice* CommChannelsManager::GetEspSpiDevice(SpiDeviceId device_id) noexcept {
+    if (!spi_bus_) return nullptr;
+    int device_index = static_cast<int>(device_id);
+    return spi_bus_->GetEspDevice(device_index);
+}
+
+std::size_t CommChannelsManager::GetSpiDeviceCount() const noexcept {
+    if (!spi_bus_) return 0;
+    return spi_bus_->GetDeviceCount();
 }
 
 BaseI2c& CommChannelsManager::GetI2c(std::size_t which) noexcept {

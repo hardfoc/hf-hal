@@ -61,7 +61,7 @@ idf_component_register(
     REQUIRES      driver freertos hf-ws2812-rmt-driver nvs_flash
     # PRIVATE deps: used only while building this lib.
     #
-    PRIV_REQUIRES hal esp_timer esp_adc 
+    PRIV_REQUIRES hal esp_timer esp_adc esp_driver_spi esp_driver_i2c esp_driver_uart esp_driver_gpio 
 )
 
 #
