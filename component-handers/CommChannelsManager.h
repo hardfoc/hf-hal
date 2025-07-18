@@ -8,7 +8,8 @@
 // Forward declarations for ESP32 comm interface classes
 class EspSpiBus;
 class EspSpiDevice;
-class EspI2c;
+class EspI2cBus;
+class EspI2cDevice;
 class EspUart;
 class EspCan;
 
@@ -43,6 +44,26 @@ enum class SpiDeviceId : uint8_t {
 };
 
 /**
+ * @enum I2cDeviceId
+ * @brief Enumeration for I2C device identification on the board.
+ * 
+ * This enum provides a type-safe way to access specific I2C devices by their
+ * functional purpose rather than numeric indices or addresses.
+ */
+enum class I2cDeviceId : uint8_t {
+    BNO08X_IMU = 0,              ///< BNO08x IMU sensor (address 0x4A or 0x4B)
+    PCAL9555_GPIO_EXPANDER = 1,  ///< PCAL9555 GPIO expander (address 0x20-0x27)
+    EXTERNAL_DEVICE_1 = 2,       ///< External I2C device 1
+    EXTERNAL_DEVICE_2 = 3,       ///< External I2C device 2
+    
+    // Aliases for common usage
+    IMU = BNO08X_IMU,
+    GPIO_EXPANDER = PCAL9555_GPIO_EXPANDER,
+    
+    I2C_DEVICE_COUNT  ///< Total number of I2C devices
+};
+
+/**
  * @class CommChannelsManager
  * @brief Singleton for managing all board comm channels (SPI, I2C, UART, CAN).
  *
@@ -51,14 +72,6 @@ enum class SpiDeviceId : uint8_t {
  * - Board-agnostic: does not know about device purposes, only hardware buses.
  * - Uses board mapping for pin/bus configuration.
  * - Follows the singleton pattern (see GpioManager/AdcManager).
- * 
- * ## UART Configuration for TMC9660
- * - UART0 configured for TMC9660 TMCL protocol communication
- * - Baud rate: 115200, Format: 8N1 (8 data bits, no parity, 1 stop bit)
- * - Pins: TX=GPIO5, RX=GPIO4 (per vortex-v1 board pin mapping)
- * - Buffers: TX=256 bytes, RX=512 bytes (optimized for 9-byte TMCL frames)
- * - Mode: Interrupt-driven with event queue for reliable communication
- * - Compatible with ESP-IDF v5.5+ UART driver features
  */
 class CommChannelsManager {
 public:
@@ -185,6 +198,81 @@ public:
     }
 
     //==================== I2C Accessors ====================//
+    /**
+     * @brief Get reference to the I2C bus.
+     * @return Reference to the I2C bus
+     */
+    EspI2cBus& GetI2cBus() noexcept;
+    
+    /**
+     * @brief Get reference to an I2C device by index.
+     * @param device_index Index of the device on the bus
+     * @return Pointer to BaseI2c device, or nullptr if invalid
+     */
+    BaseI2c* GetI2cDevice(int device_index) noexcept;
+
+    /**
+     * @brief Get reference to an I2C device by device ID (enumeration-based access).
+     * @param device_id Device identifier from I2cDeviceId enum
+     * @return Pointer to BaseI2c device, or nullptr if invalid
+     */
+    BaseI2c* GetI2cDevice(I2cDeviceId device_id) noexcept;
+    
+    /**
+     * @brief Get ESP-specific I2C device by index.
+     * @param device_index Index of the device on the bus
+     * @return Pointer to EspI2cDevice, or nullptr if invalid
+     */
+    EspI2cDevice* GetEspI2cDevice(int device_index) noexcept;
+
+    /**
+     * @brief Get ESP-specific I2C device by device ID (enumeration-based access).
+     * @param device_id Device identifier from I2cDeviceId enum
+     * @return Pointer to EspI2cDevice, or nullptr if invalid
+     */
+    EspI2cDevice* GetEspI2cDevice(I2cDeviceId device_id) noexcept;
+
+    /**
+     * @brief Get number of I2C devices on the bus.
+     * @return Number of I2C devices
+     */
+    std::size_t GetI2cDeviceCount() const noexcept;
+
+    //==================== Convenience I2C Device Accessors ====================//
+    
+    /**
+     * @brief Get the BNO08x IMU device.
+     * @return Pointer to BaseI2c device for BNO08x, or nullptr if not available
+     */
+    BaseI2c* GetImu() noexcept {
+        return GetI2cDevice(I2cDeviceId::BNO08X_IMU);
+    }
+    
+    /**
+     * @brief Get the PCAL9555 GPIO expander device.
+     * @return Pointer to BaseI2c device for PCAL9555, or nullptr if not available
+     */
+    BaseI2c* GetGpioExpander() noexcept {
+        return GetI2cDevice(I2cDeviceId::PCAL9555_GPIO_EXPANDER);
+    }
+
+    /**
+     * @brief Get the BNO08x IMU device (ESP-specific interface).
+     * @return Pointer to EspI2cDevice for BNO08x, or nullptr if not available
+     */
+    EspI2cDevice* GetEspImu() noexcept {
+        return GetEspI2cDevice(I2cDeviceId::BNO08X_IMU);
+    }
+    
+    /**
+     * @brief Get the PCAL9555 GPIO expander device (ESP-specific interface).
+     * @return Pointer to EspI2cDevice for PCAL9555, or nullptr if not available
+     */
+    EspI2cDevice* GetEspGpioExpander() noexcept {
+        return GetEspI2cDevice(I2cDeviceId::PCAL9555_GPIO_EXPANDER);
+    }
+
+    //==================== Legacy I2C Accessors (Deprecated) ====================//
 
     /**
      * @brief Get reference to an I2C bus by index.
@@ -243,8 +331,10 @@ private:
     std::unique_ptr<EspSpiBus> spi_bus_;
     std::vector<int> spi_device_indices_; ///< Track device indices for easy access
 
-    // Internal vectors for managing multiple buses
-    std::vector<std::unique_ptr<EspI2c>> i2c_buses_;
+    std::unique_ptr<EspI2cBus> i2c_bus_;
+    std::vector<int> i2c_device_indices_; ///< Track device indices for easy access
+
+    // Internal vectors for managing multiple buses (legacy support)
     std::vector<std::unique_ptr<EspUart>> uart_buses_;
     std::vector<std::unique_ptr<EspCan>> can_buses_;
 };

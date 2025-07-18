@@ -30,6 +30,10 @@ set(COMPONENT_SOURCES
     MotorController.cpp
     MotorController.h
     
+    # Communication channels management
+    CommChannelsManager.cpp
+    CommChannelsManager.h
+    
     # Example and test files
     ModernHalExample.cpp
     Tmc9660Example.cpp

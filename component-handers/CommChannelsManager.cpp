@@ -16,7 +16,7 @@ CommChannelsManager& CommChannelsManager::GetInstance() noexcept {
 CommChannelsManager::CommChannelsManager() {
     // Initialize vectors for managing multiple buses
     spi_device_indices_.reserve(4); // Reserve space for 4 SPI devices
-    i2c_buses_.reserve(2);   // Reserve space for 2 I2C buses
+    i2c_device_indices_.reserve(4); // Reserve space for 4 I2C devices
     uart_buses_.reserve(2);  // Reserve space for 2 UART buses
     can_buses_.reserve(2);   // Reserve space for 2 CAN buses
 }
@@ -24,6 +24,12 @@ CommChannelsManager::CommChannelsManager() {
 bool CommChannelsManager::Initialize() noexcept {
 
     //================ UART FOR TMC9660 TMCL COMMUNICATION =================//
+    /*
+    * # UART Configuration for TMC9660
+    * - UART0 configured for TMC9660 TMCL protocol communication
+    * - Baud rate: 115200, Format: 8N1 (8 data bits, no parity, 1 stop bit)
+    * - Buffers: TX=256 bytes, RX=512 bytes (optimized for 9-byte TMCL frames)
+    */
     {
         ESP_LOGI("CommChannelsManager", "Configuring UART for TMC9660 TMCL communication");
         
@@ -54,6 +60,7 @@ bool CommChannelsManager::Initialize() noexcept {
             uart_config.enable_wakeup = false;                                     // No wakeup needed
             uart_config.enable_loopback = false;                                   // No loopback testing
             
+            // Create UART bus
             uart_buses_.emplace_back(std::make_unique<EspUart>(uart_config));
             
             ESP_LOGI("CommChannelsManager", "UART configured for TMC9660: 115200 8N1, TX=GPIO%d, RX=GPIO%d", 
@@ -156,10 +163,10 @@ bool CommChannelsManager::Initialize() noexcept {
             i2c_config.allow_pd = false;                                                   // Disable power down in sleep modes
             
             // Create I2C master bus instance
-            auto i2c_bus = std::make_unique<EspI2c>(i2c_config);
+            i2c_bus_ = std::make_unique<EspI2cBus>(i2c_config);
             
             // Initialize the I2C bus
-            if (i2c_bus->EnsureInitialized()) {
+            if (i2c_bus_->Initialize()) {
                 ESP_LOGI("CommChannelsManager", "I2C master bus initialized: SDA=GPIO%d, SCL=GPIO%d", 
                          sda_map->physical_pin, scl_map->physical_pin);
                 ESP_LOGI("CommChannelsManager", "I2C configuration: 400kHz, 7-cycle glitch filter, queue depth=8");
@@ -168,17 +175,19 @@ bool CommChannelsManager::Initialize() noexcept {
                 {
                     hf_i2c_device_config_t bno08x_device = {};
                     bno08x_device.device_address = 0x4A;                                       // BNO08x standard I2C address
-                    bno08x_device.dev_addr_length = hf_i2c_address_bits_t::HF_I2C_ADDR_7_BIT; // 7-bit addressing
+                    bno08x_device.dev_addr_length = hf_i2c_address_bits_t::HF_I2C_ADDR_7_BIT;  // 7-bit addressing
                     bno08x_device.scl_speed_hz = 400000;                                       // 400kHz for fast I2C operation
                     bno08x_device.scl_wait_us = 0;                                             // No additional SCL wait time
+                    bno08x_device.disable_ack_check = false;                                   // Enable ACK check
                     bno08x_device.flags = 0;                                                   // No device-specific flags
                     
-                    hf_i2c_err_t result = i2c_bus->AddDevice(bno08x_device);
-                    if (result == hf_i2c_err_t::I2C_SUCCESS) {
+                    int device_index = i2c_bus_->CreateDevice(bno08x_device);
+                    if (device_index >= 0) {
+                        i2c_device_indices_.push_back(device_index);
                         ESP_LOGI("CommChannelsManager", "BNO08x IMU device added to I2C bus: address=0x%02X, speed=400kHz", 
                                  bno08x_device.device_address);
                     } else {
-                        ESP_LOGW("CommChannelsManager", "Failed to add BNO08x IMU device to I2C bus (error=%d)", static_cast<int>(result));
+                        ESP_LOGW("CommChannelsManager", "Failed to add BNO08x IMU device to I2C bus");
                     }
                 }
                 
@@ -189,26 +198,25 @@ bool CommChannelsManager::Initialize() noexcept {
                     pcal95555_device.dev_addr_length = hf_i2c_address_bits_t::HF_I2C_ADDR_7_BIT; // 7-bit addressing
                     pcal95555_device.scl_speed_hz = 400000;                                    // 400kHz for fast I2C operation
                     pcal95555_device.scl_wait_us = 0;                                          // No additional SCL wait time
+                    pcal95555_device.disable_ack_check = false;                                // Enable ACK check
                     pcal95555_device.flags = 0;                                                // No device-specific flags
                     
-                    hf_i2c_err_t result = i2c_bus->AddDevice(pcal95555_device);
-                    if (result == hf_i2c_err_t::I2C_SUCCESS) {
+                    int device_index = i2c_bus_->CreateDevice(pcal95555_device);
+                    if (device_index >= 0) {
+                        i2c_device_indices_.push_back(device_index);
                         ESP_LOGI("CommChannelsManager", "PCAL95555 GPIO expander device added to I2C bus: address=0x%02X, speed=400kHz", 
                                  pcal95555_device.device_address);
                     } else {
-                        ESP_LOGW("CommChannelsManager", "Failed to add PCAL95555 GPIO expander device to I2C bus (error=%d)", static_cast<int>(result));
+                        ESP_LOGW("CommChannelsManager", "Failed to add PCAL95555 GPIO expander device to I2C bus");
                     }
                 }
-                
-                // Store the initialized I2C bus
-                i2c_buses_.emplace_back(std::move(i2c_bus));
                 
                 ESP_LOGI("CommChannelsManager", "I2C bus ready for BNO08x IMU and PCAL95555 GPIO expander communication");
             } else {
                 ESP_LOGE("CommChannelsManager", "Failed to initialize I2C master bus");
             }
         } else {
-            ESP_LOGE("CommChannelsManager", "I2C GPIO mapping missing - BNO08x and PCAL95555 will not be available");
+            ESP_LOGE("CommChannelsManager", "I2C GPIO mapping missing - I2C devices will not be available");
             ESP_LOGE("CommChannelsManager", "Required pins: I2C_SDA=%s, I2C_SCL=%s", 
                      sda_map ? "OK" : "MISSING", scl_map ? "OK" : "MISSING");
         }
@@ -234,7 +242,7 @@ bool CommChannelsManager::Initialize() noexcept {
     //================ Initialization =================//
 
     // If no buses were created, return false
-    if (!spi_bus_ && i2c_buses_.empty() && uart_buses_.empty() && can_buses_.empty()) {
+    if (!spi_bus_ && !i2c_bus_ && uart_buses_.empty() && can_buses_.empty()) {
         // No buses initialized, return false
         return false;
     }
@@ -247,12 +255,8 @@ bool CommChannelsManager::Initialize() noexcept {
         all_initialized = false;
     }
 
-    // Initialize other buses
-    for (auto& i2c : i2c_buses_) {
-        if (!i2c->EnsureInitialized()) {
-            all_initialized = false;
-        }
-    }
+    // Initialize I2C bus (already initialized in the configuration block above)
+    // The I2C bus is initialized when created and devices are added
     for (auto& uart : uart_buses_) {
         if (!uart->EnsureInitialized()) {
             all_initialized = false;
@@ -273,7 +277,7 @@ bool CommChannelsManager::Deinitialize() noexcept {
     }
     
     // If no buses were created, return false
-    if (!spi_bus_ && i2c_buses_.empty() && uart_buses_.empty() && can_buses_.empty()) {
+    if (!spi_bus_ && !i2c_bus_ && uart_buses_.empty() && can_buses_.empty()) {
         // No buses initialized, return false
         return false;
     }
@@ -286,11 +290,9 @@ bool CommChannelsManager::Deinitialize() noexcept {
         all_deinitialized = false;
     }
 
-    // Deinitialize other buses
-    for (auto& i2c : i2c_buses_) {
-        if (!i2c->EnsureDeinitialized()) {
-            all_deinitialized = false;
-        }
+    // Deinitialize I2C bus
+    if (i2c_bus_ && !i2c_bus_->Deinitialize()) {
+        all_deinitialized = false;
     }
     for (auto& uart : uart_buses_) {
         if (!uart->EnsureDeinitialized()) {
@@ -341,11 +343,53 @@ std::size_t CommChannelsManager::GetSpiDeviceCount() const noexcept {
     return spi_bus_->GetDeviceCount();
 }
 
-BaseI2c& CommChannelsManager::GetI2c(std::size_t which) noexcept {
-    return *i2c_buses_.at(which);
+//==================== I2C Accessors ====================//
+
+EspI2cBus& CommChannelsManager::GetI2cBus() noexcept {
+    return *i2c_bus_;
 }
+
+BaseI2c* CommChannelsManager::GetI2cDevice(int device_index) noexcept {
+    if (!i2c_bus_) return nullptr;
+    return i2c_bus_->GetDevice(device_index);
+}
+
+BaseI2c* CommChannelsManager::GetI2cDevice(I2cDeviceId device_id) noexcept {
+    if (!i2c_bus_) return nullptr;
+    int device_index = static_cast<int>(device_id);
+    return i2c_bus_->GetDevice(device_index);
+}
+
+EspI2cDevice* CommChannelsManager::GetEspI2cDevice(int device_index) noexcept {
+    if (!i2c_bus_) return nullptr;
+    return i2c_bus_->GetEspDevice(device_index);
+}
+
+EspI2cDevice* CommChannelsManager::GetEspI2cDevice(I2cDeviceId device_id) noexcept {
+    if (!i2c_bus_) return nullptr;
+    int device_index = static_cast<int>(device_id);
+    return i2c_bus_->GetEspDevice(device_index);
+}
+
+std::size_t CommChannelsManager::GetI2cDeviceCount() const noexcept {
+    if (!i2c_bus_) return 0;
+    return i2c_bus_->GetDeviceCount();
+}
+
+//==================== Legacy I2C Accessors ====================//
+
+BaseI2c& CommChannelsManager::GetI2c(std::size_t which) noexcept {
+    // Legacy interface: return the first device for backward compatibility
+    // TODO: Consider deprecating this method in favor of GetI2cDevice()
+    if (!i2c_bus_ || which >= i2c_bus_->GetDeviceCount()) {
+        static EspI2cDevice dummy_device;
+        return dummy_device; // Return a dummy device to avoid null reference
+    }
+    return *i2c_bus_->GetDevice(which);
+}
+
 std::size_t CommChannelsManager::GetI2cCount() const noexcept {
-    return i2c_buses_.size();
+    return i2c_bus_ ? i2c_bus_->GetDeviceCount() : 0;
 }
 
 BaseUart& CommChannelsManager::GetUart(std::size_t which) noexcept {

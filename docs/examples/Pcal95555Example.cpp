@@ -6,6 +6,12 @@
  * that implements the BaseGpio interface and integrates with the ESP32 I2C system
  * and platform mapping configuration.
  *
+ * @note THIS EXAMPLE NEEDS TO BE UPDATED to use the new CommChannelsManager
+ *       and EspI2cBus/EspI2cDevice architecture instead of the old EspI2c class.
+ *       The example currently uses the deprecated EspI2c class directly.
+ * 
+ * @todo Update to use CommChannelsManager::GetGpioExpander() API
+ *
  * @author HardFOC Team
  * @version 2.0
  * @date 2025

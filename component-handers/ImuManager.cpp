@@ -7,8 +7,8 @@
 // Communication manager for I2C access
 #include "CommChannelsManager.h"
 
-// ESP32 I2C wrapper for integration
-#include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/mcu/esp32/EspI2c.h"
+// Base I2C interface for transport layer
+#include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/base/BaseI2c.h"
 
 // ESP32 GPIO abstraction for interrupt handling
 #include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/mcu/esp32/EspGpio.h"
@@ -33,11 +33,11 @@ static const char* TAG = "ImuManager";
 #define IMU_LOGE(format, ...) ESP_LOGE(TAG, format, ##__VA_ARGS__)
 
 /**
- * @class EspI2cBno085Transport
- * @brief I2C transport implementation for BNO085 using EspI2c wrapper.
+ * @class BaseI2cBno085Transport
+ * @brief I2C transport implementation for BNO085 using BaseI2c interface.
  * 
  * This transport bridges the BNO085 driver's IBNO085Transport interface
- * with the HardFOC ESP-IDF v5.5+ I2C implementation (EspI2c).
+ * with the HardFOC I2C implementation using the BaseI2c abstraction.
  * 
  * **BNO08x Operation Modes:**
  * - **Polling Mode**: Call bno08x.update() in your main loop to check for new data
@@ -48,15 +48,15 @@ static const char* TAG = "ImuManager";
  * - The callback executes in the same task context that calls update() (not interrupt context)
  * - For interrupt-driven operation, connect PCAL_IMU_INT pin and use GPIO interrupt handler
  */
-class EspI2cBno085Transport : public IBNO085Transport {
+class BaseI2cBno085Transport : public IBNO085Transport {
 public:
     /**
-     * @brief Constructor with I2C bus reference and device address.
-     * @param i2c_bus Reference to the EspI2c bus instance
+     * @brief Constructor with I2C device reference and device address.
+     * @param i2c_device Reference to the BaseI2c device instance
      * @param device_addr I2C device address (7-bit, typically 0x4A for BNO08x)
      */
-    explicit EspI2cBno085Transport(EspI2c& i2c_bus, uint8_t device_addr = 0x4A) noexcept
-        : i2c_bus_(i2c_bus), device_address_(device_addr) {}
+    explicit BaseI2cBno085Transport(BaseI2c& i2c_device, uint8_t device_addr = 0x4A) noexcept
+        : i2c_device_(i2c_device), device_address_(device_addr) {}
 
     /**
      * @brief Opens the I2C transport (no-op since bus is managed by CommChannelsManager).
@@ -86,7 +86,7 @@ public:
             return 0;
         }
 
-        hf_i2c_err_t result = i2c_bus_.Write(device_address_, data, static_cast<uint16_t>(length));
+        hf_i2c_err_t result = i2c_device_.Write(device_address_, data, static_cast<uint16_t>(length));
         if (result == hf_i2c_err_t::I2C_SUCCESS) {
             return static_cast<int>(length);
         } else {
@@ -106,7 +106,7 @@ public:
             return 0;
         }
 
-        hf_i2c_err_t result = i2c_bus_.Read(device_address_, data, static_cast<uint16_t>(length));
+        hf_i2c_err_t result = i2c_device_.Read(device_address_, data, static_cast<uint16_t>(length));
         if (result == hf_i2c_err_t::I2C_SUCCESS) {
             return static_cast<int>(length);
         } else {
@@ -140,7 +140,7 @@ public:
     }
 
 private:
-    EspI2c& i2c_bus_;           ///< Reference to the I2C bus
+    BaseI2c& i2c_device_;       ///< Reference to the I2C device
     uint8_t device_address_;    ///< I2C device address
 };
 
@@ -297,20 +297,15 @@ bool ImuManager::InitializeBno08x() noexcept {
 
 std::unique_ptr<IBNO085Transport> ImuManager::CreateBno08xTransport() noexcept {
     // Get I2C bus from communication manager
-    if (comm_manager_->GetI2cCount() == 0) {
-        IMU_LOGE("No I2C buses available in CommChannelsManager");
+    // Get the BNO08x IMU device using the new CommChannelsManager API
+    BaseI2c* imu_device = comm_manager_->GetImu();
+    if (!imu_device) {
+        IMU_LOGE("BNO08x IMU device not available in CommChannelsManager");
         return nullptr;
     }
 
-    BaseI2c& base_i2c = comm_manager_->GetI2c(0);
-    EspI2c* esp_i2c = dynamic_cast<EspI2c*>(&base_i2c);
-    if (!esp_i2c) {
-        IMU_LOGE("I2C bus is not an EspI2c instance");
-        return nullptr;
-    }
-
-    // Create transport with standard BNO08x I2C address
-    auto transport = std::make_unique<EspI2cBno085Transport>(*esp_i2c, 0x4A);
+    // Create transport with the IMU device
+    auto transport = std::make_unique<BaseI2cBno085Transport>(*imu_device, 0x4A);
 
     IMU_LOGI("Created BNO08x I2C transport (address=0x4A)");
     return transport;
