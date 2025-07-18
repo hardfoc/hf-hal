@@ -133,20 +133,84 @@ bool CommChannelsManager::Initialize() noexcept {
         }
     }
 
-    //================ I2C =================//
+    //================ I2C FOR BNO08X IMU AND PCAL95555 GPIO EXPANDER =================//
     {
+        ESP_LOGI("CommChannelsManager", "Configuring I2C master bus for BNO08x IMU and PCAL95555 GPIO expander");
+        
         hf_i2c_master_bus_config_t i2c_config = {};
         auto* sda_map = GetGpioMapping(HfFunctionalGpioPin::I2C_SDA);
         auto* scl_map = GetGpioMapping(HfFunctionalGpioPin::I2C_SCL);
+        
         if (sda_map && scl_map) {
-            i2c_config.i2c_port = 0; // I2C_NUM_0
-            i2c_config.sda_io_num = sda_map->physical_pin;
-            i2c_config.scl_io_num = scl_map->physical_pin;
-            i2c_config.enable_internal_pullup = sda_map->has_pullup && scl_map->has_pullup;
-            // ... set other config fields as needed
-            i2c_buses_.emplace_back(std::make_unique<EspI2c>(i2c_config));
+            // ESP-IDF v5.5+ I2C master bus configuration for BNO08x and PCAL95555
+            i2c_config.i2c_port = I2C_NUM_0;                                               // I2C port 0 (ESP32C6 has 1 I2C port)
+            i2c_config.sda_io_num = sda_map->physical_pin;                                 // SDA GPIO pin from board mapping
+            i2c_config.scl_io_num = scl_map->physical_pin;                                 // SCL GPIO pin from board mapping
+            i2c_config.enable_internal_pullup = sda_map->has_pullup && scl_map->has_pullup; // Use internal pullups if available
+            i2c_config.clk_source = hf_i2c_clock_source_t::HF_I2C_CLK_SRC_DEFAULT;        // Default clock source (APB)
+            i2c_config.clk_flags = 0;                                                      // No additional clock flags
+            i2c_config.glitch_ignore_cnt = hf_i2c_glitch_filter_t::HF_I2C_GLITCH_FILTER_7_CYCLES; // 7-cycle glitch filter for noise immunity
+            i2c_config.trans_queue_depth = 8;                                              // Transaction queue depth for async operations
+            i2c_config.intr_priority = 5;                                                  // Interrupt priority (0-7, 5=medium)
+            i2c_config.flags = 0;                                                          // No additional configuration flags
+            i2c_config.allow_pd = false;                                                   // Disable power down in sleep modes
+            
+            // Create I2C master bus instance
+            auto i2c_bus = std::make_unique<EspI2c>(i2c_config);
+            
+            // Initialize the I2C bus
+            if (i2c_bus->EnsureInitialized()) {
+                ESP_LOGI("CommChannelsManager", "I2C master bus initialized: SDA=GPIO%d, SCL=GPIO%d", 
+                         sda_map->physical_pin, scl_map->physical_pin);
+                ESP_LOGI("CommChannelsManager", "I2C configuration: 400kHz, 7-cycle glitch filter, queue depth=8");
+                
+                // Add BNO08x IMU device (standard I2C address 0x4A)
+                {
+                    hf_i2c_device_config_t bno08x_device = {};
+                    bno08x_device.device_address = 0x4A;                                       // BNO08x standard I2C address
+                    bno08x_device.dev_addr_length = hf_i2c_address_bits_t::HF_I2C_ADDR_7_BIT; // 7-bit addressing
+                    bno08x_device.scl_speed_hz = 400000;                                       // 400kHz for fast I2C operation
+                    bno08x_device.scl_wait_us = 0;                                             // No additional SCL wait time
+                    bno08x_device.flags = 0;                                                   // No device-specific flags
+                    
+                    hf_i2c_err_t result = i2c_bus->AddDevice(bno08x_device);
+                    if (result == hf_i2c_err_t::I2C_SUCCESS) {
+                        ESP_LOGI("CommChannelsManager", "BNO08x IMU device added to I2C bus: address=0x%02X, speed=400kHz", 
+                                 bno08x_device.device_address);
+                    } else {
+                        ESP_LOGW("CommChannelsManager", "Failed to add BNO08x IMU device to I2C bus (error=%d)", static_cast<int>(result));
+                    }
+                }
+                
+                // Add PCAL95555 GPIO expander device (standard I2C address range 0x20-0x27)
+                {
+                    hf_i2c_device_config_t pcal95555_device = {};
+                    pcal95555_device.device_address = 0x20;                                    // PCAL95555 base address (A0=A1=A2=0)
+                    pcal95555_device.dev_addr_length = hf_i2c_address_bits_t::HF_I2C_ADDR_7_BIT; // 7-bit addressing
+                    pcal95555_device.scl_speed_hz = 400000;                                    // 400kHz for fast I2C operation
+                    pcal95555_device.scl_wait_us = 0;                                          // No additional SCL wait time
+                    pcal95555_device.flags = 0;                                                // No device-specific flags
+                    
+                    hf_i2c_err_t result = i2c_bus->AddDevice(pcal95555_device);
+                    if (result == hf_i2c_err_t::I2C_SUCCESS) {
+                        ESP_LOGI("CommChannelsManager", "PCAL95555 GPIO expander device added to I2C bus: address=0x%02X, speed=400kHz", 
+                                 pcal95555_device.device_address);
+                    } else {
+                        ESP_LOGW("CommChannelsManager", "Failed to add PCAL95555 GPIO expander device to I2C bus (error=%d)", static_cast<int>(result));
+                    }
+                }
+                
+                // Store the initialized I2C bus
+                i2c_buses_.emplace_back(std::move(i2c_bus));
+                
+                ESP_LOGI("CommChannelsManager", "I2C bus ready for BNO08x IMU and PCAL95555 GPIO expander communication");
+            } else {
+                ESP_LOGE("CommChannelsManager", "Failed to initialize I2C master bus");
+            }
         } else {
-            // TODO: Log warning: I2C mapping missing, not instantiating I2C bus
+            ESP_LOGE("CommChannelsManager", "I2C GPIO mapping missing - BNO08x and PCAL95555 will not be available");
+            ESP_LOGE("CommChannelsManager", "Required pins: I2C_SDA=%s, I2C_SCL=%s", 
+                     sda_map ? "OK" : "MISSING", scl_map ? "OK" : "MISSING");
         }
     }
 
