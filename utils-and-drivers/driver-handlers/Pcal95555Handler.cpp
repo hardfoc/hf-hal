@@ -2,12 +2,12 @@
 #include <cstring>
 
 // ================= Pcal95555I2cAdapter =================
-hf_bool_t Pcal95555I2cAdapter::write(hf_u8_t /*addr*/, hf_u8_t reg, const hf_u8_t* data, size_t len) {
+hf_bool_t Pcal95555I2cAdapter::write(hf_u8_t addr, hf_u8_t reg, const hf_u8_t* data, size_t len) {
     std::lock_guard<std::mutex> lock(i2c_mutex_);
     return i2c_bus_.WriteRegister(i2c_address_, reg, data, len);
 }
 
-hf_bool_t Pcal95555I2cAdapter::read(hf_u8_t /*addr*/, hf_u8_t reg, hf_u8_t* data, size_t len) {
+hf_bool_t Pcal95555I2cAdapter::read(hf_u8_t addr, hf_u8_t reg, hf_u8_t* data, size_t len) {
     std::lock_guard<std::mutex> lock(i2c_mutex_);
     return i2c_bus_.ReadRegister(i2c_address_, reg, data, len);
 }
