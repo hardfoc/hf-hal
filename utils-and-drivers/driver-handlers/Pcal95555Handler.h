@@ -23,25 +23,53 @@
 #include "base/BaseGpio.h"
 #include "base/BaseI2c.h"
 #include "utils-and-drivers/hf-core-drivers/external/hf-pcal95555-driver/src/pcal95555.hpp"
+#include "utils/RtosMutex.h"
 #include <memory>
-#include <mutex>
 #include <cstdint>
 
 /**
- * @brief Adapter to connect BaseI2c to PCAL95555::i2cBus interface.
+ * @brief Adapter to connect BaseI2c device to PCAL95555::i2cBus interface.
+ * 
+ * This adapter bridges the device-centric BaseI2c interface (where device address 
+ * is pre-configured) with the PCAL95555 driver's i2cBus interface (which expects 
+ * address parameters). The adapter validates that operations target the correct 
+ * device and strips the address parameter before calling BaseI2c methods.
  */
 class Pcal95555I2cAdapter : public PCAL95555::i2cBus {
 public:
-    explicit Pcal95555I2cAdapter(BaseI2c& i2c_bus, uint8_t i2c_address) noexcept
-        : i2c_bus_(i2c_bus), i2c_address_(i2c_address) {}
+    /**
+     * @brief Construct adapter with BaseI2c device reference.
+     * @param i2c_device Reference to BaseI2c device (not bus)
+     * @note The device address is already configured in the BaseI2c device
+     */
+    explicit Pcal95555I2cAdapter(BaseI2c& i2c_device) noexcept 
+        : i2c_device_(i2c_device) {}
 
+    /**
+     * @brief Write data to device register via BaseI2c device.
+     * @param addr I2C device address (validated against BaseI2c device address)
+     * @param reg Register address
+     * @param data Data buffer to write
+     * @param len Number of bytes to write
+     * @return true if successful, false on error
+     * @note Address validation ensures type safety - prevents accidental cross-device communication
+     */
     bool write(uint8_t addr, uint8_t reg, const uint8_t* data, size_t len) override;
+
+    /**
+     * @brief Read data from device register via BaseI2c device.
+     * @param addr I2C device address (validated against BaseI2c device address)
+     * @param reg Register address
+     * @param data Buffer to store read data
+     * @param len Number of bytes to read
+     * @return true if successful, false on error
+     * @note Address validation ensures type safety - prevents accidental cross-device communication
+     */
     bool read(uint8_t addr, uint8_t reg, uint8_t* data, size_t len) override;
 
 private:
-    BaseI2c& i2c_bus_;
-    uint8_t i2c_address_;
-    mutable std::mutex i2c_mutex_;
+    BaseI2c& i2c_device_;           ///< Reference to I2C device (not bus)
+    mutable RtosMutex i2c_mutex_;   ///< Thread safety for I2C operations
 };
 
 // ===================== Per-Pin BaseGpio Wrapper ===================== //
@@ -84,7 +112,7 @@ protected:
 private:
     hf_pin_num_t pin_;
     std::shared_ptr<PCAL95555> driver_;
-    mutable std::mutex pin_mutex_;
+    mutable RtosMutex pin_mutex_;
     char description_[32] = {};
 };
 
@@ -93,10 +121,10 @@ class Pcal95555Handler {
 public:
     /**
      * @brief Construct a new handler for a PCAL95555 chip.
-     * @param i2c_bus Reference to BaseI2c bus
-     * @param i2c_address 7-bit I2C address (default: 0x20)
+     * @param i2c_device Reference to BaseI2c device (not bus)
+     * @note The device address should already be configured in the BaseI2c device
      */
-    explicit Pcal95555Handler(BaseI2c& i2c_bus, hf_u8_t i2c_address = 0x20) noexcept;
+    explicit Pcal95555Handler(BaseI2c& i2c_device) noexcept;
     ~Pcal95555Handler() = default;
 
     // No copy
@@ -161,13 +189,29 @@ public:
     hf_bool_t PowerDown() noexcept;
 
 private:
-    std::unique_ptr<Pcal95555I2cAdapter> i2c_adapter_;
-    std::shared_ptr<PCAL95555> pcal95555_driver_;
-    hf_u8_t i2c_address_;
-    hf_bool_t initialized_ = false;
-    mutable std::mutex handler_mutex_;
+    std::unique_ptr<Pcal95555I2cAdapter> i2c_adapter_;      ///< I2C adapter bridging BaseI2c to PCAL95555
+    std::shared_ptr<PCAL95555> pcal95555_driver_;           ///< PCAL95555 driver instance
+    hf_bool_t initialized_ = false;                         ///< Initialization status
+    mutable RtosMutex handler_mutex_;                       ///< Thread safety mutex
 
     hf_bool_t ValidatePin(hf_u8_t pin) const noexcept { return pin < 16; }
+    
+    /**
+     * @brief Architecture Note: Address Handling
+     * 
+     * This design implements device-centric I2C communication:
+     * 
+     * 1. **BaseI2c Device**: Pre-configured with device address, no address params needed
+     * 2. **PCAL95555 Driver**: Stores address internally for validation and state management  
+     * 3. **Pcal95555I2cAdapter**: Validates address consistency between the two layers
+     * 
+     * The adapter serves as a bridge between:
+     * - PCAL95555 driver API (expects address parameters)  
+     * - BaseI2c device API (address pre-configured, no parameters)
+     * 
+     * This provides both type safety (can't use wrong device) and compatibility
+     * with existing driver interfaces without requiring modification.
+     */
 };
 
 #endif // COMPONENT_HANDLER_PCAL95555_HANDLER_H_ 
