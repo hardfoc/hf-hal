@@ -44,9 +44,17 @@ int main() {
     }
 
     // Access the TMC9660 driver directly for advanced parameter tweaking
-    auto& driver = tmcHandler.driver();
-    // Example: set a parameter (replace with real parameter and value)
-    driver.writeParameter(static_cast<tmc9660::tmcl::Parameters>(5), 1234);
+    if (tmcHandler.IsDriverReady()) {
+        auto driver = tmcHandler.driver(); // Now returns std::shared_ptr<TMC9660>
+        // Example: set a parameter (replace with real parameter and value)
+        driver->writeParameter(static_cast<tmc9660::tmcl::Parameters>(5), 1234);
+        std::cout << "TMC9660 parameter set successfully" << std::endl;
+        
+        // You can safely store the shared_ptr for later use
+        // std::shared_ptr<TMC9660> stored_driver = driver;
+    } else {
+        std::cout << "TMC9660 driver not available - ensure Initialize() was called" << std::endl;
+    }
 
     std::cout << "TMC9660 example complete." << std::endl;
     return 0;

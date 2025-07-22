@@ -39,6 +39,7 @@ enum class SpiDeviceId : uint8_t {
     // Aliases for common usage
     MOTOR_CONTROLLER = TMC9660_MOTOR_CONTROLLER,
     POSITION_ENCODER = AS5047U_POSITION_ENCODER,
+    TMC9660_SPI = TMC9660_MOTOR_CONTROLLER,  ///< Alias for backward compatibility
     
     SPI_DEVICE_COUNT  ///< Total number of SPI devices
 };
@@ -292,6 +293,24 @@ public:
      * @note This is a convenience method that returns GetUart(0) with proper documentation
      */
     BaseUart& GetTmc9660Uart() noexcept { return GetUart(0); }
+
+    /**
+     * @brief Get TMC9660 SPI device for easy TMC9660Handler creation.
+     * @return Pointer to BaseSpi for TMC9660, or nullptr if not available
+     * @note Convenience method for TMC9660Handler construction
+     */
+    BaseSpi* GetTmc9660Spi() noexcept {
+        return GetSpiDevice(SpiDeviceId::TMC9660_SPI);
+    }
+
+    /**
+     * @brief Get AS5047U SPI device for easy As5047uHandler creation.
+     * @return Pointer to BaseSpi for AS5047U position encoder, or nullptr if not available
+     * @note Convenience method for As5047uHandler construction
+     */
+    BaseSpi* GetAs5047uSpi() noexcept {
+        return GetSpiDevice(SpiDeviceId::AS5047U_POSITION_ENCODER);
+    }
 
     /**
      * @brief Get reference to a CAN bus by index.

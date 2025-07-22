@@ -519,29 +519,103 @@ private:
     // PRIVATE MEMBERS
     //==========================================================================
     
-    // System state
-    std::atomic<bool> is_initialized_{false};
-    mutable std::mutex mutex_;
+    // ===============================
+    // SYSTEM STATE
+    // ===============================
     
-    // Hardware interfaces
-    SfI2cBus* i2c_bus_{nullptr};
+    /**
+     * @brief System initialization state (atomic for thread safety).
+     */
+    std::atomic<bool> is_initialized_{false};
+    
+    /**
+     * @brief Main system mutex for thread-safe operations.
+     * Uses RtosMutex for embedded RTOS compatibility.
+     */
+    mutable RtosMutex mutex_;
+    
+    // ===============================
+    // HARDWARE INTERFACES
+    // ===============================
+    
+    /**
+     * @brief TMC9660 motor controller for GPIO operations.
+     */
     Tmc9660MotorController* tmc9660_controller_{nullptr};
-    std::shared_ptr<Pcal95555Handler> pcal95555_handler_;
     
     // Pin registry
     std::unordered_map<HardFOC::FunctionalGpioPin, std::unique_ptr<GpioInfo>> pin_registry_;
     
-    // Statistics
+    // ===============================
+    // GPIO HANDLERS (PRE-INITIALIZED)
+    // ===============================
+    
+    /**
+     * @brief PCAL95555 GPIO expander handler (pre-initialized at boot).
+     * Single instance manages all PCAL95555 pins to prevent duplicate controllers.
+     */
+    std::unique_ptr<Pcal95555Handler> pcal95555_handler_;
+    
+    /**
+     * @brief TMC9660 UART GPIO handler (pre-initialized at boot).  
+     * Single instance manages all TMC9660 pins to prevent duplicate controllers.
+     */
+    std::unique_ptr<Tmc9660Handler> tmc9660_handler_;
+    
+    // ===============================
+    // SYSTEM STATISTICS
+    // ===============================
+    
+    /**
+     * @brief Total operations performed (atomic for thread safety).
+     */
     std::atomic<uint32_t> total_operations_{0};
+    
+    /**
+     * @brief Successful operations count (atomic for thread safety).
+     */
     std::atomic<uint32_t> successful_operations_{0};
+    
+    /**
+     * @brief Failed operations count (atomic for thread safety).
+     */
     std::atomic<uint32_t> failed_operations_{0};
+    
+    /**
+     * @brief Communication errors count (atomic for thread safety).
+     */
     std::atomic<uint32_t> communication_errors_{0};
+    
+    /**
+     * @brief Hardware errors count (atomic for thread safety).
+     */
     std::atomic<uint32_t> hardware_errors_{0};
+    
+    /**
+     * @brief System start time for uptime calculations (atomic for thread safety).
+     */
     std::atomic<uint64_t> system_start_time_{0};
     
-    // Error tracking
-    mutable std::mutex error_mutex_;
+    // ===============================
+    // ERROR TRACKING
+    // ===============================
+    
+    /**
+     * @brief Thread-safe access to error message storage.
+     * Uses RtosMutex for embedded RTOS compatibility.
+     */
+    mutable RtosMutex error_mutex_;
+    
+    /**
+     * @brief Recent error messages for diagnostics.
+     * Limited to MAX_ERROR_MESSAGES for memory management.
+     */
     std::vector<std::string> recent_errors_;
+    
+    /**
+     * @brief Maximum number of error messages to retain.
+     * Prevents unbounded memory growth in long-running embedded systems.
+     */
     static constexpr size_t MAX_ERROR_MESSAGES = 10;
     
     //==========================================================================
