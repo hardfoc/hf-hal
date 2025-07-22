@@ -313,6 +313,25 @@ public:
     }
 
     /**
+     * @brief Get BNO08x I2C device for easy Bno08xHandler creation.
+     * @return Pointer to BaseI2c for BNO08x IMU, or nullptr if not available
+     * @note Convenience method for Bno08xHandler I2C construction
+     */
+    BaseI2c* GetBno08xI2c() noexcept {
+        return GetI2cDevice(I2cDeviceId::BNO08X_IMU);
+    }
+
+    /**
+     * @brief Get BNO08x SPI device for easy Bno08xHandler creation.
+     * @return Pointer to BaseSpi for BNO08x IMU via SPI, or nullptr if not available  
+     * @note Convenience method for Bno08xHandler SPI construction
+     * @note Uses external device slot - configure appropriately for your board
+     */
+    BaseSpi* GetBno08xSpi() noexcept {
+        return GetSpiDevice(SpiDeviceId::EXTERNAL_DEVICE_1); // Configurable based on board design
+    }
+
+    /**
      * @brief Get reference to a CAN bus by index.
      */
     BaseCan& GetCan(std::size_t which = 0) noexcept;
