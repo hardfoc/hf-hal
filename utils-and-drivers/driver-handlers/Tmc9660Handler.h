@@ -89,11 +89,7 @@ public:
      * @brief Default bootloader configuration (can be overridden at construction).
      *        These values should be tuned for your hardware.
      */
-    static constexpr tmc9660::BootloaderConfig kDefaultBootConfig = {
-        .spiFrequency = 10000000, // 10 MHz
-        .uartBaudRate = 115200,   // 115200 baud
-        // Add other fields as needed for your hardware
-    };
+    static const tmc9660::BootloaderConfig kDefaultBootConfig;
 
     /**
      * @brief Construct a Tmc9660Handler with SPI interface only.
@@ -172,23 +168,28 @@ public:
     public:
         Gpio(Tmc9660Handler& parent, uint8_t gpioNumber);
         ~Gpio() override = default;
+        
+        // Pure virtual methods from BaseGpio
         bool Initialize() noexcept override;
         bool Deinitialize() noexcept override;
-        hf_gpio_err_t SetActive() noexcept override;
-        hf_gpio_err_t SetInactive() noexcept override;
-        hf_gpio_err_t Toggle() noexcept override;
-        hf_gpio_err_t IsActive(bool& is_active) noexcept override;
-        hf_gpio_err_t GetState(hf_gpio_state_t& state) noexcept override;
-        hf_gpio_err_t SetState(hf_gpio_state_t state) noexcept override;
-        hf_gpio_err_t ValidatePin() noexcept override;
-        hf_gpio_direction_t GetDirection() const noexcept override;
         bool IsPinAvailable() const noexcept override;
         hf_u8_t GetMaxPins() const noexcept override;
         const char* GetDescription() const noexcept override;
+        
+        // Protected implementation methods from BaseGpio
+        hf_gpio_err_t SetDirectionImpl(hf_gpio_direction_t direction) noexcept override;
+        hf_gpio_err_t SetOutputModeImpl(hf_gpio_output_mode_t mode) noexcept override;
+        hf_gpio_err_t SetPullModeImpl(hf_gpio_pull_mode_t mode) noexcept override;
+        hf_gpio_err_t SetPinLevelImpl(hf_gpio_level_t level) noexcept override;
+        hf_gpio_err_t GetPinLevelImpl(hf_gpio_level_t& level) noexcept override;
+        hf_gpio_pull_mode_t GetPullModeImpl() const noexcept override;
+        hf_gpio_err_t GetDirectionImpl(hf_gpio_direction_t& direction) const noexcept override;
+        hf_gpio_err_t GetOutputModeImpl(hf_gpio_output_mode_t& mode) const noexcept override;
+        
     private:
         Tmc9660Handler& parent_;
         uint8_t gpioNumber_;
-        char description_[32];  // Changed from mutable char description_[64];
+        char description_[32];
     };
 
     /**

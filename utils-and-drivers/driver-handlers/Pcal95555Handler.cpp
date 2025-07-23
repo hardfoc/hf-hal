@@ -266,43 +266,47 @@ hf_gpio_pull_mode_t Pcal95555GpioPin::GetPullModeImpl() const noexcept {
     return hf_gpio_pull_mode_t::HF_GPIO_PULL_MODE_FLOATING;
 }
 
-hf_gpio_err_t Pcal95555GpioPin::SetActiveImpl() noexcept {
+hf_gpio_err_t Pcal95555GpioPin::SetPinLevelImpl(hf_gpio_level_t level) noexcept {
     MutexLockGuard lock(pin_mutex_);
     if (!driver_) return hf_gpio_err_t::GPIO_ERR_NOT_INITIALIZED;
-    hf_bool_t ok = driver_->writePin(static_cast<hf_u8_t>(pin_), active_state_ == hf_gpio_active_state_t::HF_GPIO_ACTIVE_HIGH);
-    current_state_ = hf_gpio_state_t::HF_GPIO_STATE_ACTIVE;
+    
+    hf_bool_t hardware_level = (level == hf_gpio_level_t::HF_GPIO_LEVEL_HIGH);
+    hf_bool_t ok = driver_->writePin(static_cast<hf_u8_t>(pin_), hardware_level);
     return ok ? hf_gpio_err_t::GPIO_SUCCESS : hf_gpio_err_t::GPIO_ERR_FAILURE;
 }
 
-hf_gpio_err_t Pcal95555GpioPin::SetInactiveImpl() noexcept {
+hf_gpio_err_t Pcal95555GpioPin::GetPinLevelImpl(hf_gpio_level_t& level) noexcept {
     MutexLockGuard lock(pin_mutex_);
     if (!driver_) return hf_gpio_err_t::GPIO_ERR_NOT_INITIALIZED;
-    hf_bool_t ok = driver_->writePin(static_cast<hf_u8_t>(pin_), active_state_ == hf_gpio_active_state_t::HF_GPIO_ACTIVE_LOW);
-    current_state_ = hf_gpio_state_t::HF_GPIO_STATE_INACTIVE;
-    return ok ? hf_gpio_err_t::GPIO_SUCCESS : hf_gpio_err_t::GPIO_ERR_FAILURE;
-}
-
-hf_gpio_err_t Pcal95555GpioPin::IsActiveImpl(hf_bool_t& is_active) noexcept {
-    MutexLockGuard lock(pin_mutex_);
-    if (!driver_) return hf_gpio_err_t::GPIO_ERR_NOT_INITIALIZED;
+    
     hf_bool_t value = false;
     hf_bool_t ok = driver_->readPin(static_cast<hf_u8_t>(pin_), value);
     if (ok) {
-        is_active = (active_state_ == hf_gpio_active_state_t::HF_GPIO_ACTIVE_HIGH) ? value : !value;
-        current_state_ = is_active ? hf_gpio_state_t::HF_GPIO_STATE_ACTIVE : hf_gpio_state_t::HF_GPIO_STATE_INACTIVE;
+        level = value ? hf_gpio_level_t::HF_GPIO_LEVEL_HIGH : hf_gpio_level_t::HF_GPIO_LEVEL_LOW;
     }
     return ok ? hf_gpio_err_t::GPIO_SUCCESS : hf_gpio_err_t::GPIO_ERR_FAILURE;
 }
 
-hf_gpio_err_t Pcal95555GpioPin::ToggleImpl() noexcept {
+hf_gpio_err_t Pcal95555GpioPin::GetDirectionImpl(hf_gpio_direction_t& direction) const noexcept {
     MutexLockGuard lock(pin_mutex_);
     if (!driver_) return hf_gpio_err_t::GPIO_ERR_NOT_INITIALIZED;
-    hf_bool_t value = false;
-    if (!driver_->readPin(static_cast<hf_u8_t>(pin_), value)) return hf_gpio_err_t::GPIO_ERR_READ_FAILURE;
-    hf_bool_t new_value = !value;
-    hf_bool_t ok = driver_->writePin(static_cast<hf_u8_t>(pin_), new_value);
-    current_state_ = new_value ? hf_gpio_state_t::HF_GPIO_STATE_ACTIVE : hf_gpio_state_t::HF_GPIO_STATE_INACTIVE;
+    
+    hf_bool_t is_output = false;
+    hf_bool_t ok = driver_->getPinDirection(static_cast<hf_u8_t>(pin_), is_output);
+    if (ok) {
+        direction = is_output ? hf_gpio_direction_t::HF_GPIO_DIRECTION_OUTPUT 
+                             : hf_gpio_direction_t::HF_GPIO_DIRECTION_INPUT;
+    }
     return ok ? hf_gpio_err_t::GPIO_SUCCESS : hf_gpio_err_t::GPIO_ERR_FAILURE;
+}
+
+hf_gpio_err_t Pcal95555GpioPin::GetOutputModeImpl(hf_gpio_output_mode_t& mode) const noexcept {
+    MutexLockGuard lock(pin_mutex_);
+    if (!driver_) return hf_gpio_err_t::GPIO_ERR_NOT_INITIALIZED;
+    
+    // PCAL95555 only supports push-pull output mode
+    mode = hf_gpio_output_mode_t::HF_GPIO_OUTPUT_MODE_PUSH_PULL;
+    return hf_gpio_err_t::GPIO_SUCCESS;
 }
 
 // ===================== Handler Factory Method ===================== //

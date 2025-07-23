@@ -104,10 +104,10 @@ protected:
     hf_gpio_err_t SetOutputModeImpl(hf_gpio_output_mode_t mode) noexcept override;
     hf_gpio_err_t SetPullModeImpl(hf_gpio_pull_mode_t mode) noexcept override;
     hf_gpio_pull_mode_t GetPullModeImpl() const noexcept override;
-    hf_gpio_err_t SetActiveImpl() noexcept override;
-    hf_gpio_err_t SetInactiveImpl() noexcept override;
-    hf_gpio_err_t IsActiveImpl(hf_bool_t& is_active) noexcept override;
-    hf_gpio_err_t ToggleImpl() noexcept override;
+    hf_gpio_err_t SetPinLevelImpl(hf_gpio_level_t level) noexcept override;
+    hf_gpio_err_t GetPinLevelImpl(hf_gpio_level_t& level) noexcept override;
+    hf_gpio_err_t GetDirectionImpl(hf_gpio_direction_t& direction) const noexcept override;
+    hf_gpio_err_t GetOutputModeImpl(hf_gpio_output_mode_t& mode) const noexcept override;
 
 private:
     hf_pin_num_t pin_;
