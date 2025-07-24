@@ -1,151 +1,40 @@
 #include "ImuManager.h"
 
-// BNO08x driver includes
-#include "utils-and-drivers/hf-core-drivers/external/hf-bno08x-driver/src/BNO085.hpp"
-#include "utils-and-drivers/hf-core-drivers/external/hf-bno08x-driver/src/BNO085_Transport.hpp"
+// Bno08x handler for unified IMU interface
+#include "utils-and-drivers/driver-handlers/Bno08xHandler.h"
 
 // Communication manager for I2C access
 #include "CommChannelsManager.h"
 
-// Base I2C interface for transport layer
+// GPIO manager for interrupt pin access
+#include "GpioManager.h"
+
+// Base interfaces
 #include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/base/BaseI2c.h"
+#include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/base/BaseGpio.h"
 
-// ESP32 GPIO abstraction for interrupt handling
-#include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/mcu/esp32/EspGpio.h"
+// Platform mapping for functional pin definitions
+#include "utils-and-drivers/hf-core-drivers/internal/hf-pincfg/include/hf_platform_mapping.hpp"
 
-// Board pin mapping
-#include "utils-and-drivers/hf-core-drivers/internal/hf-pincfg/src/hf_functional_pin_config.hpp"
+// RtosMutex for thread safety
+#include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/utils/RtosMutex.h"
 
 // Standard library
 #include <iostream>
 
-// ESP-IDF logging and timing
+// ESP-IDF for semaphores and logging
 extern "C" {
 #include "esp_log.h"
-#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/queue.h"
+#include "freertos/semphr.h"
 }
 static const char* TAG = "ImuManager";
 #define IMU_LOGI(format, ...) ESP_LOGI(TAG, format, ##__VA_ARGS__)
 #define IMU_LOGW(format, ...) ESP_LOGW(TAG, format, ##__VA_ARGS__)
 #define IMU_LOGE(format, ...) ESP_LOGE(TAG, format, ##__VA_ARGS__)
 
-/**
- * @class BaseI2cBno085Transport
- * @brief I2C transport implementation for BNO085 using BaseI2c interface.
- * 
- * This transport bridges the BNO085 driver's IBNO085Transport interface
- * with the HardFOC I2C implementation using the BaseI2c abstraction.
- * 
- * **BNO08x Operation Modes:**
- * - **Polling Mode**: Call bno08x.update() in your main loop to check for new data
- * - **Interrupt Mode**: Connect BNO08x INT pin to ESP32 GPIO and use GPIO interrupts
- * 
- * **Callback Mechanism:**
- * - SensorCallback is invoked by the BNO085 driver when bno08x.update() finds new sensor data
- * - The callback executes in the same task context that calls update() (not interrupt context)
- * - For interrupt-driven operation, connect PCAL_IMU_INT pin and use GPIO interrupt handler
- */
-class BaseI2cBno085Transport : public IBNO085Transport {
-public:
-    /**
-     * @brief Constructor with I2C device reference and device address.
-     * @param i2c_device Reference to the BaseI2c device instance
-     * @param device_addr I2C device address (7-bit, typically 0x4A for BNO08x)
-     */
-    explicit BaseI2cBno085Transport(BaseI2c& i2c_device, uint8_t device_addr = 0x4A) noexcept
-        : i2c_device_(i2c_device), device_address_(device_addr) {}
-
-    /**
-     * @brief Opens the I2C transport (no-op since bus is managed by CommChannelsManager).
-     * @return true always (bus is already initialized)
-     */
-    bool open() override {
-        IMU_LOGI("Opening BNO085 I2C transport (address=0x%02X)", device_address_);
-        return true; // Bus is already initialized by CommChannelsManager
-    }
-
-    /**
-     * @brief Closes the I2C transport (no-op since bus is managed by CommChannelsManager).
-     */
-    void close() override {
-        IMU_LOGI("Closing BNO085 I2C transport");
-        // Bus remains open for other devices (PCAL95555, etc.)
-    }
-
-    /**
-     * @brief Writes data to the BNO085 via I2C.
-     * @param data Pointer to data buffer to write
-     * @param length Number of bytes to write
-     * @return Number of bytes written, or negative on error
-     */
-    int write(const uint8_t* data, uint32_t length) override {
-        if (!data || length == 0) {
-            return 0;
-        }
-
-        hf_i2c_err_t result = i2c_device_.Write(device_address_, data, static_cast<uint16_t>(length));
-        if (result == hf_i2c_err_t::I2C_SUCCESS) {
-            return static_cast<int>(length);
-        } else {
-            IMU_LOGW("I2C write failed: error=%d, length=%lu", static_cast<int>(result), length);
-            return -1;
-        }
-    }
-
-    /**
-     * @brief Reads data from the BNO085 via I2C.
-     * @param data Pointer to buffer to receive data
-     * @param length Number of bytes to read
-     * @return Number of bytes read, or negative on error
-     */
-    int read(uint8_t* data, uint32_t length) override {
-        if (!data || length == 0) {
-            return 0;
-        }
-
-        hf_i2c_err_t result = i2c_device_.Read(device_address_, data, static_cast<uint16_t>(length));
-        if (result == hf_i2c_err_t::I2C_SUCCESS) {
-            return static_cast<int>(length);
-        } else {
-            // For BNO08x, a failed read often means no data available (not an error)
-            return 0; // Return 0 to indicate no data available
-        }
-    }
-
-    /**
-     * @brief Checks if data is available (always true for polling-based operation).
-     * @return true always (we use polling mode)
-     */
-    bool dataAvailable() override {
-        return true; // Use polling mode - always attempt to read
-    }
-
-    /**
-     * @brief Delays execution for specified milliseconds.
-     * @param ms Delay duration in milliseconds
-     */
-    void delay(uint32_t ms) override {
-        vTaskDelay(pdMS_TO_TICKS(ms));
-    }
-
-    /**
-     * @brief Gets current time in microseconds (ESP32 high-resolution timer).
-     * @return Current time in microseconds
-     */
-    uint32_t getTimeUs() override {
-        return static_cast<uint32_t>(esp_timer_get_time());
-    }
-
-private:
-    BaseI2c& i2c_device_;       ///< Reference to the I2C device
-    uint8_t device_address_;    ///< I2C device address
-};
-
 //==============================================================================
-// IMUMAMAGER IMPLEMENTATION
+// IMUMANAGER IMPLEMENTATION
 //==============================================================================
 
 ImuManager& ImuManager::GetInstance() noexcept {
@@ -153,25 +42,19 @@ ImuManager& ImuManager::GetInstance() noexcept {
     return instance;
 }
 
-ImuManager::ImuManager() noexcept : interrupt_queue_(nullptr) {}
+ImuManager::ImuManager() noexcept {}
 
 ImuManager::~ImuManager() noexcept {
     Deinitialize();
-    
-    // Clean up interrupt resources
-    if (interrupt_queue_) {
-        vQueueDelete(interrupt_queue_);
-        interrupt_queue_ = nullptr;
-    }
 }
 
-bool ImuManager::EnsureInitialized() noexcept {
-    std::lock_guard<std::mutex> lock(mutex_);
+bool ImuManager::Initialize() noexcept {
+    MutexLockGuard lock(manager_mutex_);
     if (initialized_) {
         return true;
     }
 
-    IMU_LOGI("Initializing IMU Manager with direct BNO085 device access");
+    IMU_LOGI("Initializing IMU Manager with Bno08xHandler");
 
     // Get reference to communication manager
     comm_manager_ = &CommChannelsManager::GetInstance();
@@ -180,19 +63,36 @@ bool ImuManager::EnsureInitialized() noexcept {
         return false;
     }
 
-    // Initialize BNO08x IMU
-    bool bno08x_ok = InitializeBno08x();
+    // Get reference to GPIO manager for interrupt support
+    gpio_manager_ = &GpioManager::GetInstance();
+    if (!gpio_manager_->IsInitialized()) {
+        IMU_LOGW("GPIO Manager not initialized - interrupt support will be limited");
+        // Not a fatal error - can still work in polling mode
+    }
+
+    // Initialize BNO08x IMU handler
+    bool bno08x_ok = InitializeBno08xHandler();
     if (bno08x_ok) {
-        IMU_LOGI("BNO08x IMU successfully initialized");
+        IMU_LOGI("BNO08x IMU handler successfully initialized");
     } else {
-        IMU_LOGW("BNO08x IMU initialization failed");
+        IMU_LOGW("BNO08x IMU handler initialization failed");
+    }
+
+    // Initialize interrupt GPIO (optional - don't fail if not available)
+    if (gpio_manager_ && gpio_manager_->IsInitialized()) {
+        bool gpio_ok = InitializeInterruptGpio();
+        if (gpio_ok) {
+            IMU_LOGI("BNO08x interrupt GPIO initialized successfully");
+        } else {
+            IMU_LOGW("BNO08x interrupt GPIO not available - using polling mode only");
+        }
     }
 
     // Consider initialized if at least one device is available
     initialized_ = bno08x_ok;
 
     if (initialized_) {
-        IMU_LOGI("IMU Manager initialized successfully (%zu devices available)", GetImuCount());
+        IMU_LOGI("IMU Manager initialized successfully (%u devices available)", GetImuCount());
     } else {
         IMU_LOGE("IMU Manager initialization failed - no devices available");
     }
@@ -201,259 +101,319 @@ bool ImuManager::EnsureInitialized() noexcept {
 }
 
 bool ImuManager::IsInitialized() const noexcept {
-    std::lock_guard<std::mutex> lock(mutex_);
+    MutexLockGuard lock(manager_mutex_);
     return initialized_;
 }
 
 bool ImuManager::Deinitialize() noexcept {
-    std::lock_guard<std::mutex> lock(mutex_);
+    MutexLockGuard lock(manager_mutex_);
     if (!initialized_) {
         return true;
     }
 
     IMU_LOGI("Deinitializing IMU Manager");
 
-    bool all_ok = true;
+    // Disable interrupt first
+    if (interrupt_enabled_) {
+        DisableInterrupt();
+    }
 
-    // Deinitialize BNO08x
-    if (bno08x_device_) {
-        // BNO085 doesn't have explicit deinitialize method
-        bno08x_device_.reset();
-        bno08x_transport_.reset();
-        IMU_LOGI("BNO08x device deinitialized");
+    // Clean up interrupt semaphore
+    if (interrupt_semaphore_) {
+        vSemaphoreDelete(static_cast<SemaphoreHandle_t>(interrupt_semaphore_));
+        interrupt_semaphore_ = nullptr;
+    }
+
+    // Reset interrupt state
+    interrupt_gpio_ = nullptr;
+    interrupt_configured_ = false;
+    interrupt_enabled_ = false;
+    interrupt_count_.store(0);
+    interrupt_callback_ = nullptr;
+
+    // Deinitialize BNO08x handler
+    if (bno08x_handler_) {
+        bno08x_handler_.reset();
+        IMU_LOGI("BNO08x handler deinitialized");
     }
 
     initialized_ = false;
     comm_manager_ = nullptr;
 
     IMU_LOGI("IMU Manager deinitialized");
-    return all_ok;
+    return true;
 }
 
-BNO085& ImuManager::GetBno08x() {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (!initialized_ || !bno08x_device_) {
-        // Return a static dummy object instead of throwing
-        static BNO085 dummy_device(nullptr);
-        IMU_LOGE("BNO08x device not available - returning dummy object");
-        return dummy_device;
+Bno08xHandler* ImuManager::GetBno08xHandler() noexcept {
+    MutexLockGuard lock(manager_mutex_);
+    if (!initialized_ || !bno08x_handler_) {
+        return nullptr;
     }
-    return *bno08x_device_;
+    return bno08x_handler_.get();
 }
-
-BNO085* ImuManager::GetBno08xPtr() noexcept {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return bno08x_device_.get();
 }
 
 bool ImuManager::IsBno08xAvailable() const noexcept {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return initialized_ && bno08x_device_ != nullptr;
+    MutexLockGuard lock(manager_mutex_);
+    return initialized_ && bno08x_handler_ != nullptr;
 }
 
-size_t ImuManager::GetImuCount() const noexcept {
-    std::lock_guard<std::mutex> lock(mutex_);
-    size_t count = 0;
-    if (bno08x_device_) count++;
+uint8_t ImuManager::GetImuCount() const noexcept {
+    MutexLockGuard lock(manager_mutex_);
+    uint8_t count = 0;
+    if (bno08x_handler_) count++;
     return count;
 }
 
 std::vector<std::string> ImuManager::GetAvailableDevices() const noexcept {
-    std::lock_guard<std::mutex> lock(mutex_);
+    MutexLockGuard lock(manager_mutex_);
     std::vector<std::string> devices;
-    if (bno08x_device_) {
-        devices.emplace_back("BNO08x (I2C address 0x4A)");
+    if (bno08x_handler_) {
+        devices.emplace_back("BNO08x (I2C Handler)");
     }
     return devices;
 }
 
-bool ImuManager::InitializeBno08x() noexcept {
-    IMU_LOGI("Initializing BNO08x IMU with I2C transport");
+bool ImuManager::InitializeBno08xHandler() noexcept {
+    IMU_LOGI("Initializing BNO08x IMU handler with I2C transport");
 
-    // Create I2C transport for BNO08x
-    bno08x_transport_ = CreateBno08xTransport();
-    if (!bno08x_transport_) {
-        IMU_LOGE("Failed to create BNO08x I2C transport");
+    // Get I2C device from communication manager for BNO08x
+    BaseI2c* imu_device = comm_manager_->GetI2cDevice(I2cDeviceId::BNO08X_IMU);
+    if (!imu_device) {
+        IMU_LOGE("BNO08x IMU device not available in CommChannelsManager");
         return false;
     }
 
-    // Create BNO085 device instance
-    bno08x_device_ = std::make_unique<BNO085>();
+    // Create Bno08x handler with I2C interface
+    try {
+        // Create default configuration for BNO08x
+        Bno08xConfig config = {};  // Use default configuration
+        
+        // Create the handler with I2C interface (no GPIO pins for now)
+        bno08x_handler_ = std::make_unique<Bno08xHandler>(*imu_device, config);
+        
+        // Initialize the handler
+        Bno08xError init_result = bno08x_handler_->Initialize();
+        if (init_result != Bno08xError::SUCCESS) {
+            IMU_LOGE("Failed to initialize Bno08xHandler: %s", Bno08xErrorToString(init_result));
+            bno08x_handler_.reset();
+            return false;
+        }
+        
+        IMU_LOGI("BNO08x IMU handler initialized successfully");
+        return true;
+        
+    } catch (const std::exception& e) {
+        IMU_LOGE("Exception during Bno08xHandler creation: %s", e.what());
+        bno08x_handler_.reset();
+        return false;
+    }
+}
 
-    // Initialize the device with the transport
-    if (!bno08x_device_->begin(bno08x_transport_.get())) {
-        IMU_LOGE("Failed to initialize BNO085 device (SH-2 initialization failed)");
-        int error_code = bno08x_device_->getLastError();
-        IMU_LOGE("BNO085 last error code: %d", error_code);
-        bno08x_device_.reset();
-        bno08x_transport_.reset();
+//==============================================================================
+// GPIO INTERRUPT SUPPORT IMPLEMENTATION
+//==============================================================================
+
+bool ImuManager::InitializeInterruptGpio() noexcept {
+    if (!gpio_manager_) {
+        IMU_LOGW("GPIO Manager not available for interrupt setup");
         return false;
     }
 
-    IMU_LOGI("BNO08x IMU initialized successfully");
-    IMU_LOGI("BNO085 device ready for sensor configuration and data collection");
+    // Check if PCAL_IMU_INT functional pin is available
+    if (!gpio_manager_->IsPinAvailable(static_cast<HardFOC::FunctionalGpioPin>(HfFunctionalGpioPin::PCAL_IMU_INT))) {
+        IMU_LOGW("PCAL_IMU_INT functional pin not available on this platform");
+        return false;
+    }
+
+    // Register the INT pin as input with pull-up (BNO08x INT is active low)
+    auto register_result = gpio_manager_->RegisterPin(
+        static_cast<HardFOC::FunctionalGpioPin>(HfFunctionalGpioPin::PCAL_IMU_INT), 
+        true,  // input direction
+        false  // initial state (not used for input)
+    );
+    
+    if (!register_result.IsSuccess()) {
+        IMU_LOGE("Failed to register PCAL_IMU_INT pin: %s", register_result.GetErrorMessage().c_str());
+        return false;
+    }
+
+    // Configure pin as input with pull-up
+    auto pullup_result = gpio_manager_->ConfigurePullMode(
+        static_cast<HardFOC::FunctionalGpioPin>(HfFunctionalGpioPin::PCAL_IMU_INT), 
+        hf_gpio_pull_mode_t::HF_GPIO_PULL_UP
+    );
+    
+    if (!pullup_result.IsSuccess()) {
+        IMU_LOGW("Failed to configure pull-up for PCAL_IMU_INT: %s", pullup_result.GetErrorMessage().c_str());
+        // Continue anyway - might still work
+    }
+
+    // Get the GPIO info to access the BaseGpio driver
+    auto pin_info_result = gpio_manager_->GetPinInfo(static_cast<HardFOC::FunctionalGpioPin>(HfFunctionalGpioPin::PCAL_IMU_INT));
+    if (!pin_info_result.IsSuccess()) {
+        IMU_LOGE("Failed to get pin info for PCAL_IMU_INT: %s", pin_info_result.GetErrorMessage().c_str());
+        return false;
+    }
+
+    const auto* pin_info = pin_info_result.GetValue();
+    if (!pin_info || !pin_info->gpio_driver) {
+        IMU_LOGE("Invalid pin info or GPIO driver for PCAL_IMU_INT");
+        return false;
+    }
+
+    interrupt_gpio_ = pin_info->gpio_driver.get();
+
+    // Create semaphore for WaitForInterrupt()
+    interrupt_semaphore_ = xSemaphoreCreateBinary();
+    if (!interrupt_semaphore_) {
+        IMU_LOGE("Failed to create interrupt semaphore");
+        interrupt_gpio_ = nullptr;
+        return false;
+    }
+
+    IMU_LOGI("BNO08x interrupt GPIO (PCAL_IMU_INT) initialized successfully");
     return true;
 }
 
-std::unique_ptr<IBNO085Transport> ImuManager::CreateBno08xTransport() noexcept {
-    // Get I2C bus from communication manager
-    // Get the BNO08x IMU device using the new CommChannelsManager API
-    BaseI2c* imu_device = comm_manager_->GetImu();
-    if (!imu_device) {
-        IMU_LOGE("BNO08x IMU device not available in CommChannelsManager");
-        return nullptr;
+bool ImuManager::ConfigureInterrupt(std::function<void()> callback) noexcept {
+    MutexLockGuard lock(manager_mutex_);
+    
+    if (!initialized_) {
+        IMU_LOGE("ImuManager not initialized");
+        return false;
     }
 
-    // Create transport with the IMU device
-    auto transport = std::make_unique<BaseI2cBno085Transport>(*imu_device, 0x4A);
-
-    IMU_LOGI("Created BNO08x I2C transport (address=0x4A)");
-    return transport;
-}
-
-//==============================================================================
-// INTERRUPT SUPPORT IMPLEMENTATION
-//==============================================================================
-
-/**
- * @brief Internal interrupt callback for BNO08x GPIO.
- */
-void Bno08xGpioInterruptCallback(BaseGpio* gpio, hf_gpio_interrupt_trigger_t trigger, void* user_data) {
-    ImuManager* imu_manager = static_cast<ImuManager*>(user_data);
-    if (!imu_manager || !imu_manager->interrupt_queue_) {
-        return;
+    if (!interrupt_gpio_) {
+        IMU_LOGE("Interrupt GPIO not available");
+        return false;
     }
-    
-    // Send notification to main task
-    uint32_t pin_num = gpio->GetPinNumber();
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    xQueueSendFromISR(imu_manager->interrupt_queue_, &pin_num, &xHigherPriorityTaskWoken);
-    
-    // Call user callback if provided
-    if (imu_manager->interrupt_callback_) {
-        // Note: This executes in interrupt context - user callback should be fast
-        imu_manager->interrupt_callback_();
-    }
-    
-    // Yield to higher priority task if needed
-    if (xHigherPriorityTaskWoken) {
-        portYIELD_FROM_ISR();
-    }
-}
 
-bool ImuManager::ConfigureInterrupt(std::function<void()> callback, void* user_data) noexcept {
-    std::lock_guard<std::mutex> lock(mutex_);
-    
     if (interrupt_configured_) {
-        IMU_LOGW("BNO08x interrupt already configured");
-        return true;
+        IMU_LOGW("Interrupt already configured - reconfiguring");
+        // Disable first if enabled
+        if (interrupt_enabled_) {
+            DisableInterrupt();
+        }
     }
-    
+
     // Store user callback
     interrupt_callback_ = callback;
-    
-    // Get GPIO mapping for BNO08x interrupt pin
-    auto* imu_int_mapping = GetGpioMapping(HfFunctionalGpioPin::PCAL_IMU_INT);
-    if (!imu_int_mapping) {
-        IMU_LOGE("PCAL_IMU_INT pin mapping not found in board configuration");
-        return false;
-    }
-    
-    // Check if this is a direct ESP32 GPIO
-    if (imu_int_mapping->chip_type != HfGpioChipType::ESP32_INTERNAL) {
-        IMU_LOGW("BNO08x INT pin is on PCAL95555 expander - advanced configuration needed");
-        IMU_LOGW("Direct GPIO interrupt not available, use polling mode");
+
+    // Configure GPIO interrupt (falling edge for active-low BNO08x INT)
+    auto configure_result = interrupt_gpio_->ConfigureInterrupt(
+        hf_gpio_interrupt_trigger_t::HF_GPIO_INTR_FALLING_EDGE,
+        GpioInterruptHandler,
+        this  // Pass ImuManager instance as user data
+    );
+
+    if (configure_result != hf_gpio_err_t::GPIO_SUCCESS) {
+        IMU_LOGE("Failed to configure GPIO interrupt: %d", static_cast<int>(configure_result));
+        interrupt_callback_ = nullptr;
         return false;
     }
 
-    // Create EspGpio instance for interrupt pin
-    bno08x_int_gpio_ = std::make_unique<EspGpio>(
-        static_cast<hf_pin_num_t>(imu_int_mapping->physical_pin),
-        hf_gpio_direction_t::HF_GPIO_DIRECTION_INPUT,
-        hf_gpio_active_state_t::HF_GPIO_ACTIVE_LOW,  // BNO08x INT is active low
-        hf_gpio_output_mode_t::HF_GPIO_OUTPUT_MODE_PUSH_PULL,
-        hf_gpio_pull_mode_t::HF_GPIO_PULL_MODE_PULL_UP  // Enable pull-up
-    );
-    
-    // Initialize the GPIO
-    if (!bno08x_int_gpio_->EnsureInitialized()) {
-        IMU_LOGE("Failed to initialize BNO08x interrupt GPIO");
-        return false;
-    }
-    
-    // Create queue for interrupt events
-    interrupt_queue_ = xQueueCreate(10, sizeof(uint32_t));
-    if (!interrupt_queue_) {
-        IMU_LOGE("Failed to create interrupt event queue");
-        return false;
-    }
-    
-    // Configure interrupt: falling edge (BNO08x INT is active low)
-    auto result = bno08x_int_gpio_->ConfigureInterrupt(
-        hf_gpio_interrupt_trigger_t::HF_GPIO_INTR_NEGEDGE,
-        Bno08xGpioInterruptCallback,
-        this  // Pass ImuManager instance as user data
-    );
-    
-    if (result != hf_gpio_err_t::GPIO_SUCCESS) {
-        IMU_LOGE("Failed to configure BNO08x interrupt: %d", static_cast<int>(result));
-        return false;
-    }
-    
     interrupt_configured_ = true;
-    IMU_LOGI("BNO08x interrupt configured on GPIO %d", imu_int_mapping->physical_pin);
+    IMU_LOGI("BNO08x interrupt configured successfully");
     return true;
 }
 
 bool ImuManager::EnableInterrupt() noexcept {
-    std::lock_guard<std::mutex> lock(mutex_);
+    MutexLockGuard lock(manager_mutex_);
     
-    if (!interrupt_configured_ || !bno08x_int_gpio_) {
-        IMU_LOGE("BNO08x interrupt not configured");
+    if (!interrupt_configured_) {
+        IMU_LOGE("Interrupt not configured - call ConfigureInterrupt() first");
         return false;
     }
-    
-    auto result = bno08x_int_gpio_->EnableInterrupt();
-    if (result != hf_gpio_err_t::GPIO_SUCCESS) {
-        IMU_LOGE("Failed to enable BNO08x interrupt: %d", static_cast<int>(result));
+
+    if (interrupt_enabled_) {
+        IMU_LOGW("Interrupt already enabled");
+        return true;
+    }
+
+    auto enable_result = interrupt_gpio_->EnableInterrupt();
+    if (enable_result != hf_gpio_err_t::GPIO_SUCCESS) {
+        IMU_LOGE("Failed to enable GPIO interrupt: %d", static_cast<int>(enable_result));
         return false;
     }
-    
-    IMU_LOGI("BNO08x interrupt enabled");
+
+    interrupt_enabled_ = true;
+    IMU_LOGI("BNO08x interrupt enabled successfully");
     return true;
 }
 
 bool ImuManager::DisableInterrupt() noexcept {
-    std::lock_guard<std::mutex> lock(mutex_);
+    MutexLockGuard lock(manager_mutex_);
     
-    if (!interrupt_configured_ || !bno08x_int_gpio_) {
-        IMU_LOGW("BNO08x interrupt not configured");
-        return true;  // Not an error if already disabled
+    if (!interrupt_enabled_) {
+        return true;  // Already disabled
     }
-    
-    auto result = bno08x_int_gpio_->DisableInterrupt();
-    if (result != hf_gpio_err_t::GPIO_SUCCESS) {
-        IMU_LOGE("Failed to disable BNO08x interrupt: %d", static_cast<int>(result));
+
+    if (!interrupt_gpio_) {
+        IMU_LOGE("Interrupt GPIO not available");
         return false;
     }
-    
-    IMU_LOGI("BNO08x interrupt disabled");
+
+    auto disable_result = interrupt_gpio_->DisableInterrupt();
+    if (disable_result != hf_gpio_err_t::GPIO_SUCCESS) {
+        IMU_LOGE("Failed to disable GPIO interrupt: %d", static_cast<int>(disable_result));
+        return false;
+    }
+
+    interrupt_enabled_ = false;
+    IMU_LOGI("BNO08x interrupt disabled successfully");
     return true;
 }
 
 bool ImuManager::IsInterruptEnabled() const noexcept {
-    std::lock_guard<std::mutex> lock(mutex_);
-    
-    if (!interrupt_configured_ || !bno08x_int_gpio_) {
+    MutexLockGuard lock(manager_mutex_);
+    return interrupt_enabled_;
+}
+
+bool ImuManager::WaitForInterrupt(uint32_t timeout_ms) noexcept {
+    if (!interrupt_semaphore_) {
+        IMU_LOGE("Interrupt semaphore not available");
         return false;
     }
-    
-    // Check interrupt status through GPIO
-    InterruptStatus status;
-    auto result = bno08x_int_gpio_->GetInterruptStatus(status);
-    if (result != hf_gpio_err_t::GPIO_SUCCESS) {
+
+    if (!interrupt_enabled_) {
+        IMU_LOGE("Interrupt not enabled");
         return false;
     }
+
+    TickType_t timeout_ticks = (timeout_ms == 0) ? portMAX_DELAY : pdMS_TO_TICKS(timeout_ms);
     
-    return status.is_enabled;
+    BaseType_t result = xSemaphoreTake(static_cast<SemaphoreHandle_t>(interrupt_semaphore_), timeout_ticks);
+    
+    return (result == pdTRUE);
+}
+
+uint32_t ImuManager::GetInterruptCount() const noexcept {
+    return interrupt_count_.load();
+}
+
+void ImuManager::GpioInterruptHandler(BaseGpio* gpio, hf_gpio_interrupt_trigger_t trigger, void* user_data) noexcept {
+    // This function executes in interrupt context - keep it minimal!
+    auto* imu_manager = static_cast<ImuManager*>(user_data);
+    if (!imu_manager) {
+        return;
+    }
+
+    // Increment interrupt counter
+    imu_manager->interrupt_count_.fetch_add(1);
+
+    // Signal semaphore for WaitForInterrupt()
+    if (imu_manager->interrupt_semaphore_) {
+        BaseType_t higher_priority_task_woken = pdFALSE;
+        xSemaphoreGiveFromISR(
+            static_cast<SemaphoreHandle_t>(imu_manager->interrupt_semaphore_), 
+            &higher_priority_task_woken
+        );
+        portYIELD_FROM_ISR(higher_priority_task_woken);
+    }
+
+    // Call user callback if provided
+    if (imu_manager->interrupt_callback_) {
+        imu_manager->interrupt_callback_();
+    }
 } 

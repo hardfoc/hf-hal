@@ -1,35 +1,35 @@
 #pragma once
 
 #include <memory>
-#include <mutex>
 #include <vector>
+#include <functional>
+#include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/utils/RtosMutex.h"
 
 // Forward declarations
-class BNO085;
-class IBNO085Transport;
+class Bno08xHandler;
 class CommChannelsManager;
-class EspGpio;
-
-// FreeRTOS queue handle
-typedef void* QueueHandle_t;
+class GpioManager;
+class BaseGpio;
 
 /**
  * @class ImuManager
- * @brief Singleton for managing IMUs on the board with direct device object access.
+ * @brief Singleton for managing IMUs on the board using Bno08xHandler abstraction.
  *
- * This manager provides direct access to BNO085 IMU objects rather than using
- * base class abstractions. It handles initialization of I2C transport and 
- * provides type-safe access to specific IMU devices on the board.
+ * This manager provides access to BNO08x IMU devices through the Bno08xHandler
+ * which offers a unified, exception-free interface with proper RTOS synchronization.
+ * It handles initialization of I2C transport through CommChannelsManager and 
+ * provides type-safe access to IMU devices on the board.
  *
  * **Key Features:**
- * - Direct BNO085 object access (no BaseImuDriver abstraction)
+ * - Bno08xHandler-based abstraction (consistent with MotorController/Tmc9660Handler pattern)
  * - Automatic I2C transport setup using CommChannelsManager
- * - Thread-safe singleton pattern
+ * - Thread-safe singleton pattern with RtosMutex
+ * - Exception-free operation with pointer-based returns
  * - Proper device initialization and lifecycle management
  * - ESP-IDF v5.5+ I2C integration
  *
  * **BNO08x Callback Operation:**
- * - **Polling Mode**: Call bno08x.update() regularly (50-100Hz) to trigger callbacks
+ * - **Polling Mode**: Call handler->update() regularly (50-100Hz) to trigger callbacks
  * - **Interrupt Mode**: Connect INT pin to GPIO, call update() when interrupt occurs
  * - **Callback Context**: SensorCallback executes in the task that calls update()
  * - **No INT Pin Required**: Polling mode works perfectly without interrupt connection
@@ -37,27 +37,23 @@ typedef void* QueueHandle_t;
  * **Usage Example:**
  * @code
  * auto& imu_mgr = ImuManager::GetInstance();
- * if (imu_mgr.EnsureInitialized()) {
- *     BNO085& bno08x = imu_mgr.GetBno08x();
- *     
- *     // Set callback for sensor events
- *     bno08x.setCallback([](const SensorEvent& event) {
- *         ESP_LOGI("IMU", "Sensor: %d, Timestamp: %llu", (int)event.sensor, event.timestamp);
- *     });
- *     
- *     // Enable sensors
- *     if (bno08x.enableSensor(BNO085Sensor::RotationVector, 50)) {
- *         // In your main loop or task:
- *         while (true) {
- *             bno08x.update();  // This triggers callbacks when new data arrives
- *             vTaskDelay(pdMS_TO_TICKS(10)); // 100Hz polling rate
+ * if (imu_mgr.Initialize()) {
+ *     Bno08xHandler* handler = imu_mgr.GetBno08xHandler();
+ *     if (handler) {
+ *         // Configure sensors through handler
+ *         if (handler->EnableSensor(Bno08xSensorType::ROTATION_VECTOR, 50)) {
+ *             // In your main loop or task:
+ *             while (true) {
+ *                 handler->Update();  // This triggers callbacks when new data arrives
+ *                 vTaskDelay(pdMS_TO_TICKS(10)); // 100Hz polling rate
+ *             }
  *         }
  *     }
  * }
  * @endcode
  *
- * @note This manager works directly with BNO085 objects as requested by the user.
- *       No BaseImuDriver abstraction is used.
+ * @note This manager now uses Bno08xHandler for consistent architecture across
+ *       all device handlers in the HardFOC system.
  */
 class ImuManager {
 public:
@@ -68,43 +64,37 @@ public:
     static ImuManager& GetInstance() noexcept;
 
     /**
-     * @brief Ensure all IMUs are initialized (lazy initialization).
-     * @return true if all IMUs are initialized successfully, false otherwise.
+     * @brief Initialize the IMU manager system.
+     * @note This automatically creates the BNO08x IMU handler using CommChannelsManager
+     * @return true if initialization successful, false otherwise
      */
-    bool EnsureInitialized() noexcept;
+    bool Initialize() noexcept;
 
     /**
      * @brief Check if the IMU manager is initialized.
-     * @return true if initialized, false otherwise.
+     * @return true if initialized, false otherwise
      */
     bool IsInitialized() const noexcept;
 
     /**
      * @brief Deinitialize all IMUs and release resources.
-     * @return true if deinitialized successfully, false otherwise.
+     * @return true if deinitialized successfully, false otherwise
      */
     bool Deinitialize() noexcept;
 
-    //==================== Direct Device Access ====================//
+    //==================== Handler Access ====================//
 
     /**
-     * @brief Get direct reference to the BNO08x IMU device.
-     * @return Reference to the BNO085 device object
-     * @note Returns a dummy object if not initialized or device not available
-     * @note This provides direct access to the BNO085 object for full control
+     * @brief Get access to the BNO08x IMU handler.
+     * @return Pointer to Bno08xHandler if available and initialized, nullptr otherwise
+     * @note Returns nullptr if not initialized or device not available
+     * @note This provides access to the unified BNO08x handler interface
      */
-    BNO085& GetBno08x();
+    Bno08xHandler* GetBno08xHandler() noexcept;
 
     /**
-     * @brief Get direct pointer to the BNO08x IMU device (safe version).
-     * @return Pointer to the BNO085 device object, or nullptr if not available
-     * @note This is the safe version that returns nullptr if not available
-     */
-    BNO085* GetBno08xPtr() noexcept;
-
-    /**
-     * @brief Check if the BNO08x IMU is available and initialized.
-     * @return true if BNO08x is available, false otherwise
+     * @brief Check if the BNO08x IMU handler is available and initialized.
+     * @return true if BNO08x handler is available, false otherwise
      */
     bool IsBno08xAvailable() const noexcept;
 
@@ -114,7 +104,7 @@ public:
      * @brief Get the number of initialized IMUs.
      * @return Number of successfully initialized IMU devices
      */
-    size_t GetImuCount() const noexcept;
+    uint8_t GetImuCount() const noexcept;
 
     /**
      * @brief Get information about available IMU devices.
@@ -125,39 +115,46 @@ public:
     //==================== Interrupt Support ====================//
 
     /**
-     * @brief Configure BNO08x interrupt pin for efficient data processing.
-     * 
-     * This method sets up the BNO08x interrupt pin using the EspGpio abstraction.
-     * When configured, the interrupt pin will trigger when new sensor data is available,
-     * allowing for more efficient processing compared to pure polling mode.
-     * 
-     * @param callback Optional callback to invoke when interrupt occurs
-     * @param user_data Optional user data passed to callback
-     * @return true if interrupt successfully configured, false otherwise
-     * 
-     * @note The interrupt pin mapping depends on board configuration
-     * @note If interrupt pin is on PCAL95555 expander, additional setup may be required
-     * @note You still need to call bno08x.update() when interrupt occurs
+     * @brief Configure GPIO interrupt for BNO08x INT pin.
+     * @param callback Optional callback function executed in interrupt context (keep minimal)
+     * @return true if interrupt configuration successful, false otherwise
+     * @note Uses PCAL_IMU_INT functional pin through GpioManager
+     * @note Callback executes in ISR context - keep operations minimal
      */
-    bool ConfigureInterrupt(std::function<void()> callback = nullptr, void* user_data = nullptr) noexcept;
+    bool ConfigureInterrupt(std::function<void()> callback = nullptr) noexcept;
 
     /**
-     * @brief Enable BNO08x interrupt.
+     * @brief Enable BNO08x GPIO interrupt.
      * @return true if interrupt enabled successfully, false otherwise
+     * @note Must call ConfigureInterrupt() first
      */
     bool EnableInterrupt() noexcept;
 
     /**
-     * @brief Disable BNO08x interrupt.
+     * @brief Disable BNO08x GPIO interrupt.
      * @return true if interrupt disabled successfully, false otherwise
      */
     bool DisableInterrupt() noexcept;
 
     /**
-     * @brief Check if BNO08x interrupt is configured and enabled.
+     * @brief Check if interrupt is configured and enabled.
      * @return true if interrupt is active, false otherwise
      */
     bool IsInterruptEnabled() const noexcept;
+
+    /**
+     * @brief Wait for interrupt signal with timeout.
+     * @param timeout_ms Timeout in milliseconds (0 = wait indefinitely)
+     * @return true if interrupt occurred, false on timeout
+     * @note Useful for interrupt-driven processing in tasks
+     */
+    bool WaitForInterrupt(uint32_t timeout_ms = 0) noexcept;
+
+    /**
+     * @brief Get interrupt statistics for monitoring.
+     * @return Number of interrupts processed since initialization
+     */
+    uint32_t GetInterruptCount() const noexcept;
 
     // Delete copy/move constructors and assignment operators
     ImuManager(const ImuManager&) = delete;
@@ -177,37 +174,41 @@ private:
     ~ImuManager() noexcept;
 
     /**
-     * @brief Initialize the BNO08x IMU with I2C transport.
+     * @brief Initialize the BNO08x IMU handler with I2C transport.
      * @return true if initialization successful, false otherwise
      */
-    bool InitializeBno08x() noexcept;
+    bool InitializeBno08xHandler() noexcept;
 
     /**
-     * @brief Create I2C transport for BNO08x communication.
-     * @return Unique pointer to transport, or nullptr on failure
+     * @brief Initialize GPIO interrupt for BNO08x INT pin.
+     * @return true if GPIO setup successful, false otherwise
      */
-    std::unique_ptr<IBNO085Transport> CreateBno08xTransport() noexcept;
+    bool InitializeInterruptGpio() noexcept;
 
     /**
-     * @brief Configure BNO08x interrupt GPIO pin.
-     * @return true if successful, false otherwise
+     * @brief GPIO interrupt handler for BNO08x INT pin.
+     * @param gpio Pointer to the GPIO that triggered interrupt
+     * @param trigger Interrupt trigger type
+     * @param user_data Pointer to user data (ImuManager instance)
      */
-    bool SetupInterruptGpio() noexcept;
+    static void GpioInterruptHandler(BaseGpio* gpio, hf_gpio_interrupt_trigger_t trigger, void* user_data) noexcept;
 
     // State tracking
     bool initialized_ = false;
-    mutable std::mutex mutex_;
+    mutable RtosMutex manager_mutex_;
 
-    // Device objects (direct access, no base class abstraction)
-    std::unique_ptr<BNO085> bno08x_device_;
-    std::unique_ptr<IBNO085Transport> bno08x_transport_;
-
-    // Interrupt handling
-    std::unique_ptr<EspGpio> bno08x_int_gpio_;
-    std::function<void()> interrupt_callback_;
-    QueueHandle_t interrupt_queue_;
-    bool interrupt_configured_ = false;
+    // Device handler (unified interface, consistent with MotorController pattern)
+    std::unique_ptr<Bno08xHandler> bno08x_handler_;
 
     // Reference to communication manager for I2C access
     CommChannelsManager* comm_manager_ = nullptr;
+
+    // GPIO interrupt support
+    GpioManager* gpio_manager_ = nullptr;
+    BaseGpio* interrupt_gpio_ = nullptr;
+    std::function<void()> interrupt_callback_;
+    bool interrupt_configured_ = false;
+    bool interrupt_enabled_ = false;
+    std::atomic<uint32_t> interrupt_count_{0};
+    void* interrupt_semaphore_ = nullptr;  // FreeRTOS semaphore for WaitForInterrupt()
 }; 
