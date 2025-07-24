@@ -34,7 +34,6 @@
 #ifndef COMPONENT_HANDLER_GPIO_MANAGER_H_
 #define COMPONENT_HANDLER_GPIO_MANAGER_H_
 
-#include "Result.h"
 #include "CommonIDs.h"
 #include "ThingsToString.h"
 #include "base/BaseGpio.h"
@@ -42,7 +41,7 @@
 #include "Tmc9660MotorController.h"
 #include "Pcal95555Handler.h"
 #include "utils-and-drivers/hf-core-drivers/internal/hf-pincfg/include/hf_platform_mapping.hpp"
-#include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/mcu/esp32/McuDigitalGpio.h"
+#include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/mcu/esp32/EspGpio.h"
 
 #include <array>
 #include <memory>
@@ -171,7 +170,8 @@ struct GpioSystemDiagnostics {
  * - Atomic operations where appropriate
  * 
  * Error Handling:
- * - All operations return Result<T> types
+ * - Core operations return simple bool values for embedded system efficiency
+ * - Configuration operations return hf_gpio_err_t for detailed error codes
  * - Comprehensive error codes via ResultCode enum
  * - Detailed error descriptions and diagnostics
  * 
@@ -200,28 +200,16 @@ public:
     static GpioManager& GetInstance() noexcept;
     
     /**
-     * @brief Initialize the GPIO manager system with platform mapping integration.
-     * 
-     * This method initializes the entire GPIO system, including:
-     * - Platform mapping validation and pin discovery
-     * - ESP32-C6 native GPIO configuration
-     * - PCAL95555 I2C expander setup and pin registration
-     * - TMC9660 GPIO integration
-     * - Automatic pin registration based on platform configuration
-     * - Hardware resource validation and conflict detection
-     * 
-     * @param i2cBus Reference to the I2C bus for PCAL95555 communication
-     * @param tmc9660Controller Reference to the TMC9660 controller
-     * @return Result indicating success or specific error
+     * @brief Ensure the GPIO manager system is initialized.
+     * @return true if initialization successful, false otherwise
      */
-    [[nodiscard]] Result<void> Initialize(SfI2cBus& i2cBus, 
-                                         Tmc9660MotorController& tmc9660Controller) noexcept;
+    [[nodiscard]] bool EnsureInitialized() noexcept;
     
     /**
      * @brief Shutdown the GPIO manager system.
-     * @return Result indicating success or specific error
+     * @return true if shutdown successful, false otherwise
      */
-    [[nodiscard]] Result<void> Shutdown() noexcept;
+    [[nodiscard]] bool Shutdown() noexcept;
     
     /**
      * @brief Check if the GPIO system is initialized.
@@ -231,9 +219,10 @@ public:
     
     /**
      * @brief Get system diagnostics and health information.
-     * @return Result containing system diagnostics
+     * @param diagnostics Reference to store system diagnostics
+     * @return true if successful, false otherwise
      */
-    [[nodiscard]] Result<GpioSystemDiagnostics> GetSystemDiagnostics() const noexcept;
+    [[nodiscard]] bool GetSystemDiagnostics(GpioSystemDiagnostics& diagnostics) const noexcept;
     
     //==========================================================================
     // PLATFORM MAPPING INTEGRATION
@@ -249,16 +238,17 @@ public:
     /**
      * @brief Get hardware resource information for a functional pin.
      * @param pin Functional pin identifier
-     * @return Result containing hardware resource information
+     * @param resource Reference to store hardware resource pointer
+     * @return true if successful, false otherwise
      */
-    [[nodiscard]] Result<const HardFOC::GpioHardwareResource*> GetPinHardwareResource(
-        HardFOC::FunctionalGpioPin pin) const noexcept;
+    [[nodiscard]] bool GetPinHardwareResource(HardFOC::FunctionalGpioPin pin, 
+                                            const HardFOC::GpioHardwareResource*& resource) const noexcept;
     
     /**
      * @brief Register all available pins from platform mapping.
-     * @return Result indicating success or specific error
+     * @return true if registration successful, false otherwise
      */
-    [[nodiscard]] Result<void> RegisterAllPlatformPins() noexcept;
+    [[nodiscard]] bool RegisterAllPlatformPins() noexcept;
     
     /**
      * @brief Get list of all available functional pins.
@@ -275,17 +265,17 @@ public:
      * @param pin Functional pin identifier
      * @param direction Pin direction (true = input, false = output)
      * @param initial_state Initial state for output pins
-     * @return Result indicating success or specific error
+     * @return true if registration successful, false otherwise
      */
-    [[nodiscard]] Result<void> RegisterPin(HardFOC::FunctionalGpioPin pin, bool direction, 
-                                          bool initial_state = false) noexcept;
+    [[nodiscard]] bool RegisterPin(HardFOC::FunctionalGpioPin pin, bool direction, 
+                                  bool initial_state = false) noexcept;
     
     /**
      * @brief Unregister a GPIO pin from the system.
      * @param pin Functional pin identifier
-     * @return Result indicating success or specific error
+     * @return true if unregistration successful, false otherwise
      */
-    [[nodiscard]] Result<void> UnregisterPin(HardFOC::FunctionalGpioPin pin) noexcept;
+    [[nodiscard]] bool UnregisterPin(HardFOC::FunctionalGpioPin pin) noexcept;
     
     /**
      * @brief Check if a GPIO pin is registered.
@@ -297,9 +287,10 @@ public:
     /**
      * @brief Get information about a registered GPIO pin.
      * @param pin Functional pin identifier
-     * @return Result containing pin information or error
+     * @param info Reference to store pin information pointer
+     * @return true if successful, false otherwise
      */
-    [[nodiscard]] Result<const GpioInfo*> GetPinInfo(HardFOC::FunctionalGpioPin pin) const noexcept;
+    [[nodiscard]] bool GetPinInfo(HardFOC::FunctionalGpioPin pin, const GpioInfo*& info) const noexcept;
     
     /**
      * @brief Get count of registered pins.
@@ -314,51 +305,88 @@ public:
     [[nodiscard]] std::vector<HardFOC::FunctionalGpioPin> GetRegisteredPins() const noexcept;
     
     //==========================================================================
+    // MODERN SHARED_PTR PIN ACCESS
+    //==========================================================================
+    
+    /**
+     * @brief Get a shared pointer to a GPIO pin if it exists.
+     * @param pin Functional pin identifier
+     * @return Shared pointer to BaseGpio or nullptr if pin not found/created
+     * @note Does NOT create pin if not found. Use CreateSharedPin() to create new pins.
+     * @note Thread-safe with RtosMutex protection at pin level.
+     */
+    [[nodiscard]] std::shared_ptr<BaseGpio> GetPin(HfFunctionalGpioPin pin) noexcept;
+    
+    /**
+     * @brief Create a GPIO pin with specific configuration and return shared pointer.
+     * @param pin Functional pin identifier
+     * @param direction Pin direction (input/output)
+     * @param active_state Active polarity (high/low)
+     * @param pull_mode Pull resistor configuration
+     * @return Shared pointer to BaseGpio or nullptr if creation failed
+     */
+    [[nodiscard]] std::shared_ptr<BaseGpio> CreateSharedPin(
+        HfFunctionalGpioPin pin,
+        hf_gpio_direction_t direction = hf_gpio_direction_t::HF_GPIO_DIRECTION_INPUT,
+        hf_gpio_active_state_t active_state = hf_gpio_active_state_t::HF_GPIO_ACTIVE_HIGH,
+        hf_gpio_pull_mode_t pull_mode = hf_gpio_pull_mode_t::HF_GPIO_PULL_MODE_FLOATING) noexcept;
+    
+    /**
+     * @brief Get multiple GPIO pins as shared pointers in one call.
+     * @param pins Vector of functional pin identifiers
+     * @return Vector of shared pointers (nullptr for failed pins)
+     */
+    [[nodiscard]] std::vector<std::shared_ptr<BaseGpio>> GetPins(
+        const std::vector<HfFunctionalGpioPin>& pins) noexcept;
+    
+    //==========================================================================
     // BASIC PIN OPERATIONS
     //==========================================================================
     
     /**
      * @brief Set a GPIO pin to active state.
      * @param pin Functional pin identifier
-     * @return Result indicating success or specific error
+     * @return true if successful, false otherwise
      */
-    [[nodiscard]] Result<void> SetActive(HardFOC::FunctionalGpioPin pin) noexcept;
+    [[nodiscard]] bool SetActive(HardFOC::FunctionalGpioPin pin) noexcept;
     
     /**
      * @brief Set a GPIO pin to inactive state.
      * @param pin Functional pin identifier
-     * @return Result indicating success or specific error
+     * @return true if successful, false otherwise
      */
-    [[nodiscard]] Result<void> SetInactive(HardFOC::FunctionalGpioPin pin) noexcept;
+    [[nodiscard]] bool SetInactive(HardFOC::FunctionalGpioPin pin) noexcept;
     
     /**
      * @brief Set a GPIO pin to a specific state.
      * @param pin Functional pin identifier
      * @param state Desired state (true = active, false = inactive)
-     * @return Result indicating success or specific error
+     * @return true if successful, false otherwise
      */
-    [[nodiscard]] Result<void> SetState(HardFOC::FunctionalGpioPin pin, bool state) noexcept;
+    [[nodiscard]] bool SetState(HardFOC::FunctionalGpioPin pin, bool state) noexcept;
     
     /**
      * @brief Toggle a GPIO pin state.
      * @param pin Functional pin identifier
-     * @return Result containing new state or error
+     * @return true if successful, false otherwise
      */
-    [[nodiscard]] Result<bool> Toggle(HardFOC::FunctionalGpioPin pin) noexcept;
+    [[nodiscard]] bool Toggle(HardFOC::FunctionalGpioPin pin) noexcept;
     
     /**
      * @brief Read the current state of a GPIO pin.
      * @param pin Functional pin identifier
-     * @return Result containing pin state or error
+     * @param state Reference to store the read state
+     * @return true if successful, false otherwise
      */
-    [[nodiscard]] Result<bool> ReadState(HardFOC::FunctionalGpioPin pin) noexcept;
+    [[nodiscard]] bool ReadState(HardFOC::FunctionalGpioPin pin, bool& state) noexcept;
     
     /**
-     * @brief Check if a GPIO pin is currently active.
+     * @brief Check if a GPIO pin is in active state.
      * @param pin Functional pin identifier
-     * @return Result containing active status or error
+     * @param active Reference to store the active state
+     * @return true if successful, false otherwise
      */
-    [[nodiscard]] Result<bool> IsActive(HardFOC::FunctionalGpioPin pin) noexcept;
+    [[nodiscard]] bool IsActive(HardFOC::FunctionalGpioPin pin, bool& active) noexcept;
     
     //==========================================================================
     // BATCH OPERATIONS
@@ -367,32 +395,32 @@ public:
     /**
      * @brief Perform batch write operations on multiple pins.
      * @param operation Batch operation specification
-     * @return Result containing batch operation results
+     * @return Batch operation results with individual and overall status
      */
-    [[nodiscard]] Result<GpioBatchResult> BatchWrite(const GpioBatchOperation& operation) noexcept;
+    [[nodiscard]] GpioBatchResult BatchWrite(const GpioBatchOperation& operation) noexcept;
     
     /**
      * @brief Perform batch read operations on multiple pins.
      * @param pins Vector of functional pin identifiers to read
-     * @return Result containing batch operation results
+     * @return Batch operation results with individual and overall status
      */
-    [[nodiscard]] Result<GpioBatchResult> BatchRead(
+    [[nodiscard]] GpioBatchResult BatchRead(
         const std::vector<HardFOC::FunctionalGpioPin>& pins) noexcept;
     
     /**
      * @brief Set multiple pins to active state.
      * @param pins Vector of functional pin identifiers
-     * @return Result containing batch operation results
+     * @return Batch operation results with individual and overall status
      */
-    [[nodiscard]] Result<GpioBatchResult> SetMultipleActive(
+    [[nodiscard]] GpioBatchResult SetMultipleActive(
         const std::vector<HardFOC::FunctionalGpioPin>& pins) noexcept;
     
     /**
      * @brief Set multiple pins to inactive state.
      * @param pins Vector of functional pin identifiers
-     * @return Result containing batch operation results
+     * @return Batch operation results with individual and overall status
      */
-    [[nodiscard]] Result<GpioBatchResult> SetMultipleInactive(
+    [[nodiscard]] GpioBatchResult SetMultipleInactive(
         const std::vector<HardFOC::FunctionalGpioPin>& pins) noexcept;
     
     //==========================================================================
@@ -403,48 +431,51 @@ public:
      * @brief Configure pin direction.
      * @param pin Functional pin identifier
      * @param direction Pin direction (true = input, false = output)
-     * @return Result indicating success or specific error
+     * @return hf_gpio_err_t error code
      */
-    [[nodiscard]] Result<void> SetPinDirection(HardFOC::FunctionalGpioPin pin, bool direction) noexcept;
+    [[nodiscard]] hf_gpio_err_t SetPinDirection(HardFOC::FunctionalGpioPin pin, bool direction) noexcept;
     
     /**
      * @brief Configure pin pull-up/pull-down.
      * @param pin Functional pin identifier
      * @param pull_mode Pull mode configuration
-     * @return Result indicating success or specific error
+     * @return hf_gpio_err_t error code
      */
-    [[nodiscard]] Result<void> SetPinPullMode(HardFOC::FunctionalGpioPin pin, 
+    [[nodiscard]] hf_gpio_err_t SetPinPullMode(HardFOC::FunctionalGpioPin pin, 
                                              hf_gpio_pull_mode_t pull_mode) noexcept;
     
     /**
      * @brief Configure pin output mode.
      * @param pin Functional pin identifier
      * @param output_mode Output mode configuration
-     * @return Result indicating success or specific error
+     * @return hf_gpio_err_t error code
      */
-    [[nodiscard]] Result<void> SetPinOutputMode(HardFOC::FunctionalGpioPin pin,
+    [[nodiscard]] hf_gpio_err_t SetPinOutputMode(HardFOC::FunctionalGpioPin pin,
                                                hf_gpio_output_mode_t output_mode) noexcept;
     
     /**
      * @brief Get pin direction.
      * @param pin Functional pin identifier
-     * @return Result containing pin direction or error
+     * @param direction Reference to store direction (true = input, false = output)
+     * @return true if successful, false otherwise
      */
-    [[nodiscard]] Result<bool> GetPinDirection(HardFOC::FunctionalGpioPin pin) const noexcept;
+    [[nodiscard]] bool GetPinDirection(HardFOC::FunctionalGpioPin pin, bool& direction) const noexcept;
     
     /**
      * @brief Get pin pull mode.
      * @param pin Functional pin identifier
-     * @return Result containing pull mode or error
+     * @param pull_mode Reference to store pull mode
+     * @return true if successful, false otherwise
      */
-    [[nodiscard]] Result<hf_gpio_pull_mode_t> GetPinPullMode(HardFOC::FunctionalGpioPin pin) const noexcept;
+    [[nodiscard]] bool GetPinPullMode(HardFOC::FunctionalGpioPin pin, hf_gpio_pull_mode_t& pull_mode) const noexcept;
     
     /**
      * @brief Get pin output mode.
      * @param pin Functional pin identifier
-     * @return Result containing output mode or error
+     * @param output_mode Reference to store output mode
+     * @return true if successful, false otherwise
      */
-    [[nodiscard]] Result<hf_gpio_output_mode_t> GetPinOutputMode(HardFOC::FunctionalGpioPin pin) const noexcept;
+    [[nodiscard]] bool GetPinOutputMode(HardFOC::FunctionalGpioPin pin, hf_gpio_output_mode_t& output_mode) const noexcept;
     
     //==========================================================================
     // INTERRUPT SUPPORT
@@ -456,26 +487,26 @@ public:
      * @param trigger Interrupt trigger type
      * @param callback Interrupt callback function
      * @param user_data User data for callback
-     * @return Result indicating success or specific error
+     * @return hf_gpio_err_t error code
      */
-    [[nodiscard]] Result<void> ConfigureInterrupt(HardFOC::FunctionalGpioPin pin,
-                                                 BaseGpio::InterruptTrigger trigger,
-                                                 BaseGpio::InterruptCallback callback,
-                                                 void* user_data = nullptr) noexcept;
+    [[nodiscard]] hf_gpio_err_t ConfigureInterrupt(HardFOC::FunctionalGpioPin pin,
+                                                   BaseGpio::InterruptTrigger trigger,
+                                                   BaseGpio::InterruptCallback callback,
+                                                   void* user_data = nullptr) noexcept;
     
     /**
      * @brief Enable interrupt for a pin.
      * @param pin Functional pin identifier
-     * @return Result indicating success or specific error
+     * @return hf_gpio_err_t error code
      */
-    [[nodiscard]] Result<void> EnableInterrupt(HardFOC::FunctionalGpioPin pin) noexcept;
+    [[nodiscard]] hf_gpio_err_t EnableInterrupt(HardFOC::FunctionalGpioPin pin) noexcept;
     
     /**
      * @brief Disable interrupt for a pin.
      * @param pin Functional pin identifier
-     * @return Result indicating success or specific error
+     * @return hf_gpio_err_t error code
      */
-    [[nodiscard]] Result<void> DisableInterrupt(HardFOC::FunctionalGpioPin pin) noexcept;
+    [[nodiscard]] hf_gpio_err_t DisableInterrupt(HardFOC::FunctionalGpioPin pin) noexcept;
     
     /**
      * @brief Check if pin supports interrupts.
@@ -490,34 +521,49 @@ public:
     
     /**
      * @brief Get system health information.
-     * @return Result containing health status string
+     * @param health_info Reference to store health information string
+     * @return true if successful, false otherwise
      */
-    [[nodiscard]] Result<std::string> GetSystemHealth() const noexcept;
+    [[nodiscard]] bool GetSystemHealth(std::string& health_info) const noexcept;
     
     /**
      * @brief Reset all output pins to inactive state.
-     * @return Result indicating success or specific error
+     * @return true if successful, false otherwise
      */
-    [[nodiscard]] Result<void> ResetAllPins() noexcept;
+    [[nodiscard]] bool ResetAllPins() noexcept;
     
     /**
      * @brief Get pin statistics.
      * @param pin Functional pin identifier
-     * @return Result containing pin statistics or error
+     * @param statistics Reference to store pin statistics
+     * @return true if successful, false otherwise
      */
-    [[nodiscard]] Result<BaseGpio::PinStatistics> GetPinStatistics(HardFOC::FunctionalGpioPin pin) const noexcept;
+    [[nodiscard]] bool GetPinStatistics(HardFOC::FunctionalGpioPin pin, BaseGpio::PinStatistics& statistics) const noexcept;
     
     /**
      * @brief Clear pin statistics.
      * @param pin Functional pin identifier
-     * @return Result indicating success or specific error
+     * @return true if successful, false otherwise
      */
-    [[nodiscard]] Result<void> ClearPinStatistics(HardFOC::FunctionalGpioPin pin) noexcept;
+    [[nodiscard]] bool ClearPinStatistics(HardFOC::FunctionalGpioPin pin) noexcept;
 
 private:
     //==========================================================================
     // PRIVATE MEMBERS
     //==========================================================================
+    
+    /**
+     * @brief Initialize the GPIO manager system with platform pin registration.
+     * 
+     * This private method performs the actual initialization including:
+     * - CommChannelsManager dependency validation
+     * - All platform pins registration and validation
+     * - Lazy initialization of hardware handlers
+     * - Thread-safe initialization with RtosMutex
+     * 
+     * @return true if initialization successful, false otherwise
+     */
+    [[nodiscard]] bool Initialize() noexcept;
     
     // ===============================
     // SYSTEM STATE
@@ -535,32 +581,46 @@ private:
     mutable RtosMutex mutex_;
     
     // ===============================
-    // HARDWARE INTERFACES
+    // HARDWARE INTERFACES (REMOVED - USE COMMCHANNELSMANAGER)
     // ===============================
     
-    /**
-     * @brief TMC9660 motor controller for GPIO operations.
-     */
-    Tmc9660MotorController* tmc9660_controller_{nullptr};
-    
-    // Pin registry
+    // Pin registry with RtosMutex protection
     std::unordered_map<HardFOC::FunctionalGpioPin, std::unique_ptr<GpioInfo>> pin_registry_;
     
+    /**
+     * @brief Modern shared pointer pin registry for safe shared access.
+     * Allows multiple components to safely share the same GPIO pin.
+     * Protected by RtosMutex for thread-safe access.
+     */
+    std::unordered_map<HfFunctionalGpioPin, std::shared_ptr<BaseGpio>> shared_pin_registry_;
+    mutable RtosMutex shared_pin_mutex_;  ///< RtosMutex for shared pin registry access
+    
     // ===============================
-    // GPIO HANDLERS (PRE-INITIALIZED)
+    // GPIO HANDLERS (LAZY INITIALIZATION)
     // ===============================
     
     /**
-     * @brief PCAL95555 GPIO expander handler (pre-initialized at boot).
+     * @brief PCAL95555 GPIO expander handler (lazy initialized when first accessed).
      * Single instance manages all PCAL95555 pins to prevent duplicate controllers.
+     * Uses CommChannelsManager for I2C access.
      */
     std::unique_ptr<Pcal95555Handler> pcal95555_handler_;
+    mutable RtosMutex pcal_handler_mutex_;  ///< Mutex for PCAL95555 handler initialization
     
     /**
-     * @brief TMC9660 UART GPIO handler (pre-initialized at boot).  
+     * @brief Hardware interrupt pin for PCAL95555 (ESP32 GPIO connected to PCAL95555 INT line).
+     * This pin receives hardware interrupts from the PCAL95555 when any enabled pin changes state.
+     * Lazy initialized with PCAL95555 handler.
+     */
+    std::unique_ptr<BaseGpio> pcal_interrupt_pin_;
+    
+    /**
+     * @brief TMC9660 GPIO handler (lazy initialized when first accessed).  
      * Single instance manages all TMC9660 pins to prevent duplicate controllers.
+     * Uses CommChannelsManager for SPI/UART access.
      */
     std::unique_ptr<Tmc9660Handler> tmc9660_handler_;
+    mutable RtosMutex tmc_handler_mutex_;   ///< Mutex for TMC9660 handler initialization
     
     // ===============================
     // SYSTEM STATISTICS
@@ -640,57 +700,68 @@ private:
     
     /**
      * @brief Initialize ESP32-C6 native GPIO system.
-     * @return Result indicating success or specific error
+     * @return true if successful, false otherwise
      */
-    [[nodiscard]] Result<void> InitializeEsp32Gpio() noexcept;
+    [[nodiscard]] bool InitializeEsp32Gpio() noexcept;
     
     /**
      * @brief Initialize PCAL95555 GPIO wrapper.
-     * @return Result indicating success or specific error
+     * @return true if successful, false otherwise
      */
-    [[nodiscard]] Result<void> InitializePcal95555GpioWrapper() noexcept;
+    [[nodiscard]] bool InitializePcal95555GpioWrapper() noexcept;
     
     /**
      * @brief Initialize TMC9660 GPIO system.
-     * @return Result indicating success or specific error
+     * @return true if successful, false otherwise
      */
-    [[nodiscard]] Result<void> InitializeTmc9660Gpio() noexcept;
+    [[nodiscard]] bool InitializeTmc9660Gpio() noexcept;
     
     /**
-     * @brief Create GPIO driver for a functional pin.
+     * @brief Create GPIO pin from functional pin.
      * @param pin Functional pin identifier
-     * @param direction Pin direction
-     * @return Result containing GPIO driver or error
+     * @param direction Pin direction (true = input, false = output)
+     * @param driver Reference to store created driver
+     * @return true if successful, false otherwise
      */
-    [[nodiscard]] Result<std::unique_ptr<BaseGpio>> CreateGpioDriver(
-        HardFOC::FunctionalGpioPin pin, bool direction) noexcept;
+    [[nodiscard]] bool CreateGpioPin(
+        HardFOC::FunctionalGpioPin pin, bool direction, std::unique_ptr<BaseGpio>& driver) noexcept;
     
     /**
-     * @brief Create ESP32 GPIO driver.
+     * @brief Create ESP32 GPIO pin.
      * @param pin_id Hardware pin ID
-     * @param direction Pin direction
-     * @return Result containing GPIO driver or error
+     * @param direction Pin direction (true = input, false = output)
+     * @param driver Reference to store created driver
+     * @return true if successful, false otherwise
      */
-    [[nodiscard]] Result<std::unique_ptr<BaseGpio>> CreateEsp32GpioDriver(
-        uint8_t pin_id, bool direction) noexcept;
+    [[nodiscard]] bool CreateEsp32GpioPin(
+        uint8_t pin_id, bool direction, std::unique_ptr<BaseGpio>& driver) noexcept;
     
     /**
-     * @brief Create PCAL95555 GPIO driver.
+     * @brief Create PCAL95555 GPIO pin.
      * @param pin_id Hardware pin ID
-     * @param direction Pin direction
-     * @return Result containing GPIO driver or error
+     * @param direction Pin direction (true = input, false = output)
+     * @param driver Reference to store created driver
+     * @return true if successful, false otherwise
      */
-    [[nodiscard]] Result<std::unique_ptr<BaseGpio>> CreatePcal95555GpioDriver(
-        uint8_t pin_id, bool direction) noexcept;
+    [[nodiscard]] bool CreatePcal95555GpioPin(
+        uint8_t pin_id, bool direction, std::unique_ptr<BaseGpio>& driver) noexcept;
     
     /**
-     * @brief Create TMC9660 GPIO driver.
+     * @brief Create TMC9660 GPIO pin.
      * @param pin_id Hardware pin ID
-     * @param direction Pin direction
-     * @return Result containing GPIO driver or error
+     * @param direction Pin direction (true = input, false = output)
+     * @param driver Reference to store created driver
+     * @return true if successful, false otherwise
      */
-    [[nodiscard]] Result<std::unique_ptr<BaseGpio>> CreateTmc9660GpioDriver(
-        uint8_t pin_id, bool direction) noexcept;
+    [[nodiscard]] bool CreateTmc9660GpioPin(
+        uint8_t pin_id, bool direction, std::unique_ptr<BaseGpio>& driver) noexcept;
+    
+    /**
+     * @brief Ensure PCAL95555 handler is initialized (lazy initialization).
+     * @return true if successful, false otherwise
+     * @note Thread-safe with RtosMutex protection
+     */
+    [[nodiscard]] bool EnsurePcal95555Handler() noexcept;
     
     /**
      * @brief Find GPIO info by functional pin.
@@ -728,17 +799,17 @@ private:
     /**
      * @brief Validate hardware resource for pin creation.
      * @param resource Hardware resource descriptor
-     * @return Result indicating success or specific error
+     * @return true if valid, false otherwise
      */
-    [[nodiscard]] Result<void> ValidateHardwareResource(
+    [[nodiscard]] bool ValidateHardwareResource(
         const HardFOC::GpioHardwareResource* resource) const noexcept;
     
     /**
      * @brief Check for hardware resource conflicts.
      * @param resource Hardware resource descriptor
-     * @return Result indicating success or specific error
+     * @return true if no conflicts, false otherwise
      */
-    [[nodiscard]] Result<void> CheckHardwareConflicts(
+    [[nodiscard]] bool CheckHardwareConflicts(
         const HardFOC::GpioHardwareResource* resource) const noexcept;
 };
 

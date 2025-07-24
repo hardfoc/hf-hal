@@ -59,7 +59,7 @@ const tmc9660::BootloaderConfig Tmc9660Handler::kDefaultBootConfig = {
     // RS485 Configuration - Disabled by default
     {
         false,                                      // enable_rs485
-        tmc9660::bootcfg::RS485TxEnPin::None,      // txen_pin
+        tmc9660::bootcfg::RS485TxEnPin::None,       // txen_pin
         0,                                          // txen_pre_delay
         0                                           // txen_post_delay
     },
@@ -67,37 +67,37 @@ const tmc9660::BootloaderConfig Tmc9660Handler::kDefaultBootConfig = {
     // SPI Boot Configuration - Use interface 0 with standard pins
     {
         false,                                      // disable_spi
-        tmc9660::bootcfg::SPIInterface::IFACE0,    // boot_spi_iface
-        tmc9660::bootcfg::SPI0SckPin::GPIO6        // spi0_sck_pin
+        tmc9660::bootcfg::SPIInterface::IFACE0,     // boot_spi_iface
+        tmc9660::bootcfg::SPI0SckPin::GPIO6         // spi0_sck_pin
     },
     
     // SPI Flash Configuration - Enable per TMC9660-3PH-EVAL board settings
     {
         true,                                       // enable_flash - Enable SPI flash
-        tmc9660::bootcfg::SPIInterface::IFACE0,    // flash_spi_iface - Use SPI0 block
-        tmc9660::bootcfg::SPI0SckPin::GPIO11,      // spi0_sck_pin - GPIO11 per eval board
+        tmc9660::bootcfg::SPIInterface::IFACE0,     // flash_spi_iface - Use SPI0 block
+        tmc9660::bootcfg::SPI0SckPin::GPIO11,       // spi0_sck_pin - GPIO11 per eval board
         12,                                         // cs_pin - GPIO12 chip select
-        tmc9660::bootcfg::SPIFlashFreq::Div1       // freq_div - 10MHz frequency (Div1)
+        tmc9660::bootcfg::SPIFlashFreq::Div1        // freq_div - 10MHz frequency (Div1)
     },
     
     // I2C EEPROM Configuration - Disabled by default
     {
         false,                                      // enable_eeprom
-        tmc9660::bootcfg::I2CSdaPin::GPIO5,        // sda_pin
-        tmc9660::bootcfg::I2CSclPin::GPIO4,        // scl_pin
+        tmc9660::bootcfg::I2CSdaPin::GPIO5,         // sda_pin
+        tmc9660::bootcfg::I2CSclPin::GPIO4,         // scl_pin
         0,                                          // address_bits
-        tmc9660::bootcfg::I2CFreq::Freq100k        // freq_code
+        tmc9660::bootcfg::I2CFreq::Freq100k         // freq_code
     },
     
     // Clock Configuration - Use external 16MHz crystal with PLL
     {
-        tmc9660::bootcfg::ClockSource::External,   // use_external - External crystal
-        tmc9660::bootcfg::ExtSourceType::Oscillator, // ext_source_type - Crystal oscillator
-        tmc9660::bootcfg::XtalDrive::Freq16MHz,    // xtal_drive - 16MHz crystal
-        false,                                      // xtal_boost
-        tmc9660::bootcfg::SysClkSource::PLL,       // pll_selection - Use PLL
-        14,                                         // rdiv - PLL reference divider for 16MHz
-        tmc9660::bootcfg::SysClkDiv::Div1          // sysclk_div
+        tmc9660::bootcfg::ClockSource::External,        // use_external - External crystal
+        tmc9660::bootcfg::ExtSourceType::Oscillator,    // ext_source_type - Crystal oscillator
+        tmc9660::bootcfg::XtalDrive::Freq16MHz,         // xtal_drive - 16MHz crystal
+        false,                                          // xtal_boost
+        tmc9660::bootcfg::SysClkSource::PLL,            // pll_selection - Use PLL
+        14,                                             // rdiv - PLL reference divider for 16MHz
+        tmc9660::bootcfg::SysClkDiv::Div1               // sysclk_div
     },
     
     // GPIO Configuration - Configure per TMC9660-3PH-EVAL board settings

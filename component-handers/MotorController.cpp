@@ -10,7 +10,7 @@ MotorController& MotorController::GetInstance() {
 }
 
 MotorController::MotorController() 
-    : onboardDeviceCreated_(false), systemInitialized_(false) {
+    : onboardDeviceCreated_(false), initialized_(false), deviceMutex_() {
     // Initialize all device slots as empty and not active
     tmcHandlers_.fill(nullptr);
     deviceInitialized_.fill(false);
@@ -55,7 +55,6 @@ bool MotorController::Initialize() {
         }
     }
     
-    systemInitialized_ = allSuccess;
     return allSuccess;
 }
 
@@ -81,7 +80,7 @@ bool MotorController::CreateOnboardDevice(BaseSpi& spiInterface,
     onboardDeviceCreated_ = true;
     
     // If system is already initialized, initialize this device immediately
-    if (systemInitialized_) {
+    if (IsInitialized()) {
         deviceInitialized_[ONBOARD_TMC9660_INDEX] = tmcHandlers_[ONBOARD_TMC9660_INDEX]->Initialize();
     }
     
@@ -110,7 +109,7 @@ bool MotorController::CreateOnboardDevice(BaseUart& uartInterface,
     onboardDeviceCreated_ = true;
     
     // If system is already initialized, initialize this device immediately
-    if (systemInitialized_) {
+    if (IsInitialized()) {
         deviceInitialized_[ONBOARD_TMC9660_INDEX] = tmcHandlers_[ONBOARD_TMC9660_INDEX]->Initialize();
     }
     
@@ -154,7 +153,7 @@ bool MotorController::CreateExternalDevice(uint8_t csDeviceIndex,
     deviceInitialized_[csDeviceIndex] = false;
     
     // If system is already initialized, initialize this device immediately
-    if (systemInitialized_) {
+    if (IsInitialized()) {
         deviceInitialized_[csDeviceIndex] = tmcHandlers_[csDeviceIndex]->Initialize();
     }
     
@@ -187,7 +186,7 @@ bool MotorController::CreateExternalDevice(uint8_t csDeviceIndex,
     deviceInitialized_[csDeviceIndex] = false;
     
     // If system is already initialized, initialize this device immediately
-    if (systemInitialized_) {
+    if (IsInitialized()) {
         deviceInitialized_[csDeviceIndex] = tmcHandlers_[csDeviceIndex]->Initialize();
     }
     

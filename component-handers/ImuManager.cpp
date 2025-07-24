@@ -66,8 +66,11 @@ bool ImuManager::Initialize() noexcept {
     // Get reference to GPIO manager for interrupt support
     gpio_manager_ = &GpioManager::GetInstance();
     if (!gpio_manager_->IsInitialized()) {
-        IMU_LOGW("GPIO Manager not initialized - interrupt support will be limited");
-        // Not a fatal error - can still work in polling mode
+        // Try to initialize GPIO manager
+        auto init_result = gpio_manager_->EnsureInitialized();
+        if (!init_result.IsSuccess()) {
+            IMU_LOGW("GPIO Manager initialization failed - interrupt support will be limited");
+        }
     }
 
     // Initialize BNO08x IMU handler
@@ -126,6 +129,7 @@ bool ImuManager::Deinitialize() noexcept {
 
     // Reset interrupt state
     interrupt_gpio_ = nullptr;
+    interrupt_gpio_shared_.reset();  // Release shared ownership
     interrupt_configured_ = false;
     interrupt_enabled_ = false;
     interrupt_count_.store(0);
@@ -184,30 +188,23 @@ bool ImuManager::InitializeBno08xHandler() noexcept {
         return false;
     }
 
-    // Create Bno08x handler with I2C interface
-    try {
-        // Create default configuration for BNO08x
-        Bno08xConfig config = {};  // Use default configuration
-        
-        // Create the handler with I2C interface (no GPIO pins for now)
-        bno08x_handler_ = std::make_unique<Bno08xHandler>(*imu_device, config);
-        
-        // Initialize the handler
-        Bno08xError init_result = bno08x_handler_->Initialize();
-        if (init_result != Bno08xError::SUCCESS) {
-            IMU_LOGE("Failed to initialize Bno08xHandler: %s", Bno08xErrorToString(init_result));
-            bno08x_handler_.reset();
-            return false;
-        }
-        
-        IMU_LOGI("BNO08x IMU handler initialized successfully");
-        return true;
-        
-    } catch (const std::exception& e) {
-        IMU_LOGE("Exception during Bno08xHandler creation: %s", e.what());
+    // Create Bno08x handler with I2C interface (no exceptions)
+    // Create default configuration for BNO08x
+    Bno08xConfig config = {};  // Use default configuration
+    
+    // Create the handler with I2C interface (no GPIO pins for now)
+    bno08x_handler_ = std::make_unique<Bno08xHandler>(*imu_device, config);
+    
+    // Initialize the handler
+    Bno08xError init_result = bno08x_handler_->Initialize();
+    if (init_result != Bno08xError::SUCCESS) {
+        IMU_LOGE("Failed to initialize Bno08xHandler: %s", Bno08xErrorToString(init_result));
         bno08x_handler_.reset();
         return false;
     }
+    
+    IMU_LOGI("BNO08x IMU handler initialized successfully");
+    return true;
 }
 
 //==============================================================================
@@ -226,53 +223,33 @@ bool ImuManager::InitializeInterruptGpio() noexcept {
         return false;
     }
 
-    // Register the INT pin as input with pull-up (BNO08x INT is active low)
-    auto register_result = gpio_manager_->RegisterPin(
-        static_cast<HardFOC::FunctionalGpioPin>(HfFunctionalGpioPin::PCAL_IMU_INT), 
-        true,  // input direction
-        false  // initial state (not used for input)
+    // Get shared GPIO pin for PCAL_IMU_INT (creates if needed)
+    // Configure as input with pull-up since BNO08x INT is active low
+    interrupt_gpio_shared_ = gpio_manager_->CreateSharedPin(
+        HfFunctionalGpioPin::PCAL_IMU_INT,
+        hf_gpio_direction_t::HF_GPIO_DIRECTION_INPUT,
+        hf_gpio_active_state_t::HF_GPIO_ACTIVE_LOW,  // BNO08x INT is active low
+        hf_gpio_pull_mode_t::HF_GPIO_PULL_MODE_UP    // Pull-up for active low signal
     );
     
-    if (!register_result.IsSuccess()) {
-        IMU_LOGE("Failed to register PCAL_IMU_INT pin: %s", register_result.GetErrorMessage().c_str());
+    if (!interrupt_gpio_shared_) {
+        IMU_LOGE("Failed to create shared PCAL_IMU_INT pin");
         return false;
     }
 
-    // Configure pin as input with pull-up
-    auto pullup_result = gpio_manager_->ConfigurePullMode(
-        static_cast<HardFOC::FunctionalGpioPin>(HfFunctionalGpioPin::PCAL_IMU_INT), 
-        hf_gpio_pull_mode_t::HF_GPIO_PULL_UP
-    );
-    
-    if (!pullup_result.IsSuccess()) {
-        IMU_LOGW("Failed to configure pull-up for PCAL_IMU_INT: %s", pullup_result.GetErrorMessage().c_str());
-        // Continue anyway - might still work
-    }
-
-    // Get the GPIO info to access the BaseGpio driver
-    auto pin_info_result = gpio_manager_->GetPinInfo(static_cast<HardFOC::FunctionalGpioPin>(HfFunctionalGpioPin::PCAL_IMU_INT));
-    if (!pin_info_result.IsSuccess()) {
-        IMU_LOGE("Failed to get pin info for PCAL_IMU_INT: %s", pin_info_result.GetErrorMessage().c_str());
-        return false;
-    }
-
-    const auto* pin_info = pin_info_result.GetValue();
-    if (!pin_info || !pin_info->gpio_driver) {
-        IMU_LOGE("Invalid pin info or GPIO driver for PCAL_IMU_INT");
-        return false;
-    }
-
-    interrupt_gpio_ = pin_info->gpio_driver.get();
+    // Store raw pointer for compatibility with existing callback code
+    interrupt_gpio_ = interrupt_gpio_shared_.get();
 
     // Create semaphore for WaitForInterrupt()
     interrupt_semaphore_ = xSemaphoreCreateBinary();
     if (!interrupt_semaphore_) {
         IMU_LOGE("Failed to create interrupt semaphore");
         interrupt_gpio_ = nullptr;
+        interrupt_gpio_shared_.reset();
         return false;
     }
 
-    IMU_LOGI("BNO08x interrupt GPIO (PCAL_IMU_INT) initialized successfully");
+    IMU_LOGI("BNO08x interrupt GPIO (PCAL_IMU_INT) initialized successfully with shared pin access");
     return true;
 }
 

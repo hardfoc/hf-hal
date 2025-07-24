@@ -32,15 +32,21 @@ public:
      */
     static MotorController& GetInstance();
 
-    /**
-     * @brief Initialize the motor controller system.
-     * @note This automatically creates the onboard TMC9660 device using CommChannelsManager
-     * @return true if initialization successful, false otherwise
-     */
-    bool Initialize();
-
     //**************************************************************************//
     //**                  DEVICE MANAGEMENT METHODS                           **//
+    //**************************************************************************//
+
+    bool EnsureInitialized() noexcept {
+        if (!initialized_) {
+            initialized_ = Initialize();
+        }
+        return initialized_;
+    }
+
+    inline bool IsInitialized() const noexcept { return initialized_; }
+
+    //**************************************************************************//
+    //**                  HANDLER AND DRIVER MANAGEMENT                       **//
     //**************************************************************************//
 
     /**
@@ -60,7 +66,7 @@ public:
     std::shared_ptr<TMC9660> driver(uint8_t deviceIndex = ONBOARD_TMC9660_INDEX) noexcept;
 
     //**************************************************************************//
-    //**                  DEVICE MANAGEMENT METHODS                           **//
+    //**                  DEVICES MANAGEMENT METHODS                           **//
     //**************************************************************************//
 
     /**
@@ -131,6 +137,13 @@ private:
     MotorController& operator=(const MotorController&) = delete;
 
     /**
+     * @brief Initialize the motor controller system.
+     * @note This automatically creates the onboard TMC9660 device using CommChannelsManager
+     * @return true if initialization successful, false otherwise
+     */
+    bool Initialize();
+
+    /**
      * @brief Validate if CS device index is for external device.
      * @param csDeviceIndex Device index to validate
      * @return true if index is for external device (2 or 3), false otherwise
@@ -140,9 +153,10 @@ private:
     std::array<std::unique_ptr<Tmc9660Handler>, MAX_TMC9660_DEVICES> tmcHandlers_;
     std::array<bool, MAX_TMC9660_DEVICES> deviceInitialized_;
     std::array<bool, MAX_TMC9660_DEVICES> deviceActive_;    ///< Track which devices are active
-    bool onboardDeviceCreated_;    ///< Track if onboard device has been created
-    bool systemInitialized_;    ///< Track if system has been initialized
-    mutable RtosMutex deviceMutex_;    ///< RTOS mutex for thread-safe device access
+    
+    bool onboardDeviceCreated_;         ///< Track if onboard device has been created
+    bool initialized_;                  ///< Track if system has been initialized
+    mutable RtosMutex deviceMutex_;     ///< RTOS mutex for thread-safe device access
 };
 
 #endif // COMPONENT_HANDLER_MOTOR_CONTROLLER_H_ 

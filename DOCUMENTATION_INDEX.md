@@ -137,13 +137,13 @@ hf-hal/utils-and-drivers/hf-core-drivers/
 
 ### 2. Initialize Hardware
 ```cpp
-// Initialize I2C for PCAL95555 expanders
-auto& i2cBus = SfI2cBus::GetInstance();
-// Configure and initialize I2C bus
+// Initialize communication channels
+auto& commManager = CommChannelsManager::GetInstance();
+commManager.EnsureInitialized();
 
 // Initialize GPIO system
 auto& gpioManager = GpioManager::GetInstance();  
-gpioManager.Initialize(i2cBus);
+gpioManager.EnsureInitialized();
 
 // Initialize ADC system
 auto& adcManager = AdcManager::GetInstance();

@@ -205,7 +205,8 @@ private:
 
     // GPIO interrupt support
     GpioManager* gpio_manager_ = nullptr;
-    BaseGpio* interrupt_gpio_ = nullptr;
+    BaseGpio* interrupt_gpio_ = nullptr;                    // Raw pointer for compatibility
+    std::shared_ptr<BaseGpio> interrupt_gpio_shared_;       // Shared pointer for safe ownership
     std::function<void()> interrupt_callback_;
     bool interrupt_configured_ = false;
     bool interrupt_enabled_ = false;

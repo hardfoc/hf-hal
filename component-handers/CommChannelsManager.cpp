@@ -17,8 +17,8 @@ CommChannelsManager::CommChannelsManager() {
     // Initialize vectors for managing multiple buses
     spi_device_indices_.reserve(4); // Reserve space for 4 SPI devices
     i2c_device_indices_.reserve(4); // Reserve space for 4 I2C devices
-    uart_buses_.reserve(2);  // Reserve space for 2 UART buses
-    can_buses_.reserve(2);   // Reserve space for 2 CAN buses
+    uart_buses_.reserve(1);  // Reserve space for 1 UART bus
+    can_buses_.reserve(1);   // Reserve space for 1 CAN bus
 }
 
 bool CommChannelsManager::Initialize() noexcept {
