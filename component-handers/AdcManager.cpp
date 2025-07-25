@@ -31,12 +31,12 @@ AdcManager& AdcManager::GetInstance() noexcept {
 // LIFECYCLE METHODS
 //==============================================================================
 
-Result<void> AdcManager::Initialize(Tmc9660MotorController& tmc9660Controller) noexcept {
+bool AdcManager::Initialize(Tmc9660MotorController& tmc9660Controller) noexcept {
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (isInitialized_.load()) {
         ESP_LOGW(TAG, "ADC manager already initialized");
-        return Result<void>(ResultCode::ERROR_ALREADY_INITIALIZED);
+        return false;
     }
     
     ESP_LOGI(TAG, "Initializing HardFOC ADC Manager v2.0");
@@ -45,40 +45,34 @@ Result<void> AdcManager::Initialize(Tmc9660MotorController& tmc9660Controller) n
     tmc9660Controller_ = &tmc9660Controller;
     
     // Initialize hardware subsystems
-    auto esp32Result = InitializeEsp32Adc();
-    if (esp32Result.IsError()) {
-        ESP_LOGE(TAG, "Failed to initialize ESP32 ADC: %s", 
-                 GetResultDescription(esp32Result.GetResult()).data());
-        return esp32Result;
+    if (!InitializeEsp32Adc()) {
+        ESP_LOGE(TAG, "Failed to initialize ESP32 ADC");
+        return false;
     }
     
-    auto tmcResult = InitializeTmc9660Adc();
-    if (tmcResult.IsError()) {
-        ESP_LOGE(TAG, "Failed to initialize TMC9660 ADC: %s", 
-                 GetResultDescription(tmcResult.GetResult()).data());
-        return tmcResult;
+    if (!InitializeTmc9660Adc()) {
+        ESP_LOGE(TAG, "Failed to initialize TMC9660 ADC");
+        return false;
     }
     
     // Register default channel mappings
-    auto regResult = RegisterDefaultChannels();
-    if (regResult.IsError()) {
-        ESP_LOGE(TAG, "Failed to register default channels: %s", 
-                 GetResultDescription(regResult.GetResult()).data());
-        return regResult;
+    if (!RegisterDefaultChannels()) {
+        ESP_LOGE(TAG, "Failed to register default channels");
+        return false;
     }
     
     isInitialized_.store(true);
     ESP_LOGI(TAG, "ADC manager initialized successfully with %zu channels", 
              adcRegistry_.size());
     
-    return HARDFOC_SUCCESS();
+    return true;
 }
 
-Result<void> AdcManager::Shutdown() noexcept {
+bool AdcManager::Shutdown() noexcept {
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (!isInitialized_.load()) {
-        return Result<void>(ResultCode::ERROR_NOT_INITIALIZED);
+        return false;
     }
     
     ESP_LOGI(TAG, "Shutting down ADC manager");
@@ -94,7 +88,7 @@ Result<void> AdcManager::Shutdown() noexcept {
     isInitialized_.store(false);
     ESP_LOGI(TAG, "ADC manager shutdown complete");
     
-    return HARDFOC_SUCCESS();
+    return true;
 }
 
 bool AdcManager::IsInitialized() const noexcept {
@@ -105,20 +99,20 @@ bool AdcManager::IsInitialized() const noexcept {
 // CHANNEL REGISTRATION METHODS
 //==============================================================================
 
-Result<void> AdcManager::RegisterChannel(AdcInputSensor sensor, 
-                                               float referenceVoltage,
-                                               float calibrationScale,
-                                               float calibrationOffset) noexcept {
+bool AdcManager::RegisterChannel(AdcInputSensor sensor,
+                                 float referenceVoltage,
+                                 float calibrationScale,
+                                 float calibrationOffset) noexcept {
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (!isInitialized_.load()) {
-        return Result<void>(ResultCode::ERROR_NOT_INITIALIZED);
+        return false;
     }
     
     auto it = adcRegistry_.find(sensor);
     if (it != adcRegistry_.end()) {
         ESP_LOGW(TAG, "Channel already registered: %d", static_cast<int>(sensor));
-        return Result<void>(ResultCode::ERROR_ADC_ALREADY_REGISTERED);
+        return false;
     }
     
     // TODO: Implement channel registration logic based on sensor mapping
@@ -131,25 +125,25 @@ Result<void> AdcManager::RegisterChannel(AdcInputSensor sensor,
     ESP_LOGD(TAG, "Registered channel %d (ref: %.2fV, scale: %.3f, offset: %.3f)", 
              static_cast<int>(sensor), referenceVoltage, calibrationScale, calibrationOffset);
     
-    return HARDFOC_SUCCESS();
+    return true;
 }
 
-Result<void> AdcManager::UnregisterChannel(AdcInputSensor sensor) noexcept {
+bool AdcManager::UnregisterChannel(AdcInputSensor sensor) noexcept {
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (!isInitialized_.load()) {
-        return Result<void>(ResultCode::ERROR_NOT_INITIALIZED);
+        return false;
     }
     
     auto it = adcRegistry_.find(sensor);
     if (it == adcRegistry_.end()) {
-        return Result<void>(ResultCode::ERROR_ADC_CHANNEL_NOT_FOUND);
+        return false;
     }
     
     adcRegistry_.erase(it);
     ESP_LOGD(TAG, "Unregistered channel %d", static_cast<int>(sensor));
     
-    return HARDFOC_SUCCESS();
+    return true;
 }
 
 bool AdcManager::IsChannelRegistered(AdcInputSensor sensor) const noexcept {
@@ -157,68 +151,69 @@ bool AdcManager::IsChannelRegistered(AdcInputSensor sensor) const noexcept {
     return adcRegistry_.find(sensor) != adcRegistry_.end();
 }
 
-Result<const AdcChannelInfo*> AdcManager::GetChannelInfo(AdcInputSensor sensor) const noexcept {
+bool AdcManager::GetChannelInfo(AdcInputSensor sensor, const AdcChannelInfo*& info) const noexcept {
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (!isInitialized_.load()) {
-        return Result<const AdcChannelInfo*>(ResultCode::ERROR_NOT_INITIALIZED);
+        return false;
     }
     
-    const auto* info = FindChannelInfo(sensor);
+    info = FindChannelInfo(sensor);
     if (!info) {
-        return Result<const AdcChannelInfo*>(ResultCode::ERROR_ADC_CHANNEL_NOT_FOUND);
+        return false;
     }
-    
-    return Result<const AdcChannelInfo*>(info);
+
+    return true;
 }
 
 //==============================================================================
 // BASIC READING OPERATIONS
 //==============================================================================
 
-Result<AdcReading> AdcManager::ReadChannel(AdcInputSensor sensor) noexcept {
+bool AdcManager::ReadChannel(AdcInputSensor sensor, AdcReading& reading) noexcept {
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (!isInitialized_.load()) {
         UpdateGlobalStatistics(false);
-        return Result<AdcReading>(ResultCode::ERROR_NOT_INITIALIZED);
+        return false;
     }
     
     auto* info = FindChannelInfo(sensor);
     if (!info) {
         UpdateGlobalStatistics(false);
-        return Result<AdcReading>(ResultCode::ERROR_ADC_CHANNEL_NOT_FOUND);
+        return false;
     }
     
     // Perform the ADC reading
-    AdcReading reading = PerformSingleReading(*info);
+    AdcReading local_reading = PerformSingleReading(*info);
     
     // Update statistics
-    UpdateChannelStatistics(*info, reading);
-    UpdateGlobalStatistics(reading.IsValid());
+    UpdateChannelStatistics(*info, local_reading);
+    UpdateGlobalStatistics(local_reading.IsValid());
     
-    ESP_LOGV(TAG, "Read channel %d: raw=%lu, voltage=%.3f", 
-             static_cast<int>(sensor), reading.rawValue, reading.voltage);
-    
-    return Result<AdcReading>(reading);
+    ESP_LOGV(TAG, "Read channel %d: raw=%lu, voltage=%.3f",
+             static_cast<int>(sensor), local_reading.rawValue, local_reading.voltage);
+
+    reading = local_reading;
+    return local_reading.IsValid();
 }
 
-Result<AdcReading> AdcManager::ReadChannelWithSampling(const AdcSamplingSpec& spec) noexcept {
+bool AdcManager::ReadChannelWithSampling(const AdcSamplingSpec& spec, AdcReading& reading) noexcept {
     if (!spec.IsValid()) {
-        return Result<AdcReading>(ResultCode::ERROR_ADC_INVALID_SAMPLES);
+        return false;
     }
     
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (!isInitialized_.load()) {
         UpdateGlobalStatistics(false);
-        return Result<AdcReading>(ResultCode::ERROR_NOT_INITIALIZED);
+        return false;
     }
     
     auto* info = FindChannelInfo(spec.sensor);
     if (!info) {
         UpdateGlobalStatistics(false);
-        return Result<AdcReading>(ResultCode::ERROR_ADC_CHANNEL_NOT_FOUND);
+        return false;
     }
     
     // Collect multiple samples
@@ -239,7 +234,7 @@ Result<AdcReading> AdcManager::ReadChannelWithSampling(const AdcSamplingSpec& sp
     
     if (samples.empty()) {
         UpdateGlobalStatistics(false);
-        return Result<AdcReading>(ResultCode::ERROR_ADC_READ_FAILED);
+        return false;
     }
     
     // Calculate average
@@ -265,43 +260,46 @@ Result<AdcReading> AdcManager::ReadChannelWithSampling(const AdcSamplingSpec& sp
     UpdateChannelStatistics(*info, averagedReading);
     UpdateGlobalStatistics(true);
     
-    ESP_LOGV(TAG, "Sampled channel %d (%d samples): raw=%lu, voltage=%.3f", 
-             static_cast<int>(spec.sensor), samples.size(), 
+    ESP_LOGV(TAG, "Sampled channel %d (%d samples): raw=%lu, voltage=%.3f",
+             static_cast<int>(spec.sensor), samples.size(),
              averagedReading.rawValue, averagedReading.voltage);
-    
-    return Result<AdcReading>(averagedReading);
+
+    reading = averagedReading;
+    return true;
 }
 
-Result<float> AdcManager::ReadFilteredValue(AdcInputSensor sensor) noexcept {
+bool AdcManager::ReadFilteredValue(AdcInputSensor sensor, float& value) noexcept {
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (!isInitialized_.load()) {
-        return Result<float>(ResultCode::ERROR_NOT_INITIALIZED);
+        return false;
     }
     
     const auto* info = FindChannelInfo(sensor);
     if (!info) {
-        return Result<float>(ResultCode::ERROR_ADC_CHANNEL_NOT_FOUND);
+        return false;
     }
     
     if (info->totalReadings == 0) {
         // No readings taken yet, perform one
-        auto readResult = const_cast<AdcManager*>(this)->ReadChannel(sensor);
-        if (readResult.IsError()) {
-            return Result<float>(readResult.GetResult());
+        AdcReading temp;
+        if (!const_cast<AdcManager*>(this)->ReadChannel(sensor, temp)) {
+            return false;
         }
     }
     
-    return Result<float>(info->filteredValue);
+    value = info->filteredValue;
+    return true;
 }
 
-Result<uint32_t> AdcManager::ReadRawValue(AdcInputSensor sensor) noexcept {
-    auto readResult = ReadChannel(sensor);
-    if (readResult.IsError()) {
-        return Result<uint32_t>(readResult.GetResult());
+bool AdcManager::ReadRawValue(AdcInputSensor sensor, uint32_t& value) noexcept {
+    AdcReading reading;
+    if (!ReadChannel(sensor, reading)) {
+        return false;
     }
-    
-    return Result<uint32_t>(readResult.GetValue().rawValue);
+
+    value = reading.rawValue;
+    return true;
 }
 
 //==============================================================================
@@ -326,14 +324,14 @@ std::vector<AdcInputSensor> AdcManager::GetRegisteredSensors() const noexcept {
     return sensors;
 }
 
-Result<std::string> AdcManager::GetSystemHealth() const noexcept {
+bool AdcManager::GetSystemHealth(std::string& health) const noexcept {
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (!isInitialized_.load()) {
-        return Result<std::string>(ResultCode::ERROR_NOT_INITIALIZED);
+        return false;
     }
     
-    std::string health;
+    health.clear();
     health += "HardFOC ADC Manager Health Report\n";
     health += "=================================\n";
     health += "Status: " + std::string(isInitialized_.load() ? "Initialized" : "Not Initialized") + "\n";
@@ -349,14 +347,14 @@ Result<std::string> AdcManager::GetSystemHealth() const noexcept {
         health += "Success Rate: " + std::to_string(successRate) + "%\n";
     }
     
-    return Result<std::string>(std::move(health));
+    return true;
 }
 
-Result<void> AdcManager::ResetAllChannels() noexcept {
+bool AdcManager::ResetAllChannels() noexcept {
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (!isInitialized_.load()) {
-        return Result<void>(ResultCode::ERROR_NOT_INITIALIZED);
+        return false;
     }
     
     for (auto& pair : adcRegistry_) {
@@ -368,45 +366,45 @@ Result<void> AdcManager::ResetAllChannels() noexcept {
     }
     
     ESP_LOGI(TAG, "Reset all %zu ADC channels", adcRegistry_.size());
-    return HARDFOC_SUCCESS();
+    return true;
 }
 
 //==============================================================================
 // PRIVATE IMPLEMENTATION METHODS
 //==============================================================================
 
-Result<void> AdcManager::InitializeEsp32Adc() noexcept {
+bool AdcManager::InitializeEsp32Adc() noexcept {
     ESP_LOGD(TAG, "Initializing ESP32-C6 internal ADC");
     
     try {
         mcuAdc_ = std::make_unique<McuAdc>();
         // TODO: Configure ESP32-C6 ADC
-        return HARDFOC_SUCCESS();
+        return true;
     } catch (const std::exception& e) {
         ESP_LOGE(TAG, "Failed to create MCU ADC: %s", e.what());
-        return Result<void>(ResultCode::ERROR_INIT_FAILED);
+        return false;
     }
 }
 
-Result<void> AdcManager::InitializeTmc9660Adc() noexcept {
+bool AdcManager::InitializeTmc9660Adc() noexcept {
     ESP_LOGD(TAG, "Initializing TMC9660 ADC");
     
     if (!tmc9660Controller_) {
-        return Result<void>(ResultCode::ERROR_DEPENDENCY_MISSING);
+        return false;
     }
     
     // TODO: Initialize TMC9660 ADC channels
-    return HARDFOC_SUCCESS();
+    return true;
 }
 
-Result<void> AdcManager::RegisterDefaultChannels() noexcept {
+bool AdcManager::RegisterDefaultChannels() noexcept {
     ESP_LOGD(TAG, "Registering default channel mappings");
     
     // TODO: Register all default channels based on platform mapping
     // This would involve iterating through the platform mapping table
     // and registering each functional channel with its corresponding hardware
-    
-    return HARDFOC_SUCCESS();
+
+    return true;
 }
 
 AdcChannelInfo* AdcManager::FindChannelInfo(AdcInputSensor sensor) noexcept {

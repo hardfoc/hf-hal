@@ -14,7 +14,7 @@
  * Key Features:
  * - Thread-safe operation with mutex protection
  * - Multi-source ADC channel registration and management
- * - Unified error handling with Result<T> types
+ * - Simplified error handling using bool return values
  * - Raw and voltage reading capabilities
  * - Calibration and offset management
  * - Comprehensive health monitoring and diagnostics
@@ -243,7 +243,7 @@ struct AdcBatchResult {
  * - Atomic operations for statistics
  * 
  * Error Handling:
- * - All operations return Result<T> types
+ * - All operations return bool with output parameters
  * - Comprehensive error codes via ResultCode enum
  * - Detailed error descriptions available
  * 
@@ -276,13 +276,13 @@ public:
      * @param tmc9660Controller Reference to the TMC9660 controller
      * @return Result indicating success or specific error
      */
-    [[nodiscard]] Result<void> Initialize(Tmc9660MotorController& tmc9660Controller) noexcept;
+    [[nodiscard]] bool Initialize(Tmc9660MotorController& tmc9660Controller) noexcept;
     
     /**
      * @brief Shutdown the ADC manager system.
      * @return Result indicating success or specific error
      */
-    [[nodiscard]] Result<void> Shutdown() noexcept;
+    [[nodiscard]] bool Shutdown() noexcept;
     
     /**
      * @brief Check if the ADC system is initialized.
@@ -302,17 +302,17 @@ public:
      * @param calibrationOffset Offset value for calibration
      * @return Result indicating success or specific error
      */
-    [[nodiscard]] Result<void> RegisterChannel(AdcInputSensor sensor, 
-                                              float referenceVoltage = 3.3f,
-                                              float calibrationScale = 1.0f,
-                                              float calibrationOffset = 0.0f) noexcept;
+    [[nodiscard]] bool RegisterChannel(AdcInputSensor sensor,
+                                       float referenceVoltage = 3.3f,
+                                       float calibrationScale = 1.0f,
+                                       float calibrationOffset = 0.0f) noexcept;
     
     /**
      * @brief Unregister an ADC channel from the system.
      * @param sensor Functional sensor identifier
      * @return Result indicating success or specific error
      */
-    [[nodiscard]] Result<void> UnregisterChannel(AdcInputSensor sensor) noexcept;
+    [[nodiscard]] bool UnregisterChannel(AdcInputSensor sensor) noexcept;
     
     /**
      * @brief Check if an ADC channel is registered.
@@ -326,7 +326,7 @@ public:
      * @param sensor Functional sensor identifier
      * @return Result containing channel information or error
      */
-    [[nodiscard]] Result<const AdcChannelInfo*> GetChannelInfo(AdcInputSensor sensor) const noexcept;
+    [[nodiscard]] bool GetChannelInfo(AdcInputSensor sensor, const AdcChannelInfo*& info) const noexcept;
     
     //==========================================================================
     // BASIC READING OPERATIONS
@@ -337,28 +337,28 @@ public:
      * @param sensor Functional sensor identifier
      * @return Result containing the reading or error
      */
-    [[nodiscard]] Result<AdcReading> ReadChannel(AdcInputSensor sensor) noexcept;
+    [[nodiscard]] bool ReadChannel(AdcInputSensor sensor, AdcReading& reading) noexcept;
     
     /**
      * @brief Read multiple samples from a channel and average them.
      * @param spec Sampling specification
      * @return Result containing the averaged reading or error
      */
-    [[nodiscard]] Result<AdcReading> ReadChannelWithSampling(const AdcSamplingSpec& spec) noexcept;
+    [[nodiscard]] bool ReadChannelWithSampling(const AdcSamplingSpec& spec, AdcReading& reading) noexcept;
     
     /**
      * @brief Read the filtered/averaged value for a channel.
      * @param sensor Functional sensor identifier
      * @return Result containing the filtered value or error
      */
-    [[nodiscard]] Result<float> ReadFilteredValue(AdcInputSensor sensor) noexcept;
+    [[nodiscard]] bool ReadFilteredValue(AdcInputSensor sensor, float& value) noexcept;
     
     /**
      * @brief Read raw ADC count value (no conversion).
      * @param sensor Functional sensor identifier
      * @return Result containing the raw count or error
      */
-    [[nodiscard]] Result<uint32_t> ReadRawValue(AdcInputSensor sensor) noexcept;
+    [[nodiscard]] bool ReadRawValue(AdcInputSensor sensor, uint32_t& value) noexcept;
     
     //==========================================================================
     // BATCH OPERATIONS
@@ -369,20 +369,20 @@ public:
      * @param sensors Vector of sensor identifiers to read
      * @return Result containing batch read results
      */
-    [[nodiscard]] Result<AdcBatchResult> BatchRead(const std::vector<AdcInputSensor>& sensors) noexcept;
+    [[nodiscard]] bool BatchRead(const std::vector<AdcInputSensor>& sensors, AdcBatchResult& result) noexcept;
     
     /**
      * @brief Read multiple channels with individual sampling specifications.
      * @param specs Vector of sampling specifications
      * @return Result containing batch read results
      */
-    [[nodiscard]] Result<AdcBatchResult> BatchReadWithSampling(const std::vector<AdcSamplingSpec>& specs) noexcept;
+    [[nodiscard]] bool BatchReadWithSampling(const std::vector<AdcSamplingSpec>& specs, AdcBatchResult& result) noexcept;
     
     /**
      * @brief Read all registered channels.
      * @return Result containing readings from all channels
      */
-    [[nodiscard]] Result<AdcBatchResult> ReadAllChannels() noexcept;
+    [[nodiscard]] bool ReadAllChannels(AdcBatchResult& result) noexcept;
     
     //==========================================================================
     // CALIBRATION AND CONFIGURATION
@@ -395,9 +395,9 @@ public:
      * @param measuredValue Measured ADC value at reference voltage
      * @return Result indicating success or specific error
      */
-    [[nodiscard]] Result<void> CalibrateChannel(AdcInputSensor sensor, 
-                                               float referenceVoltage,
-                                               uint32_t measuredValue) noexcept;
+    [[nodiscard]] bool CalibrateChannel(AdcInputSensor sensor,
+                                        float referenceVoltage,
+                                        uint32_t measuredValue) noexcept;
     
     /**
      * @brief Set the voltage range for a channel (for validation).
@@ -406,9 +406,9 @@ public:
      * @param maxVoltage Maximum expected voltage
      * @return Result indicating success or specific error
      */
-    [[nodiscard]] Result<void> SetChannelRange(AdcInputSensor sensor, 
-                                              float minVoltage, 
-                                              float maxVoltage) noexcept;
+    [[nodiscard]] bool SetChannelRange(AdcInputSensor sensor,
+                                       float minVoltage,
+                                       float maxVoltage) noexcept;
     
     /**
      * @brief Update filter settings for a channel.
@@ -417,9 +417,9 @@ public:
      * @param filterWeight Filter weight (0.0-1.0)
      * @return Result indicating success or specific error
      */
-    [[nodiscard]] Result<void> ConfigureFiltering(AdcInputSensor sensor, 
-                                                 bool enableFiltering,
-                                                 float filterWeight = 0.1f) noexcept;
+    [[nodiscard]] bool ConfigureFiltering(AdcInputSensor sensor,
+                                          bool enableFiltering,
+                                          float filterWeight = 0.1f) noexcept;
     
     //==========================================================================
     // SYSTEM INFORMATION AND DIAGNOSTICS
@@ -441,25 +441,25 @@ public:
      * @brief Get system health information.
      * @return Result containing health information or error
      */
-    [[nodiscard]] Result<std::string> GetSystemHealth() const noexcept;
+    [[nodiscard]] bool GetSystemHealth(std::string& health) const noexcept;
     
     /**
      * @brief Get detailed system statistics.
      * @return Result containing statistics or error
      */
-    [[nodiscard]] Result<std::string> GetSystemStatistics() const noexcept;
+    [[nodiscard]] bool GetSystemStatistics(std::string& stats) const noexcept;
     
     /**
      * @brief Reset all channel statistics and filters.
      * @return Result indicating success or specific error
      */
-    [[nodiscard]] Result<void> ResetAllChannels() noexcept;
+    [[nodiscard]] bool ResetAllChannels() noexcept;
     
     /**
      * @brief Perform system self-test.
      * @return Result indicating test success or specific failures
      */
-    [[nodiscard]] Result<std::string> PerformSelfTest() noexcept;
+    [[nodiscard]] bool PerformSelfTest(std::string& result) noexcept;
     
     //==========================================================================
     // CONVENIENCE METHODS (NAME-BASED ACCESS)
@@ -470,14 +470,14 @@ public:
      * @param sensorName Human-readable sensor name
      * @return Result containing the reading or error
      */
-    [[nodiscard]] Result<AdcReading> ReadChannelByName(std::string_view sensorName) noexcept;
+    [[nodiscard]] bool ReadChannelByName(std::string_view sensorName, AdcReading& reading) noexcept;
     
     /**
      * @brief Read filtered value using sensor name.
      * @param sensorName Human-readable sensor name
      * @return Result containing the filtered value or error
      */
-    [[nodiscard]] Result<float> ReadFilteredValueByName(std::string_view sensorName) noexcept;
+    [[nodiscard]] bool ReadFilteredValueByName(std::string_view sensorName, float& value) noexcept;
 
 private:
     //==========================================================================
@@ -514,19 +514,19 @@ private:
      * @brief Initialize ESP32-C6 internal ADC.
      * @return Result indicating success or specific error
      */
-    [[nodiscard]] Result<void> InitializeEsp32Adc() noexcept;
+    [[nodiscard]] bool InitializeEsp32Adc() noexcept;
     
     /**
      * @brief Initialize TMC9660 ADC channels.
      * @return Result indicating success or specific error
      */
-    [[nodiscard]] Result<void> InitializeTmc9660Adc() noexcept;
+    [[nodiscard]] bool InitializeTmc9660Adc() noexcept;
     
     /**
      * @brief Create and register all default ADC channels.
      * @return Result indicating success or specific error
      */
-    [[nodiscard]] Result<void> RegisterDefaultChannels() noexcept;
+    [[nodiscard]] bool RegisterDefaultChannels() noexcept;
     
     /**
      * @brief Find ADC channel info by sensor identifier.

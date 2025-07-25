@@ -41,23 +41,21 @@ void HardFocIntegration::DemoAdcUsage() noexcept {
     AdcManager& adcManager = AdcManager::GetInstance();
     
     // Read motor current phase A (raw count)
-    auto rawResult = adcManager.ReadRawValue(AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_A);
-    if (rawResult.IsSuccess()) {
-        console_info(TAG, "Motor Current Phase A: %lu counts", rawResult.GetValue());
+    uint32_t rawValue = 0;
+    if (adcManager.ReadRawValue(AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_A, rawValue)) {
+        console_info(TAG, "Motor Current Phase A: %lu counts", rawValue);
     }
     
     // Read motor current phase A (voltage)
-    auto readingResult = adcManager.ReadChannel(AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_A);
-    if (readingResult.IsSuccess()) {
-        const auto& reading = readingResult.GetValue();
-        console_info(TAG, "Motor Current Phase A: %.3f V", reading.voltage);
+    AdcReading phaseA;
+    if (adcManager.ReadChannel(AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_A, phaseA)) {
+        console_info(TAG, "Motor Current Phase A: %.3f V", phaseA.voltage);
     }
     
     // Read system 3.3V rail
-    auto voltageResult = adcManager.ReadChannel(AdcInputSensor::ADC_SYSTEM_VOLTAGE_3V3);
-    if (voltageResult.IsSuccess()) {
-        const auto& reading = voltageResult.GetValue();
-        console_info(TAG, "3.3V Rail: %lu counts, %.3f V", reading.rawValue, reading.voltage);
+    AdcReading voltage;
+    if (adcManager.ReadChannel(AdcInputSensor::ADC_SYSTEM_VOLTAGE_3V3, voltage)) {
+        console_info(TAG, "3.3V Rail: %lu counts, %.3f V", voltage.rawValue, voltage.voltage);
     }
     
     console_info(TAG, "ADC demo completed");
@@ -225,9 +223,9 @@ void HardFocIntegration::RunSystemDiagnostics() noexcept {
     for (int i = 0; i < static_cast<int>(AdcInputSensor::ADC_INPUT_COUNT); ++i) {
         AdcInputSensor sensor = static_cast<AdcInputSensor>(i);
         if (adcManager.IsChannelRegistered(sensor)) {
-            auto readResult = adcManager.ReadChannel(sensor);
-            if (readResult.IsSuccess()) {
-                console_info(TAG, "ADC %s: RESPONDING", 
+            AdcReading r;
+            if (adcManager.ReadChannel(sensor, r)) {
+                console_info(TAG, "ADC %s: RESPONDING",
                             AdcInputSensorToString(sensor).data());
             }
         }
@@ -287,37 +285,37 @@ bool HardFocIntegration::ReadMotorSensors(float& current_a, float& current_b, fl
     
     bool success = true;
     
-    auto currentAResult = adcManager.ReadChannel(AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_A);
-    if (currentAResult.IsSuccess()) {
-        current_a = currentAResult.GetValue().voltage;
+    AdcReading currentA;
+    if (adcManager.ReadChannel(AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_A, currentA)) {
+        current_a = currentA.voltage;
     } else {
         success = false;
     }
     
-    auto currentBResult = adcManager.ReadChannel(AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_B);
-    if (currentBResult.IsSuccess()) {
-        current_b = currentBResult.GetValue().voltage;
+    AdcReading currentB;
+    if (adcManager.ReadChannel(AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_B, currentB)) {
+        current_b = currentB.voltage;
     } else {
         success = false;
     }
     
-    auto currentCResult = adcManager.ReadChannel(AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_C);
-    if (currentCResult.IsSuccess()) {
-        current_c = currentCResult.GetValue().voltage;
+    AdcReading currentC;
+    if (adcManager.ReadChannel(AdcInputSensor::ADC_MOTOR_CURRENT_PHASE_C, currentC)) {
+        current_c = currentC.voltage;
     } else {
         success = false;
     }
     
-    auto busVoltageResult = adcManager.ReadChannel(AdcInputSensor::ADC_MOTOR_VOLTAGE_BUS);
-    if (busVoltageResult.IsSuccess()) {
-        bus_voltage = busVoltageResult.GetValue().voltage;
+    AdcReading busVoltageReading;
+    if (adcManager.ReadChannel(AdcInputSensor::ADC_MOTOR_VOLTAGE_BUS, busVoltageReading)) {
+        bus_voltage = busVoltageReading.voltage;
     } else {
         success = false;
     }
     
-    auto temperatureResult = adcManager.ReadChannel(AdcInputSensor::ADC_MOTOR_TEMPERATURE);
-    if (temperatureResult.IsSuccess()) {
-        temperature = temperatureResult.GetValue().voltage;
+    AdcReading tempReading;
+    if (adcManager.ReadChannel(AdcInputSensor::ADC_MOTOR_TEMPERATURE, tempReading)) {
+        temperature = tempReading.voltage;
     } else {
         success = false;
     }
@@ -358,23 +356,23 @@ bool HardFocIntegration::MonitorSystemVoltages(float& voltage_3v3, float& voltag
     
     bool success = true;
     
-    auto voltage3v3Result = adcManager.ReadChannel(AdcInputSensor::ADC_SYSTEM_VOLTAGE_3V3);
-    if (voltage3v3Result.IsSuccess()) {
-        voltage_3v3 = voltage3v3Result.GetValue().voltage;
+    AdcReading voltage3v3Result;
+    if (adcManager.ReadChannel(AdcInputSensor::ADC_SYSTEM_VOLTAGE_3V3, voltage3v3Result)) {
+        voltage_3v3 = voltage3v3Result.voltage;
     } else {
         success = false;
     }
     
-    auto voltage5vResult = adcManager.ReadChannel(AdcInputSensor::ADC_SYSTEM_VOLTAGE_5V);
-    if (voltage5vResult.IsSuccess()) {
-        voltage_5v = voltage5vResult.GetValue().voltage;
+    AdcReading voltage5vResult;
+    if (adcManager.ReadChannel(AdcInputSensor::ADC_SYSTEM_VOLTAGE_5V, voltage5vResult)) {
+        voltage_5v = voltage5vResult.voltage;
     } else {
         success = false;
     }
     
-    auto voltage12vResult = adcManager.ReadChannel(AdcInputSensor::ADC_SYSTEM_VOLTAGE_12V);
-    if (voltage12vResult.IsSuccess()) {
-        voltage_12v = voltage12vResult.GetValue().voltage;
+    AdcReading voltage12vResult;
+    if (adcManager.ReadChannel(AdcInputSensor::ADC_SYSTEM_VOLTAGE_12V, voltage12vResult)) {
+        voltage_12v = voltage12vResult.voltage;
     } else {
         success = false;
     }

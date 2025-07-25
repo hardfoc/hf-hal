@@ -10,7 +10,6 @@ set(COMPONENT_NAME "component-handler")
 set(COMPONENT_SOURCES
     # Core system files
     SystemInit.cpp
-    Result.h
     CommonIDs.h
     ThingsToString.h
     
