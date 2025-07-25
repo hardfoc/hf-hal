@@ -74,11 +74,8 @@ bool GpioManager::Shutdown() noexcept {
     communication_errors_.store(0, std::memory_order_release);
     hardware_errors_.store(0, std::memory_order_release);
     
-    // Clear error messages
-    {
-        RtosMutex::LockGuard error_lock(error_mutex_);
-        recent_errors_.clear();
-    }
+    // Reset last error
+    last_error_.store(hf_gpio_err_t::GPIO_SUCCESS, std::memory_order_release);
     
     is_initialized_.store(false, std::memory_order_release);
     return true;
@@ -88,11 +85,11 @@ bool GpioManager::IsInitialized() const noexcept {
     return is_initialized_.load(std::memory_order_acquire);
 }
 
-bool GpioManager::GetSystemDiagnostics(GpioSystemDiagnostics& diagnostics) const noexcept {
+hf_gpio_err_t GpioManager::GetSystemDiagnostics(GpioSystemDiagnostics& diagnostics) const noexcept {
     RtosMutex::LockGuard lock(mutex_);
     
     if (!is_initialized_.load(std::memory_order_acquire)) {
-        return false;
+        return hf_gpio_err_t::GPIO_ERR_NOT_INITIALIZED;
     }
     
     // Get registry statistics
@@ -127,44 +124,42 @@ bool GpioManager::GetSystemDiagnostics(GpioSystemDiagnostics& diagnostics) const
         diagnostics.system_uptime_ms = 0;
     }
     
-    // Get recent error messages
-    {
-        RtosMutex::LockGuard error_lock(error_mutex_);
-        diagnostics.error_messages = recent_errors_;
-    }
+    // Get last error
+    diagnostics.last_error = last_error_.load(std::memory_order_acquire);
     
     // Determine overall system health
     diagnostics.system_healthy = (diagnostics.failed_operations == 0) && 
                                  (diagnostics.communication_errors == 0) && 
                                  (diagnostics.hardware_errors == 0);
     
-    return true;
+    return hf_gpio_err_t::GPIO_SUCCESS;
 }
 
 //==============================================================================
 // GPIO REGISTRATION AND MANAGEMENT
 //==============================================================================
 
-bool GpioManager::RegisterGpio(std::string_view name, std::shared_ptr<BaseGpio> gpio) noexcept {
-    if (!ValidatePinName(name)) {
-        AddErrorMessage("Invalid pin name: " + std::string(name));
+hf_gpio_err_t GpioManager::RegisterGpio(std::string_view name, std::shared_ptr<BaseGpio> gpio) noexcept {
+    hf_gpio_err_t validation_result = ValidatePinName(name);
+    if (validation_result != hf_gpio_err_t::GPIO_SUCCESS) {
+        UpdateLastError(validation_result);
         UpdateStatistics(false);
-        return false;
+        return validation_result;
     }
     
     RtosMutex::LockGuard registry_lock(registry_mutex_);
     
     // Check for duplicate registration
     if (gpio_registry_.find(name) != gpio_registry_.end()) {
-        AddErrorMessage("Pin already registered: " + std::string(name));
+        UpdateLastError(hf_gpio_err_t::GPIO_ERR_PIN_ALREADY_REGISTERED);
         UpdateStatistics(false);
-        return false;
+        return hf_gpio_err_t::GPIO_ERR_PIN_ALREADY_REGISTERED;
     }
     
     // Register the GPIO
     gpio_registry_[name] = std::move(gpio);
     UpdateStatistics(true);
-    return true;
+    return hf_gpio_err_t::GPIO_SUCCESS;
 }
 
 std::shared_ptr<BaseGpio> GpioManager::Get(std::string_view name) noexcept {
@@ -206,30 +201,32 @@ void GpioManager::LogAllRegisteredGpios() const noexcept {
 // BASIC GPIO OPERATIONS (Complete BaseGpio Coverage)
 //==============================================================================
 
-bool GpioManager::Set(std::string_view name, bool value) noexcept {
+hf_gpio_err_t GpioManager::Set(std::string_view name, bool value) noexcept {
     auto gpio = Get(name);
     if (!gpio) {
+        UpdateLastError(hf_gpio_err_t::GPIO_ERR_PIN_NOT_FOUND);
         UpdateStatistics(false);
-        return false;
+        return hf_gpio_err_t::GPIO_ERR_PIN_NOT_FOUND;
     }
     
     hf_gpio_err_t result = value ? gpio->SetActive() : gpio->SetInactive();
-    bool success = (result == hf_gpio_err_t::GPIO_SUCCESS);
-    UpdateStatistics(success);
-    return success;
+    UpdateLastError(result);
+    UpdateStatistics(result == hf_gpio_err_t::GPIO_SUCCESS);
+    return result;
 }
 
-bool GpioManager::SetActive(std::string_view name) noexcept {
+hf_gpio_err_t GpioManager::SetActive(std::string_view name) noexcept {
     auto gpio = Get(name);
     if (!gpio) {
+        UpdateLastError(hf_gpio_err_t::GPIO_ERR_PIN_NOT_FOUND);
         UpdateStatistics(false);
-        return false;
+        return hf_gpio_err_t::GPIO_ERR_PIN_NOT_FOUND;
     }
     
     hf_gpio_err_t result = gpio->SetActive();
-    bool success = (result == hf_gpio_err_t::GPIO_SUCCESS);
-    UpdateStatistics(success);
-    return success;
+    UpdateLastError(result);
+    UpdateStatistics(result == hf_gpio_err_t::GPIO_SUCCESS);
+    return result;
 }
 
 bool GpioManager::SetInactive(std::string_view name) noexcept {
@@ -604,14 +601,14 @@ bool GpioManager::Initialize() noexcept {
     // Get CommChannelsManager instance
     auto& comm_manager = CommChannelsManager::GetInstance();
     if (!comm_manager.IsInitialized()) {
-        AddErrorMessage("CommChannelsManager not initialized");
+        UpdateLastError(hf_gpio_err_t::GPIO_ERR_NOT_INITIALIZED);
         return false;
     }
     
     // Get MotorController instance for TMC9660 handler access
     motor_controller_ = &MotorController::GetInstance();
     if (!motor_controller_->EnsureInitialized()) {
-        AddErrorMessage("MotorController not initialized - TMC9660 GPIO access will be limited");
+        UpdateLastError(hf_gpio_err_t::GPIO_ERR_NOT_INITIALIZED);
         // Don't fail initialization, just log warning
     }
     
@@ -647,17 +644,15 @@ bool GpioManager::Initialize() noexcept {
                 break;
                 
             default:
-                AddErrorMessage("Unknown chip type for pin: " + std::string(mapping.name));
+                UpdateLastError(hf_gpio_err_t::GPIO_ERR_INVALID_PARAMETER);
                 continue;
         }
         
         if (gpio) {
             // Register the GPIO with its string name
-            if (!RegisterGpio(mapping.name, std::move(gpio))) {
-                AddErrorMessage("Failed to register GPIO for pin: " + std::string(mapping.name));
-            }
+            RegisterGpio(mapping.name, std::move(gpio));
         } else {
-            AddErrorMessage("Failed to create GPIO for pin: " + std::string(mapping.name));
+            UpdateLastError(hf_gpio_err_t::GPIO_ERR_HARDWARE_FAULT);
         }
     }
     
@@ -675,21 +670,21 @@ bool GpioManager::EnsurePcal95555Handler() noexcept {
     // Get CommChannelsManager instance
     auto& comm_manager = CommChannelsManager::GetInstance();
     if (!comm_manager.IsInitialized()) {
-        AddErrorMessage("CommChannelsManager not initialized for PCAL95555");
+        AddErrorMessage("CommMgr not init for PCAL");
         return false;
     }
     
     // Get I2C interface for PCAL95555
     auto i2c_interface = comm_manager.GetI2cInterface(0); // Assuming PCAL95555 is on I2C0
     if (!i2c_interface) {
-        AddErrorMessage("I2C interface not available for PCAL95555");
+        AddErrorMessage("I2C not available for PCAL");
         return false;
     }
     
     // Create PCAL95555 handler
     pcal95555_handler_ = std::make_unique<Pcal95555Handler>(*i2c_interface);
     if (!pcal95555_handler_->Initialize()) {
-        AddErrorMessage("Failed to initialize PCAL95555 handler");
+        AddErrorMessage("PCAL95555 handler init fail");
         pcal95555_handler_.reset();
         return false;
     }
@@ -705,7 +700,7 @@ Tmc9660Handler* GpioManager::GetTmc9660Handler(uint8_t device_index) noexcept {
     
     // Ensure MotorController is initialized
     if (!motor_controller_->EnsureInitialized()) {
-        AddErrorMessage("MotorController not initialized for TMC9660 access");
+        AddErrorMessage("MotorCtrl not init for TMC");
         return nullptr;
     }
     
@@ -740,10 +735,10 @@ std::shared_ptr<BaseGpio> GpioManager::CreateEsp32GpioPin(hf_u8_t pin_id, bool i
                                     : hf_gpio_active_state_t::HF_GPIO_ACTIVE_HIGH);
     
     // Initialize the GPIO
-    if (!gpio->Initialize()) {
-        AddErrorMessage("Failed to initialize ESP32 GPIO pin " + std::to_string(pin_id));
-        return nullptr;
-    }
+            if (!gpio->Initialize()) {
+            AddErrorMessage("ESP32 GPIO init failed");
+            return nullptr;
+        }
     
     return gpio;
 }
@@ -758,7 +753,7 @@ std::shared_ptr<BaseGpio> GpioManager::CreatePcal95555GpioPin(hf_u8_t pin_id, hf
     // Use PCAL95555 handler's factory method with unit number
     auto gpio = pcal95555_handler_->CreateGpioPin(pin_id, unit_number);
     if (!gpio) {
-        AddErrorMessage("Failed to create PCAL95555 GPIO pin " + std::to_string(pin_id) + " on unit " + std::to_string(unit_number));
+        AddErrorMessage("PCAL95555 GPIO create failed");
         return nullptr;
     }
     
@@ -791,14 +786,14 @@ std::shared_ptr<BaseGpio> GpioManager::CreateTmc9660GpioPin(hf_u8_t pin_id, hf_u
     // Get TMC9660 handler from MotorController using specified device index
     Tmc9660Handler* handler = GetTmc9660Handler(device_index);
     if (!handler) {
-        AddErrorMessage("TMC9660 handler not available for device " + std::to_string(device_index) + " GPIO pin " + std::to_string(pin_id));
+        AddErrorMessage("TMC9660 handler not available");
         return nullptr;
     }
     
     // Use TMC9660 handler's factory method
     auto gpio = handler->CreateGpioPin(pin_id);
     if (!gpio) {
-        AddErrorMessage("Failed to create TMC9660 GPIO pin " + std::to_string(pin_id) + " on device " + std::to_string(device_index));
+        AddErrorMessage("TMC9660 GPIO create failed");
         return nullptr;
     }
     
@@ -835,35 +830,45 @@ void GpioManager::UpdateStatistics(bool success) noexcept {
     }
 }
 
-void GpioManager::AddErrorMessage(const std::string& error_message) noexcept {
-    RtosMutex::LockGuard error_lock(error_mutex_);
-    
-    recent_errors_.push_back(error_message);
-    
-    // Keep only the most recent error messages
-    if (recent_errors_.size() > MAX_ERROR_MESSAGES) {
-        recent_errors_.erase(recent_errors_.begin(), 
-                           recent_errors_.begin() + (recent_errors_.size() - MAX_ERROR_MESSAGES));
-    }
+void GpioManager::UpdateLastError(hf_gpio_err_t error_code) noexcept {
+    last_error_.store(error_code, std::memory_order_release);
 }
 
-bool GpioManager::ValidatePinName(std::string_view name) const noexcept {
+hf_gpio_err_t GpioManager::ValidatePinName(std::string_view name) noexcept {
+    // Check for empty name
     if (name.empty()) {
-        return false;
+        return hf_gpio_err_t::GPIO_ERR_INVALID_PARAMETER;
     }
     
-    // Check for reserved prefixes
-    if (name.substr(0, 5) == "CORE_" || name.substr(0, 5) == "COMM_" || 
-        name.substr(0, 4) == "SYS_" || name.substr(0, 9) == "INTERNAL_") {
-        return false;
+    // Check maximum length (conserve memory with reasonable limit)
+    static constexpr size_t MAX_PIN_NAME_LENGTH = 32;
+    if (name.length() > MAX_PIN_NAME_LENGTH) {
+        return hf_gpio_err_t::GPIO_ERR_OUT_OF_MEMORY;  // Name too long
     }
     
-    // Check for valid characters (alphanumeric, underscore, hyphen)
-    for (char c : name) {
-        if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_' && c != '-') {
-            return false;
+    // Check for reserved prefixes using compile-time array
+    static constexpr std::array<std::string_view, 4> RESERVED_PREFIXES = {{
+        "CORE_", "COMM_", "SYS_", "INTERNAL_"
+    }};
+    
+    for (const auto& prefix : RESERVED_PREFIXES) {
+        if (name.length() >= prefix.length() && 
+            name.substr(0, prefix.length()) == prefix) {
+            return hf_gpio_err_t::GPIO_ERR_PERMISSION_DENIED;  // Reserved prefix
         }
     }
     
-    return true;
+    // Check if name starts with a digit (invalid for most naming conventions)
+    if (std::isdigit(static_cast<unsigned char>(name[0]))) {
+        return hf_gpio_err_t::GPIO_ERR_INVALID_ARG;  // Invalid format
+    }
+    
+    // Check for valid characters (alphanumeric, underscore, hyphen only)
+    for (char c : name) {
+        if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_' && c != '-') {
+            return hf_gpio_err_t::GPIO_ERR_INVALID_ARG;  // Invalid characters
+        }
+    }
+    
+    return hf_gpio_err_t::GPIO_SUCCESS;
 } 
