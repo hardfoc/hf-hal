@@ -600,16 +600,21 @@ private:
     mutable RtosMutex error_mutex_;
     
     /**
-     * @brief Recent error messages for diagnostics.
-     * Limited to MAX_ERROR_MESSAGES for memory management.
+     * @brief Static error message buffer for embedded systems.
+     * Uses fixed-size circular buffer to avoid dynamic allocations.
      */
-    std::vector<std::string> recent_errors_;
+    struct ErrorEntry {
+        std::array<char, 64> message;  ///< Fixed-size message buffer (64 chars max)
+        uint8_t length;                ///< Actual message length
+        uint32_t timestamp;            ///< Timestamp when error occurred
+        
+        ErrorEntry() noexcept : message{}, length(0), timestamp(0) {}
+    };
     
-    /**
-     * @brief Maximum number of error messages to retain.
-     * Prevents unbounded memory growth in long-running embedded systems.
-     */
-    static constexpr size_t MAX_ERROR_MESSAGES = 10;
+    static constexpr size_t MAX_ERROR_MESSAGES = 8;  ///< Reduced for memory conservation
+    std::array<ErrorEntry, MAX_ERROR_MESSAGES> error_buffer_;
+    uint8_t error_write_index_;        ///< Current write position in circular buffer
+    uint8_t error_count_;             ///< Number of errors stored (max MAX_ERROR_MESSAGES)
     
     //==========================================================================
     // PRIVATE METHODS
@@ -618,7 +623,7 @@ private:
     /**
      * @brief Private constructor for singleton pattern.
      */
-    GpioManager() = default;
+    GpioManager() : error_write_index_(0), error_count_(0) {}
     
     /**
      * @brief Private destructor.
@@ -654,17 +659,49 @@ private:
     void UpdateStatistics(bool success) noexcept;
     
     /**
-     * @brief Add error message to recent errors list.
-     * @param error_message Error message to add
+     * @brief Add error message to static error buffer.
+     * @param error_message Error message to add (truncated if > 63 chars)
      */
-    void AddErrorMessage(const std::string& error_message) noexcept;
+    void AddErrorMessage(std::string_view error_message) noexcept;
     
     /**
-     * @brief Validate pin name for registration.
+     * @brief Get current system timestamp for error logging.
+     * @return Timestamp in milliseconds (implementation-specific)
+     */
+    uint32_t GetCurrentTimestamp() const noexcept;
+    
+    /**
+     * @brief Enhanced pin name validation result.
+     */
+    enum class PinNameValidationResult : uint8_t {
+        VALID = 0,           ///< Pin name is valid
+        EMPTY,               ///< Pin name is empty
+        TOO_LONG,            ///< Pin name exceeds maximum length
+        RESERVED_PREFIX,     ///< Pin name uses reserved prefix
+        INVALID_CHARS,       ///< Pin name contains invalid characters
+        STARTS_WITH_DIGIT    ///< Pin name starts with a digit
+    };
+    
+    /**
+     * @brief Enhanced pin name validation with detailed error reporting.
+     * @param name Pin name to validate
+     * @return Validation result with specific error type
+     */
+    [[nodiscard]] PinNameValidationResult ValidatePinNameDetailed(std::string_view name) const noexcept;
+    
+    /**
+     * @brief Validate pin name for registration (legacy interface).
      * @param name Pin name to validate
      * @return true if valid, false otherwise
      */
     [[nodiscard]] bool ValidatePinName(std::string_view name) const noexcept;
+    
+    /**
+     * @brief Convert validation result to static string for debugging.
+     * @param result Validation result
+     * @return Static string describing the validation result
+     */
+    [[nodiscard]] static constexpr const char* ValidationResultToString(PinNameValidationResult result) noexcept;
     
     //==========================================================================
     // GPIO CREATION METHODS (PRIVATE)

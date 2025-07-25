@@ -77,7 +77,13 @@ bool GpioManager::Shutdown() noexcept {
     // Clear error messages
     {
         RtosMutex::LockGuard error_lock(error_mutex_);
-        recent_errors_.clear();
+        error_write_index_ = 0;
+        error_count_ = 0;
+        // Clear error buffer
+        for (auto& entry : error_buffer_) {
+            entry.length = 0;
+            entry.timestamp = 0;
+        }
     }
     
     is_initialized_.store(false, std::memory_order_release);
@@ -130,7 +136,16 @@ bool GpioManager::GetSystemDiagnostics(GpioSystemDiagnostics& diagnostics) const
     // Get recent error messages
     {
         RtosMutex::LockGuard error_lock(error_mutex_);
-        diagnostics.error_messages = recent_errors_;
+        diagnostics.error_messages.clear();
+        diagnostics.error_messages.reserve(error_count_);
+        
+        // Read errors in chronological order (oldest to newest)
+        uint8_t read_index = error_count_ < MAX_ERROR_MESSAGES ? 0 : error_write_index_;
+        for (uint8_t i = 0; i < error_count_; ++i) {
+            uint8_t idx = (read_index + i) % MAX_ERROR_MESSAGES;
+            const auto& entry = error_buffer_[idx];
+            diagnostics.error_messages.emplace_back(entry.message.data(), entry.length);
+        }
     }
     
     // Determine overall system health
@@ -146,8 +161,30 @@ bool GpioManager::GetSystemDiagnostics(GpioSystemDiagnostics& diagnostics) const
 //==============================================================================
 
 bool GpioManager::RegisterGpio(std::string_view name, std::shared_ptr<BaseGpio> gpio) noexcept {
-    if (!ValidatePinName(name)) {
-        AddErrorMessage("Invalid pin name: " + std::string(name));
+    auto validation_result = ValidatePinNameDetailed(name);
+    if (validation_result != PinNameValidationResult::VALID) {
+        // Create concise error message without string concatenation
+        const char* error_msg = "Invalid pin name";
+        switch (validation_result) {
+            case PinNameValidationResult::EMPTY:
+                error_msg = "Pin name empty";
+                break;
+            case PinNameValidationResult::TOO_LONG:
+                error_msg = "Pin name too long";
+                break;
+            case PinNameValidationResult::RESERVED_PREFIX:
+                error_msg = "Pin name reserved prefix";
+                break;
+            case PinNameValidationResult::INVALID_CHARS:
+                error_msg = "Pin name invalid chars";
+                break;
+            case PinNameValidationResult::STARTS_WITH_DIGIT:
+                error_msg = "Pin name starts with digit";
+                break;
+            default:
+                break;
+        }
+        AddErrorMessage(error_msg);
         UpdateStatistics(false);
         return false;
     }
@@ -156,7 +193,7 @@ bool GpioManager::RegisterGpio(std::string_view name, std::shared_ptr<BaseGpio> 
     
     // Check for duplicate registration
     if (gpio_registry_.find(name) != gpio_registry_.end()) {
-        AddErrorMessage("Pin already registered: " + std::string(name));
+        AddErrorMessage("Pin already registered");
         UpdateStatistics(false);
         return false;
     }
@@ -604,14 +641,14 @@ bool GpioManager::Initialize() noexcept {
     // Get CommChannelsManager instance
     auto& comm_manager = CommChannelsManager::GetInstance();
     if (!comm_manager.IsInitialized()) {
-        AddErrorMessage("CommChannelsManager not initialized");
+        AddErrorMessage("CommChannelsManager not init");
         return false;
     }
     
     // Get MotorController instance for TMC9660 handler access
     motor_controller_ = &MotorController::GetInstance();
     if (!motor_controller_->EnsureInitialized()) {
-        AddErrorMessage("MotorController not initialized - TMC9660 GPIO access will be limited");
+        AddErrorMessage("MotorController not init");
         // Don't fail initialization, just log warning
     }
     
@@ -647,17 +684,17 @@ bool GpioManager::Initialize() noexcept {
                 break;
                 
             default:
-                AddErrorMessage("Unknown chip type for pin: " + std::string(mapping.name));
+                AddErrorMessage("Unknown chip type");
                 continue;
         }
         
         if (gpio) {
             // Register the GPIO with its string name
             if (!RegisterGpio(mapping.name, std::move(gpio))) {
-                AddErrorMessage("Failed to register GPIO for pin: " + std::string(mapping.name));
+                AddErrorMessage("Failed to register GPIO");
             }
         } else {
-            AddErrorMessage("Failed to create GPIO for pin: " + std::string(mapping.name));
+            AddErrorMessage("Failed to create GPIO");
         }
     }
     
@@ -675,21 +712,21 @@ bool GpioManager::EnsurePcal95555Handler() noexcept {
     // Get CommChannelsManager instance
     auto& comm_manager = CommChannelsManager::GetInstance();
     if (!comm_manager.IsInitialized()) {
-        AddErrorMessage("CommChannelsManager not initialized for PCAL95555");
+        AddErrorMessage("CommMgr not init for PCAL");
         return false;
     }
     
     // Get I2C interface for PCAL95555
     auto i2c_interface = comm_manager.GetI2cInterface(0); // Assuming PCAL95555 is on I2C0
     if (!i2c_interface) {
-        AddErrorMessage("I2C interface not available for PCAL95555");
+        AddErrorMessage("I2C not available for PCAL");
         return false;
     }
     
     // Create PCAL95555 handler
     pcal95555_handler_ = std::make_unique<Pcal95555Handler>(*i2c_interface);
     if (!pcal95555_handler_->Initialize()) {
-        AddErrorMessage("Failed to initialize PCAL95555 handler");
+        AddErrorMessage("PCAL95555 handler init fail");
         pcal95555_handler_.reset();
         return false;
     }
@@ -705,7 +742,7 @@ Tmc9660Handler* GpioManager::GetTmc9660Handler(uint8_t device_index) noexcept {
     
     // Ensure MotorController is initialized
     if (!motor_controller_->EnsureInitialized()) {
-        AddErrorMessage("MotorController not initialized for TMC9660 access");
+        AddErrorMessage("MotorCtrl not init for TMC");
         return nullptr;
     }
     
@@ -740,10 +777,10 @@ std::shared_ptr<BaseGpio> GpioManager::CreateEsp32GpioPin(hf_u8_t pin_id, bool i
                                     : hf_gpio_active_state_t::HF_GPIO_ACTIVE_HIGH);
     
     // Initialize the GPIO
-    if (!gpio->Initialize()) {
-        AddErrorMessage("Failed to initialize ESP32 GPIO pin " + std::to_string(pin_id));
-        return nullptr;
-    }
+            if (!gpio->Initialize()) {
+            AddErrorMessage("ESP32 GPIO init failed");
+            return nullptr;
+        }
     
     return gpio;
 }
@@ -758,7 +795,7 @@ std::shared_ptr<BaseGpio> GpioManager::CreatePcal95555GpioPin(hf_u8_t pin_id, hf
     // Use PCAL95555 handler's factory method with unit number
     auto gpio = pcal95555_handler_->CreateGpioPin(pin_id, unit_number);
     if (!gpio) {
-        AddErrorMessage("Failed to create PCAL95555 GPIO pin " + std::to_string(pin_id) + " on unit " + std::to_string(unit_number));
+        AddErrorMessage("PCAL95555 GPIO create failed");
         return nullptr;
     }
     
@@ -791,14 +828,14 @@ std::shared_ptr<BaseGpio> GpioManager::CreateTmc9660GpioPin(hf_u8_t pin_id, hf_u
     // Get TMC9660 handler from MotorController using specified device index
     Tmc9660Handler* handler = GetTmc9660Handler(device_index);
     if (!handler) {
-        AddErrorMessage("TMC9660 handler not available for device " + std::to_string(device_index) + " GPIO pin " + std::to_string(pin_id));
+        AddErrorMessage("TMC9660 handler not available");
         return nullptr;
     }
     
     // Use TMC9660 handler's factory method
     auto gpio = handler->CreateGpioPin(pin_id);
     if (!gpio) {
-        AddErrorMessage("Failed to create TMC9660 GPIO pin " + std::to_string(pin_id) + " on device " + std::to_string(device_index));
+        AddErrorMessage("TMC9660 GPIO create failed");
         return nullptr;
     }
     
@@ -835,35 +872,91 @@ void GpioManager::UpdateStatistics(bool success) noexcept {
     }
 }
 
-void GpioManager::AddErrorMessage(const std::string& error_message) noexcept {
+void GpioManager::AddErrorMessage(std::string_view error_message) noexcept {
     RtosMutex::LockGuard error_lock(error_mutex_);
     
-    recent_errors_.push_back(error_message);
+    auto& entry = error_buffer_[error_write_index_];
     
-    // Keep only the most recent error messages
-    if (recent_errors_.size() > MAX_ERROR_MESSAGES) {
-        recent_errors_.erase(recent_errors_.begin(), 
-                           recent_errors_.begin() + (recent_errors_.size() - MAX_ERROR_MESSAGES));
+    // Copy message with length limit (reserve 1 byte for null terminator)
+    constexpr size_t max_msg_len = sizeof(entry.message) - 1;
+    entry.length = static_cast<uint8_t>(std::min(error_message.length(), max_msg_len));
+    
+    std::memcpy(entry.message.data(), error_message.data(), entry.length);
+    entry.message[entry.length] = '\0';  // Null terminate
+    entry.timestamp = GetCurrentTimestamp();
+    
+    // Update circular buffer indices
+    error_write_index_ = (error_write_index_ + 1) % MAX_ERROR_MESSAGES;
+    if (error_count_ < MAX_ERROR_MESSAGES) {
+        ++error_count_;
     }
 }
 
-bool GpioManager::ValidatePinName(std::string_view name) const noexcept {
+uint32_t GpioManager::GetCurrentTimestamp() const noexcept {
+    // In a real implementation, this would get system time
+    // For now, return a simple counter-based timestamp
+    static std::atomic<uint32_t> timestamp_counter{0};
+    return timestamp_counter.fetch_add(1, std::memory_order_relaxed);
+}
+
+GpioManager::PinNameValidationResult GpioManager::ValidatePinNameDetailed(std::string_view name) const noexcept {
+    // Check for empty name
     if (name.empty()) {
-        return false;
+        return PinNameValidationResult::EMPTY;
     }
     
-    // Check for reserved prefixes
-    if (name.substr(0, 5) == "CORE_" || name.substr(0, 5) == "COMM_" || 
-        name.substr(0, 4) == "SYS_" || name.substr(0, 9) == "INTERNAL_") {
-        return false;
+    // Check maximum length (conserve memory with reasonable limit)
+    static constexpr size_t MAX_PIN_NAME_LENGTH = 32;
+    if (name.length() > MAX_PIN_NAME_LENGTH) {
+        return PinNameValidationResult::TOO_LONG;
     }
     
-    // Check for valid characters (alphanumeric, underscore, hyphen)
-    for (char c : name) {
-        if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_' && c != '-') {
-            return false;
+    // Check for reserved prefixes using compile-time array
+    static constexpr std::array<std::string_view, 4> RESERVED_PREFIXES = {{
+        "CORE_", "COMM_", "SYS_", "INTERNAL_"
+    }};
+    
+    for (const auto& prefix : RESERVED_PREFIXES) {
+        if (name.length() >= prefix.length() && 
+            name.substr(0, prefix.length()) == prefix) {
+            return PinNameValidationResult::RESERVED_PREFIX;
         }
     }
     
-    return true;
+    // Check if name starts with a digit (invalid for most naming conventions)
+    if (std::isdigit(static_cast<unsigned char>(name[0]))) {
+        return PinNameValidationResult::STARTS_WITH_DIGIT;
+    }
+    
+    // Check for valid characters (alphanumeric, underscore, hyphen only)
+    for (char c : name) {
+        if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_' && c != '-') {
+            return PinNameValidationResult::INVALID_CHARS;
+        }
+    }
+    
+    return PinNameValidationResult::VALID;
+}
+
+bool GpioManager::ValidatePinName(std::string_view name) const noexcept {
+    return ValidatePinNameDetailed(name) == PinNameValidationResult::VALID;
+}
+
+constexpr const char* GpioManager::ValidationResultToString(PinNameValidationResult result) noexcept {
+    switch (result) {
+        case PinNameValidationResult::VALID:
+            return "Valid";
+        case PinNameValidationResult::EMPTY:
+            return "Empty";
+        case PinNameValidationResult::TOO_LONG:
+            return "Too long";
+        case PinNameValidationResult::RESERVED_PREFIX:
+            return "Reserved prefix";
+        case PinNameValidationResult::INVALID_CHARS:
+            return "Invalid chars";
+        case PinNameValidationResult::STARTS_WITH_DIGIT:
+            return "Starts with digit";
+        default:
+            return "Unknown";
+    }
 } 
