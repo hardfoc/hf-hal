@@ -502,9 +502,9 @@ bool GpioManager::SetState(HardFOC::FunctionalGpioPin pin, bool state) noexcept 
     } else {
         info->error_count++;
         UpdateStatistics(false);
+        UpdateLastError(result);
         
         std::string error_msg = "Failed to set pin state: " + std::string(HfGpioErrToString(result));
-        AddErrorMessage(error_msg);
         console_error(TAG, "Failed to set pin %s: %s", info->name.data(), error_msg.c_str());
         return false;
     }
@@ -557,9 +557,9 @@ bool GpioManager::ReadState(HardFOC::FunctionalGpioPin pin, bool& state) noexcep
     } else {
         info->error_count++;
         UpdateStatistics(false);
+        UpdateLastError(result);
         
         std::string error_msg = "Failed to read pin state: " + std::string(HfGpioErrToString(result));
-        AddErrorMessage(error_msg);
         console_error(TAG, "Failed to read pin %s: %s", info->name.data(), error_msg.c_str());
         return false;
     }
@@ -1233,15 +1233,8 @@ void GpioManager::UpdateStatistics(bool success) noexcept {
     }
 }
 
-void GpioManager::AddErrorMessage(const std::string& error_message) noexcept {
-    std::lock_guard<std::mutex> lock(error_mutex_);
-    
-    recent_errors_.push_back(error_message);
-    
-    // Keep only the most recent error messages
-    if (recent_errors_.size() > MAX_ERROR_MESSAGES) {
-        recent_errors_.erase(recent_errors_.begin());
-    }
+void GpioManager::UpdateLastError(hf_gpio_err_t error_code) noexcept {
+    last_error_.store(error_code, std::memory_order_release);
 }
 
 std::string GpioManager::GetPinName(HardFOC::FunctionalGpioPin pin) const noexcept {

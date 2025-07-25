@@ -661,6 +661,11 @@ private:
     // ===============================
     
     /**
+     * @brief Last error code for diagnostics (atomic for thread safety).
+     */
+    std::atomic<hf_gpio_err_t> last_error_{hf_gpio_err_t::GPIO_SUCCESS};
+    
+    /**
      * @brief Thread-safe access to error message storage.
      * Uses RtosMutex for embedded RTOS compatibility.
      */
@@ -784,10 +789,10 @@ private:
     void UpdateStatistics(bool success) noexcept;
     
     /**
-     * @brief Add error message to recent errors list.
-     * @param error_message Error message to add
+     * @brief Update last error for diagnostics.
+     * @param error_code Error code to record
      */
-    void AddErrorMessage(const std::string& error_message) noexcept;
+    void UpdateLastError(hf_gpio_err_t error_code) noexcept;
     
     /**
      * @brief Get pin name from functional pin identifier.
