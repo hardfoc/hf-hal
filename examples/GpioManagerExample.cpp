@@ -40,18 +40,20 @@ void DemonstrateBasicOperations() {
     auto& gpio_manager = GpioManager::GetInstance();
     
     // Set a GPIO pin to active state
-    if (gpio_manager.SetActive("GPIO_WS2812_LED_DAT")) {
+    hf_gpio_err_t result = gpio_manager.SetActive("GPIO_WS2812_LED_DAT");
+    if (result == hf_gpio_err_t::GPIO_SUCCESS) {
         std::cout << "✓ Set WS2812 LED pin to active" << std::endl;
     } else {
-        std::cout << "✗ Failed to set WS2812 LED pin to active" << std::endl;
+        std::cout << "✗ Failed to set WS2812 LED pin to active (error: " << static_cast<int>(result) << ")" << std::endl;
     }
     
     // Read the current state
     bool state;
-    if (gpio_manager.Read("GPIO_WS2812_LED_DAT", state)) {
+    result = gpio_manager.Read("GPIO_WS2812_LED_DAT", state);
+    if (result == hf_gpio_err_t::GPIO_SUCCESS) {
         std::cout << "✓ Read WS2812 LED pin state: " << (state ? "ACTIVE" : "INACTIVE") << std::endl;
     } else {
-        std::cout << "✗ Failed to read WS2812 LED pin state" << std::endl;
+        std::cout << "✗ Failed to read WS2812 LED pin state (error: " << static_cast<int>(result) << ")" << std::endl;
     }
     
     // Toggle the pin

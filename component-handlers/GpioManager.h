@@ -132,14 +132,14 @@ struct GpioBatchOperation {
 struct GpioBatchResult {
     std::vector<std::string_view> pin_names;    ///< Pin names operated on
     std::vector<bool> states;                   ///< Resulting states
-    std::vector<ResultCode> results;            ///< Individual operation results
-    ResultCode overall_result;                  ///< Overall operation result
+    std::vector<hf_gpio_err_t> results;         ///< Individual operation results
+    hf_gpio_err_t overall_result;               ///< Overall operation result
     
     /**
      * @brief Check if all operations were successful.
      */
     [[nodiscard]] bool AllSuccessful() const noexcept {
-        return IsSuccessResult(overall_result);
+        return overall_result == hf_gpio_err_t::GPIO_SUCCESS;
     }
 };
 
@@ -157,7 +157,7 @@ struct GpioSystemDiagnostics {
     uint32_t communication_errors;                 ///< Communication errors
     uint32_t hardware_errors;                      ///< Hardware errors
     uint64_t system_uptime_ms;                     ///< System uptime
-    std::vector<std::string> error_messages;       ///< Recent error messages
+    hf_gpio_err_t last_error;                      ///< Last error encountered
 };
 
 //==============================================================================
@@ -236,9 +236,9 @@ public:
     /**
      * @brief Get system diagnostics and health information.
      * @param diagnostics Reference to store system diagnostics
-     * @return true if successful, false otherwise
+     * @return hf_gpio_err_t::GPIO_SUCCESS if successful, error code otherwise
      */
-    [[nodiscard]] bool GetSystemDiagnostics(GpioSystemDiagnostics& diagnostics) const noexcept;
+    [[nodiscard]] hf_gpio_err_t GetSystemDiagnostics(GpioSystemDiagnostics& diagnostics) const noexcept;
     
     //==========================================================================
     // GPIO REGISTRATION AND MANAGEMENT
@@ -248,11 +248,11 @@ public:
      * @brief Register a GPIO pin with the system using string_view identifier.
      * @param name Pin name (must be static string or outlive the manager)
      * @param gpio Shared pointer to GPIO driver
-     * @return true if registration successful, false otherwise
+     * @return hf_gpio_err_t::GPIO_SUCCESS if successful, error code otherwise
      * @note Pin names must be static strings (string literals or static arrays)
      * @note Reserved prefixes (CORE_, COMM_, SYS_, INTERNAL_) are not allowed
      */
-    [[nodiscard]] bool RegisterGpio(std::string_view name, std::shared_ptr<BaseGpio> gpio) noexcept;
+    [[nodiscard]] hf_gpio_err_t RegisterGpio(std::string_view name, std::shared_ptr<BaseGpio> gpio) noexcept;
     
     /**
      * @brief Get a GPIO pin by name.
@@ -287,46 +287,46 @@ public:
      * @brief Set a GPIO pin to a specific state.
      * @param name Pin name
      * @param value Desired state (true = active, false = inactive)
-     * @return true if successful, false otherwise
+     * @return hf_gpio_err_t operation result
      */
-    [[nodiscard]] bool Set(std::string_view name, bool value) noexcept;
+    [[nodiscard]] hf_gpio_err_t Set(std::string_view name, bool value) noexcept;
     
     /**
      * @brief Set a GPIO pin to active state.
      * @param name Pin name
-     * @return true if successful, false otherwise
+     * @return hf_gpio_err_t operation result
      */
-    [[nodiscard]] bool SetActive(std::string_view name) noexcept;
+    [[nodiscard]] hf_gpio_err_t SetActive(std::string_view name) noexcept;
     
     /**
      * @brief Set a GPIO pin to inactive state.
      * @param name Pin name
-     * @return true if successful, false otherwise
+     * @return hf_gpio_err_t operation result
      */
-    [[nodiscard]] bool SetInactive(std::string_view name) noexcept;
+    [[nodiscard]] hf_gpio_err_t SetInactive(std::string_view name) noexcept;
     
     /**
      * @brief Read the current state of a GPIO pin.
      * @param name Pin name
      * @param state Reference to store the read state
-     * @return true if successful, false otherwise
+     * @return hf_gpio_err_t operation result
      */
-    [[nodiscard]] bool Read(std::string_view name, bool& state) noexcept;
+    [[nodiscard]] hf_gpio_err_t Read(std::string_view name, bool& state) noexcept;
     
     /**
      * @brief Toggle a GPIO pin state.
      * @param name Pin name
-     * @return true if successful, false otherwise
+     * @return hf_gpio_err_t operation result
      */
-    [[nodiscard]] bool Toggle(std::string_view name) noexcept;
+    [[nodiscard]] hf_gpio_err_t Toggle(std::string_view name) noexcept;
     
     /**
      * @brief Check if a GPIO pin is in active state.
      * @param name Pin name
      * @param active Reference to store the active state
-     * @return true if successful, false otherwise
+     * @return hf_gpio_err_t operation result
      */
-    [[nodiscard]] bool IsActive(std::string_view name, bool& active) noexcept;
+    [[nodiscard]] hf_gpio_err_t IsActive(std::string_view name, bool& active) noexcept;
     
     //==========================================================================
     // PIN CONFIGURATION (Complete BaseGpio Coverage)
@@ -360,25 +360,25 @@ public:
      * @brief Get pin direction.
      * @param name Pin name
      * @param direction Reference to store direction
-     * @return true if successful, false otherwise
+     * @return hf_gpio_err_t operation result
      */
-    [[nodiscard]] bool GetDirection(std::string_view name, hf_gpio_direction_t& direction) const noexcept;
+    [[nodiscard]] hf_gpio_err_t GetDirection(std::string_view name, hf_gpio_direction_t& direction) const noexcept;
     
     /**
      * @brief Get pin pull mode.
      * @param name Pin name
      * @param pull_mode Reference to store pull mode
-     * @return true if successful, false otherwise
+     * @return hf_gpio_err_t operation result
      */
-    [[nodiscard]] bool GetPullMode(std::string_view name, hf_gpio_pull_mode_t& pull_mode) const noexcept;
+    [[nodiscard]] hf_gpio_err_t GetPullMode(std::string_view name, hf_gpio_pull_mode_t& pull_mode) const noexcept;
     
     /**
      * @brief Get pin output mode.
      * @param name Pin name
      * @param output_mode Reference to store output mode
-     * @return true if successful, false otherwise
+     * @return hf_gpio_err_t operation result
      */
-    [[nodiscard]] bool GetOutputMode(std::string_view name, hf_gpio_output_mode_t& output_mode) const noexcept;
+    [[nodiscard]] hf_gpio_err_t GetOutputMode(std::string_view name, hf_gpio_output_mode_t& output_mode) const noexcept;
     
     //==========================================================================
     // INTERRUPT SUPPORT (Complete BaseGpio Coverage)
@@ -426,16 +426,16 @@ public:
      * @brief Get pin statistics.
      * @param name Pin name
      * @param statistics Reference to store pin statistics
-     * @return true if successful, false otherwise
+     * @return hf_gpio_err_t operation result
      */
-    [[nodiscard]] bool GetStatistics(std::string_view name, BaseGpio::PinStatistics& statistics) const noexcept;
+    [[nodiscard]] hf_gpio_err_t GetStatistics(std::string_view name, BaseGpio::PinStatistics& statistics) const noexcept;
     
     /**
      * @brief Reset pin statistics.
      * @param name Pin name
-     * @return true if successful, false otherwise
+     * @return hf_gpio_err_t operation result
      */
-    [[nodiscard]] bool ResetStatistics(std::string_view name) noexcept;
+    [[nodiscard]] hf_gpio_err_t ResetStatistics(std::string_view name) noexcept;
     
     //==========================================================================
     // BATCH OPERATIONS
@@ -474,17 +474,10 @@ public:
     //==========================================================================
     
     /**
-     * @brief Get system health information.
-     * @param health_info Reference to store health information string
-     * @return true if successful, false otherwise
-     */
-    [[nodiscard]] bool GetSystemHealth(std::string& health_info) const noexcept;
-    
-    /**
      * @brief Reset all output pins to inactive state.
-     * @return true if successful, false otherwise
+     * @return hf_gpio_err_t operation result
      */
-    [[nodiscard]] bool ResetAllPins() noexcept;
+    [[nodiscard]] hf_gpio_err_t ResetAllPins() noexcept;
 
 private:
     //==========================================================================
@@ -600,21 +593,10 @@ private:
     mutable RtosMutex error_mutex_;
     
     /**
-     * @brief Static error message buffer for embedded systems.
-     * Uses fixed-size circular buffer to avoid dynamic allocations.
+     * @brief Last error encountered (for diagnostics only).
+     * Single error code instead of error message storage.
      */
-    struct ErrorEntry {
-        std::array<char, 64> message;  ///< Fixed-size message buffer (64 chars max)
-        uint8_t length;                ///< Actual message length
-        uint32_t timestamp;            ///< Timestamp when error occurred
-        
-        ErrorEntry() noexcept : message{}, length(0), timestamp(0) {}
-    };
-    
-    static constexpr size_t MAX_ERROR_MESSAGES = 8;  ///< Reduced for memory conservation
-    std::array<ErrorEntry, MAX_ERROR_MESSAGES> error_buffer_;
-    uint8_t error_write_index_;        ///< Current write position in circular buffer
-    uint8_t error_count_;             ///< Number of errors stored (max MAX_ERROR_MESSAGES)
+    std::atomic<hf_gpio_err_t> last_error_{hf_gpio_err_t::GPIO_SUCCESS};
     
     //==========================================================================
     // PRIVATE METHODS
@@ -623,7 +605,7 @@ private:
     /**
      * @brief Private constructor for singleton pattern.
      */
-    GpioManager() : error_write_index_(0), error_count_(0) {}
+    GpioManager() = default;
     
     /**
      * @brief Private destructor.
@@ -659,49 +641,17 @@ private:
     void UpdateStatistics(bool success) noexcept;
     
     /**
-     * @brief Add error message to static error buffer.
-     * @param error_message Error message to add (truncated if > 63 chars)
+     * @brief Update last error for diagnostics.
+     * @param error_code Error code to record
      */
-    void AddErrorMessage(std::string_view error_message) noexcept;
+    void UpdateLastError(hf_gpio_err_t error_code) noexcept;
     
     /**
-     * @brief Get current system timestamp for error logging.
-     * @return Timestamp in milliseconds (implementation-specific)
-     */
-    uint32_t GetCurrentTimestamp() const noexcept;
-    
-    /**
-     * @brief Enhanced pin name validation result.
-     */
-    enum class PinNameValidationResult : uint8_t {
-        VALID = 0,           ///< Pin name is valid
-        EMPTY,               ///< Pin name is empty
-        TOO_LONG,            ///< Pin name exceeds maximum length
-        RESERVED_PREFIX,     ///< Pin name uses reserved prefix
-        INVALID_CHARS,       ///< Pin name contains invalid characters
-        STARTS_WITH_DIGIT    ///< Pin name starts with a digit
-    };
-    
-    /**
-     * @brief Enhanced pin name validation with detailed error reporting.
+     * @brief Validate pin name using hf_gpio_err_t error codes.
      * @param name Pin name to validate
-     * @return Validation result with specific error type
+     * @return hf_gpio_err_t::GPIO_SUCCESS if valid, specific error otherwise
      */
-    [[nodiscard]] PinNameValidationResult ValidatePinNameDetailed(std::string_view name) const noexcept;
-    
-    /**
-     * @brief Validate pin name for registration (legacy interface).
-     * @param name Pin name to validate
-     * @return true if valid, false otherwise
-     */
-    [[nodiscard]] bool ValidatePinName(std::string_view name) const noexcept;
-    
-    /**
-     * @brief Convert validation result to static string for debugging.
-     * @param result Validation result
-     * @return Static string describing the validation result
-     */
-    [[nodiscard]] static constexpr const char* ValidationResultToString(PinNameValidationResult result) noexcept;
+    [[nodiscard]] static hf_gpio_err_t ValidatePinName(std::string_view name) noexcept;
     
     //==========================================================================
     // GPIO CREATION METHODS (PRIVATE)

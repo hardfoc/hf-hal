@@ -74,17 +74,8 @@ bool GpioManager::Shutdown() noexcept {
     communication_errors_.store(0, std::memory_order_release);
     hardware_errors_.store(0, std::memory_order_release);
     
-    // Clear error messages
-    {
-        RtosMutex::LockGuard error_lock(error_mutex_);
-        error_write_index_ = 0;
-        error_count_ = 0;
-        // Clear error buffer
-        for (auto& entry : error_buffer_) {
-            entry.length = 0;
-            entry.timestamp = 0;
-        }
-    }
+    // Reset last error
+    last_error_.store(hf_gpio_err_t::GPIO_SUCCESS, std::memory_order_release);
     
     is_initialized_.store(false, std::memory_order_release);
     return true;
@@ -94,11 +85,11 @@ bool GpioManager::IsInitialized() const noexcept {
     return is_initialized_.load(std::memory_order_acquire);
 }
 
-bool GpioManager::GetSystemDiagnostics(GpioSystemDiagnostics& diagnostics) const noexcept {
+hf_gpio_err_t GpioManager::GetSystemDiagnostics(GpioSystemDiagnostics& diagnostics) const noexcept {
     RtosMutex::LockGuard lock(mutex_);
     
     if (!is_initialized_.load(std::memory_order_acquire)) {
-        return false;
+        return hf_gpio_err_t::GPIO_ERR_NOT_INITIALIZED;
     }
     
     // Get registry statistics
@@ -133,75 +124,42 @@ bool GpioManager::GetSystemDiagnostics(GpioSystemDiagnostics& diagnostics) const
         diagnostics.system_uptime_ms = 0;
     }
     
-    // Get recent error messages
-    {
-        RtosMutex::LockGuard error_lock(error_mutex_);
-        diagnostics.error_messages.clear();
-        diagnostics.error_messages.reserve(error_count_);
-        
-        // Read errors in chronological order (oldest to newest)
-        uint8_t read_index = error_count_ < MAX_ERROR_MESSAGES ? 0 : error_write_index_;
-        for (uint8_t i = 0; i < error_count_; ++i) {
-            uint8_t idx = (read_index + i) % MAX_ERROR_MESSAGES;
-            const auto& entry = error_buffer_[idx];
-            diagnostics.error_messages.emplace_back(entry.message.data(), entry.length);
-        }
-    }
+    // Get last error
+    diagnostics.last_error = last_error_.load(std::memory_order_acquire);
     
     // Determine overall system health
     diagnostics.system_healthy = (diagnostics.failed_operations == 0) && 
                                  (diagnostics.communication_errors == 0) && 
                                  (diagnostics.hardware_errors == 0);
     
-    return true;
+    return hf_gpio_err_t::GPIO_SUCCESS;
 }
 
 //==============================================================================
 // GPIO REGISTRATION AND MANAGEMENT
 //==============================================================================
 
-bool GpioManager::RegisterGpio(std::string_view name, std::shared_ptr<BaseGpio> gpio) noexcept {
-    auto validation_result = ValidatePinNameDetailed(name);
-    if (validation_result != PinNameValidationResult::VALID) {
-        // Create concise error message without string concatenation
-        const char* error_msg = "Invalid pin name";
-        switch (validation_result) {
-            case PinNameValidationResult::EMPTY:
-                error_msg = "Pin name empty";
-                break;
-            case PinNameValidationResult::TOO_LONG:
-                error_msg = "Pin name too long";
-                break;
-            case PinNameValidationResult::RESERVED_PREFIX:
-                error_msg = "Pin name reserved prefix";
-                break;
-            case PinNameValidationResult::INVALID_CHARS:
-                error_msg = "Pin name invalid chars";
-                break;
-            case PinNameValidationResult::STARTS_WITH_DIGIT:
-                error_msg = "Pin name starts with digit";
-                break;
-            default:
-                break;
-        }
-        AddErrorMessage(error_msg);
+hf_gpio_err_t GpioManager::RegisterGpio(std::string_view name, std::shared_ptr<BaseGpio> gpio) noexcept {
+    hf_gpio_err_t validation_result = ValidatePinName(name);
+    if (validation_result != hf_gpio_err_t::GPIO_SUCCESS) {
+        UpdateLastError(validation_result);
         UpdateStatistics(false);
-        return false;
+        return validation_result;
     }
     
     RtosMutex::LockGuard registry_lock(registry_mutex_);
     
     // Check for duplicate registration
     if (gpio_registry_.find(name) != gpio_registry_.end()) {
-        AddErrorMessage("Pin already registered");
+        UpdateLastError(hf_gpio_err_t::GPIO_ERR_PIN_ALREADY_REGISTERED);
         UpdateStatistics(false);
-        return false;
+        return hf_gpio_err_t::GPIO_ERR_PIN_ALREADY_REGISTERED;
     }
     
     // Register the GPIO
     gpio_registry_[name] = std::move(gpio);
     UpdateStatistics(true);
-    return true;
+    return hf_gpio_err_t::GPIO_SUCCESS;
 }
 
 std::shared_ptr<BaseGpio> GpioManager::Get(std::string_view name) noexcept {
@@ -243,30 +201,32 @@ void GpioManager::LogAllRegisteredGpios() const noexcept {
 // BASIC GPIO OPERATIONS (Complete BaseGpio Coverage)
 //==============================================================================
 
-bool GpioManager::Set(std::string_view name, bool value) noexcept {
+hf_gpio_err_t GpioManager::Set(std::string_view name, bool value) noexcept {
     auto gpio = Get(name);
     if (!gpio) {
+        UpdateLastError(hf_gpio_err_t::GPIO_ERR_PIN_NOT_FOUND);
         UpdateStatistics(false);
-        return false;
+        return hf_gpio_err_t::GPIO_ERR_PIN_NOT_FOUND;
     }
     
     hf_gpio_err_t result = value ? gpio->SetActive() : gpio->SetInactive();
-    bool success = (result == hf_gpio_err_t::GPIO_SUCCESS);
-    UpdateStatistics(success);
-    return success;
+    UpdateLastError(result);
+    UpdateStatistics(result == hf_gpio_err_t::GPIO_SUCCESS);
+    return result;
 }
 
-bool GpioManager::SetActive(std::string_view name) noexcept {
+hf_gpio_err_t GpioManager::SetActive(std::string_view name) noexcept {
     auto gpio = Get(name);
     if (!gpio) {
+        UpdateLastError(hf_gpio_err_t::GPIO_ERR_PIN_NOT_FOUND);
         UpdateStatistics(false);
-        return false;
+        return hf_gpio_err_t::GPIO_ERR_PIN_NOT_FOUND;
     }
     
     hf_gpio_err_t result = gpio->SetActive();
-    bool success = (result == hf_gpio_err_t::GPIO_SUCCESS);
-    UpdateStatistics(success);
-    return success;
+    UpdateLastError(result);
+    UpdateStatistics(result == hf_gpio_err_t::GPIO_SUCCESS);
+    return result;
 }
 
 bool GpioManager::SetInactive(std::string_view name) noexcept {
@@ -641,14 +601,14 @@ bool GpioManager::Initialize() noexcept {
     // Get CommChannelsManager instance
     auto& comm_manager = CommChannelsManager::GetInstance();
     if (!comm_manager.IsInitialized()) {
-        AddErrorMessage("CommChannelsManager not init");
+        UpdateLastError(hf_gpio_err_t::GPIO_ERR_NOT_INITIALIZED);
         return false;
     }
     
     // Get MotorController instance for TMC9660 handler access
     motor_controller_ = &MotorController::GetInstance();
     if (!motor_controller_->EnsureInitialized()) {
-        AddErrorMessage("MotorController not init");
+        UpdateLastError(hf_gpio_err_t::GPIO_ERR_NOT_INITIALIZED);
         // Don't fail initialization, just log warning
     }
     
@@ -684,17 +644,15 @@ bool GpioManager::Initialize() noexcept {
                 break;
                 
             default:
-                AddErrorMessage("Unknown chip type");
+                UpdateLastError(hf_gpio_err_t::GPIO_ERR_INVALID_PARAMETER);
                 continue;
         }
         
         if (gpio) {
             // Register the GPIO with its string name
-            if (!RegisterGpio(mapping.name, std::move(gpio))) {
-                AddErrorMessage("Failed to register GPIO");
-            }
+            RegisterGpio(mapping.name, std::move(gpio));
         } else {
-            AddErrorMessage("Failed to create GPIO");
+            UpdateLastError(hf_gpio_err_t::GPIO_ERR_HARDWARE_FAULT);
         }
     }
     
@@ -872,43 +830,20 @@ void GpioManager::UpdateStatistics(bool success) noexcept {
     }
 }
 
-void GpioManager::AddErrorMessage(std::string_view error_message) noexcept {
-    RtosMutex::LockGuard error_lock(error_mutex_);
-    
-    auto& entry = error_buffer_[error_write_index_];
-    
-    // Copy message with length limit (reserve 1 byte for null terminator)
-    constexpr size_t max_msg_len = sizeof(entry.message) - 1;
-    entry.length = static_cast<uint8_t>(std::min(error_message.length(), max_msg_len));
-    
-    std::memcpy(entry.message.data(), error_message.data(), entry.length);
-    entry.message[entry.length] = '\0';  // Null terminate
-    entry.timestamp = GetCurrentTimestamp();
-    
-    // Update circular buffer indices
-    error_write_index_ = (error_write_index_ + 1) % MAX_ERROR_MESSAGES;
-    if (error_count_ < MAX_ERROR_MESSAGES) {
-        ++error_count_;
-    }
+void GpioManager::UpdateLastError(hf_gpio_err_t error_code) noexcept {
+    last_error_.store(error_code, std::memory_order_release);
 }
 
-uint32_t GpioManager::GetCurrentTimestamp() const noexcept {
-    // In a real implementation, this would get system time
-    // For now, return a simple counter-based timestamp
-    static std::atomic<uint32_t> timestamp_counter{0};
-    return timestamp_counter.fetch_add(1, std::memory_order_relaxed);
-}
-
-GpioManager::PinNameValidationResult GpioManager::ValidatePinNameDetailed(std::string_view name) const noexcept {
+hf_gpio_err_t GpioManager::ValidatePinName(std::string_view name) noexcept {
     // Check for empty name
     if (name.empty()) {
-        return PinNameValidationResult::EMPTY;
+        return hf_gpio_err_t::GPIO_ERR_INVALID_PARAMETER;
     }
     
     // Check maximum length (conserve memory with reasonable limit)
     static constexpr size_t MAX_PIN_NAME_LENGTH = 32;
     if (name.length() > MAX_PIN_NAME_LENGTH) {
-        return PinNameValidationResult::TOO_LONG;
+        return hf_gpio_err_t::GPIO_ERR_OUT_OF_MEMORY;  // Name too long
     }
     
     // Check for reserved prefixes using compile-time array
@@ -919,44 +854,21 @@ GpioManager::PinNameValidationResult GpioManager::ValidatePinNameDetailed(std::s
     for (const auto& prefix : RESERVED_PREFIXES) {
         if (name.length() >= prefix.length() && 
             name.substr(0, prefix.length()) == prefix) {
-            return PinNameValidationResult::RESERVED_PREFIX;
+            return hf_gpio_err_t::GPIO_ERR_PERMISSION_DENIED;  // Reserved prefix
         }
     }
     
     // Check if name starts with a digit (invalid for most naming conventions)
     if (std::isdigit(static_cast<unsigned char>(name[0]))) {
-        return PinNameValidationResult::STARTS_WITH_DIGIT;
+        return hf_gpio_err_t::GPIO_ERR_INVALID_ARG;  // Invalid format
     }
     
     // Check for valid characters (alphanumeric, underscore, hyphen only)
     for (char c : name) {
         if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_' && c != '-') {
-            return PinNameValidationResult::INVALID_CHARS;
+            return hf_gpio_err_t::GPIO_ERR_INVALID_ARG;  // Invalid characters
         }
     }
     
-    return PinNameValidationResult::VALID;
-}
-
-bool GpioManager::ValidatePinName(std::string_view name) const noexcept {
-    return ValidatePinNameDetailed(name) == PinNameValidationResult::VALID;
-}
-
-constexpr const char* GpioManager::ValidationResultToString(PinNameValidationResult result) noexcept {
-    switch (result) {
-        case PinNameValidationResult::VALID:
-            return "Valid";
-        case PinNameValidationResult::EMPTY:
-            return "Empty";
-        case PinNameValidationResult::TOO_LONG:
-            return "Too long";
-        case PinNameValidationResult::RESERVED_PREFIX:
-            return "Reserved prefix";
-        case PinNameValidationResult::INVALID_CHARS:
-            return "Invalid chars";
-        case PinNameValidationResult::STARTS_WITH_DIGIT:
-            return "Starts with digit";
-        default:
-            return "Unknown";
-    }
+    return hf_gpio_err_t::GPIO_SUCCESS;
 } 
