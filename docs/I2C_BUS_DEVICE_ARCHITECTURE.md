@@ -234,10 +234,10 @@ Currently configured devices:
 - `tests/component-handler/I2cBusDeviceTest.cpp`
 
 ### Modified Files
-- `component-handers/CommChannelsManager.h`
-- `component-handers/CommChannelsManager.cpp`
+- `component-handlers/CommChannelsManager.h`
+- `component-handlers/CommChannelsManager.cpp`
 - `utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/mcu/esp32/utils/EspTypes_I2C.h`
-- `component-handers/CMakeLists.txt`
+- `component-handlers/CMakeLists.txt`
 
 ### Legacy Files (Deprecated)
 - `utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/mcu/esp32/EspI2c.h`

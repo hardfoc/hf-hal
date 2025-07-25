@@ -670,21 +670,21 @@ bool GpioManager::EnsurePcal95555Handler() noexcept {
     // Get CommChannelsManager instance
     auto& comm_manager = CommChannelsManager::GetInstance();
     if (!comm_manager.IsInitialized()) {
-        AddErrorMessage("CommMgr not init for PCAL");
+        UpdateLastError(hf_gpio_err_t::GPIO_ERR_NOT_INITIALIZED);
         return false;
     }
     
     // Get I2C interface for PCAL95555
     auto i2c_interface = comm_manager.GetI2cInterface(0); // Assuming PCAL95555 is on I2C0
     if (!i2c_interface) {
-        AddErrorMessage("I2C not available for PCAL");
+        UpdateLastError(hf_gpio_err_t::GPIO_ERR_HARDWARE_FAULT);
         return false;
     }
     
     // Create PCAL95555 handler
     pcal95555_handler_ = std::make_unique<Pcal95555Handler>(*i2c_interface);
     if (!pcal95555_handler_->Initialize()) {
-        AddErrorMessage("PCAL95555 handler init fail");
+        UpdateLastError(hf_gpio_err_t::GPIO_ERR_HARDWARE_FAULT);
         pcal95555_handler_.reset();
         return false;
     }
@@ -700,7 +700,7 @@ Tmc9660Handler* GpioManager::GetTmc9660Handler(uint8_t device_index) noexcept {
     
     // Ensure MotorController is initialized
     if (!motor_controller_->EnsureInitialized()) {
-        AddErrorMessage("MotorCtrl not init for TMC");
+        UpdateLastError(hf_gpio_err_t::GPIO_ERR_NOT_INITIALIZED);
         return nullptr;
     }
     
@@ -736,7 +736,7 @@ std::shared_ptr<BaseGpio> GpioManager::CreateEsp32GpioPin(hf_u8_t pin_id, bool i
     
     // Initialize the GPIO
             if (!gpio->Initialize()) {
-            AddErrorMessage("ESP32 GPIO init failed");
+            UpdateLastError(hf_gpio_err_t::GPIO_ERR_HARDWARE_FAULT);
             return nullptr;
         }
     
@@ -753,7 +753,7 @@ std::shared_ptr<BaseGpio> GpioManager::CreatePcal95555GpioPin(hf_u8_t pin_id, hf
     // Use PCAL95555 handler's factory method with unit number
     auto gpio = pcal95555_handler_->CreateGpioPin(pin_id, unit_number);
     if (!gpio) {
-        AddErrorMessage("PCAL95555 GPIO create failed");
+        UpdateLastError(hf_gpio_err_t::GPIO_ERR_HARDWARE_FAULT);
         return nullptr;
     }
     
@@ -786,14 +786,14 @@ std::shared_ptr<BaseGpio> GpioManager::CreateTmc9660GpioPin(hf_u8_t pin_id, hf_u
     // Get TMC9660 handler from MotorController using specified device index
     Tmc9660Handler* handler = GetTmc9660Handler(device_index);
     if (!handler) {
-        AddErrorMessage("TMC9660 handler not available");
+        UpdateLastError(hf_gpio_err_t::GPIO_ERR_HARDWARE_FAULT);
         return nullptr;
     }
     
     // Use TMC9660 handler's factory method
     auto gpio = handler->CreateGpioPin(pin_id);
     if (!gpio) {
-        AddErrorMessage("TMC9660 GPIO create failed");
+        UpdateLastError(hf_gpio_err_t::GPIO_ERR_HARDWARE_FAULT);
         return nullptr;
     }
     
