@@ -16,6 +16,9 @@ This document provides an index of all available documentation for the HardFOC s
 
 **[component-handler/GPIO_MANAGER_README.md](component-handler/GPIO_MANAGER_README.md)**
 - **Complete documentation** for the new GpioManager system
+
+**[component-handler/ADC_MANAGER_README.md](component-handler/ADC_MANAGER_README.md)**
+- **Complete documentation** for the new AdcManager system
 - **Multi-chip GPIO management** (ESP32, PCAL95555, TMC9660)
 - **Platform mapping integration** with functional pin identifiers
 - **Thread-safe operations** and advanced features
@@ -89,6 +92,7 @@ hf-hal/
 │   ├── CommonIDs.h            # System-wide enumerations and constants
 │   ├── SystemInit.h/cpp       # System initialization utilities
 │   ├── GPIO_MANAGER_README.md # Complete GPIO manager documentation
+│   ├── ADC_MANAGER_README.md  # Complete ADC manager documentation
 │   └── All.h                  # Master include file
 ├── API/                        # Public API interfaces
 │   ├── All.h                  # Public API master include
