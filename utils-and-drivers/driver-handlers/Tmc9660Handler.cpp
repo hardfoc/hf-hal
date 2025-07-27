@@ -1,5 +1,8 @@
 #include "Tmc9660Handler.h"
 #include <cstring>
+#include <algorithm>
+#include "utils-and-drivers/hf-core-utils/hf-utils-rtos-wrap/include/OsAbstraction.h"
+#include "utils-and-drivers/hf-core-utils/hf-utils-rtos-wrap/include/OsUtility.h"
 
 /**
  * @brief Default TMC9660 bootloader configuration based on TMC9660-3PH-EVAL board settings.
@@ -411,22 +414,50 @@ hf_adc_err_t Tmc9660Handler::Adc::ReadChannelV(hf_channel_id_t channel_id, float
 hf_adc_err_t Tmc9660Handler::Adc::ReadChannelCount(hf_channel_id_t channel_id, hf_u32_t& channel_reading_count,
                                                    hf_u8_t numOfSamplesToAvg,
                                                    hf_time_t timeBetweenSamples) noexcept {
-    if (channel_id > 3) {
-        return hf_adc_err_t::ADC_ERR_INVALID_CHANNEL;
+    RtosMutex::LockGuard lock(mutex_);
+    
+    const uint64_t start_time_us = GetCurrentTimeUs();
+    
+    // Validate channel ID
+    hf_adc_err_t validation_result = ValidateChannelId(channel_id);
+    if (validation_result != hf_adc_err_t::ADC_SUCCESS) {
+        UpdateDiagnostics(validation_result);
+        return validation_result;
     }
     
-    // Map channel ID to TMC9660 ADC parameter
-    // Assuming ADC_I0, ADC_I1, ADC_I2, ADC_I3 are consecutive enum values
-    uint32_t value = 0;
-    tmc9660::tmcl::Parameters param = static_cast<tmc9660::tmcl::Parameters>(
-        static_cast<uint16_t>(tmc9660::tmcl::Parameters::ADC_I0) + channel_id);
+    // Route to appropriate channel type handler based on channel ID
+    hf_adc_err_t result = hf_adc_err_t::ADC_ERR_INVALID_CHANNEL;
     
-    if (!parent_.tmc9660_ || !parent_.tmc9660_->readParameter(param, value)) {
-        return hf_adc_err_t::ADC_ERR_CHANNEL_READ_ERR;
+    if (channel_id <= 3) {
+        // AIN channels (0-3) - external analog inputs
+        float voltage;
+        result = ReadAinChannel(channel_id, channel_reading_count, voltage);
+    } else if (channel_id >= 10 && channel_id <= 13) {
+        // Current sense channels (10-13) - map to I0-I3
+        float voltage;
+        result = ReadCurrentSenseChannel(channel_id - 10, channel_reading_count, voltage);
+    } else if (channel_id >= 20 && channel_id <= 21) {
+        // Voltage monitoring channels (20-21)
+        float voltage;
+        result = ReadVoltageChannel(channel_id - 20, channel_reading_count, voltage);
+    } else if (channel_id >= 30 && channel_id <= 31) {
+        // Temperature channels (30-31)
+        float voltage;
+        result = ReadTemperatureChannel(channel_id - 30, channel_reading_count, voltage);
+    } else if (channel_id >= 40 && channel_id <= 42) {
+        // Motor data channels (40-42)
+        float voltage;
+        result = ReadMotorDataChannel(channel_id - 40, channel_reading_count, voltage);
     }
     
-    channel_reading_count = value;
-    return hf_adc_err_t::ADC_SUCCESS;
+    // Update statistics
+    UpdateStatistics(result, start_time_us);
+    
+    if (result != hf_adc_err_t::ADC_SUCCESS) {
+        UpdateDiagnostics(result);
+    }
+    
+    return result;
 }
 
 hf_adc_err_t Tmc9660Handler::Adc::ReadChannel(hf_channel_id_t channel_id, hf_u32_t& channel_reading_count,
@@ -441,4 +472,299 @@ hf_adc_err_t Tmc9660Handler::Adc::ReadChannel(hf_channel_id_t channel_id, hf_u32
     // Convert to voltage
     channel_reading_v = static_cast<float>(channel_reading_count) * 3.3f / 65535.0f;
     return hf_adc_err_t::ADC_SUCCESS;
+}
+
+hf_adc_err_t Tmc9660Handler::Adc::ReadMultipleChannels(const hf_channel_id_t* channel_ids, hf_u8_t num_channels,
+                                                       hf_u32_t* readings, float* voltages) noexcept {
+    RtosMutex::LockGuard lock(mutex_);
+    
+    if (!channel_ids || !readings || !voltages) {
+        UpdateDiagnostics(hf_adc_err_t::ADC_ERR_NULL_POINTER);
+        return hf_adc_err_t::ADC_ERR_NULL_POINTER;
+    }
+    
+    const uint64_t start_time_us = GetCurrentTimeUs();
+    
+    // Validate all channel IDs
+    for (hf_u8_t i = 0; i < num_channels; ++i) {
+        hf_adc_err_t validation_result = ValidateChannelId(channel_ids[i]);
+        if (validation_result != hf_adc_err_t::ADC_SUCCESS) {
+            UpdateDiagnostics(validation_result);
+            return validation_result;
+        }
+    }
+    
+    // Read each channel individually (TMC9660 doesn't support simultaneous reads)
+    for (hf_u8_t i = 0; i < num_channels; ++i) {
+        hf_adc_err_t result = ReadChannelCount(channel_ids[i], readings[i], 1, 0);
+        if (result != hf_adc_err_t::ADC_SUCCESS) {
+            UpdateDiagnostics(result);
+            return result;
+        }
+        
+        // Convert to voltage
+        result = RawToVoltage(readings[i], voltages[i]);
+        if (result != hf_adc_err_t::ADC_SUCCESS) {
+            UpdateDiagnostics(result);
+            return result;
+        }
+    }
+    
+    // Update statistics
+    UpdateStatistics(hf_adc_err_t::ADC_SUCCESS, start_time_us);
+    
+    return hf_adc_err_t::ADC_SUCCESS;
+}
+
+hf_adc_err_t Tmc9660Handler::Adc::GetStatistics(hf_adc_statistics_t& statistics) noexcept {
+    RtosMutex::LockGuard lock(mutex_);
+    statistics = statistics_;
+    return hf_adc_err_t::ADC_SUCCESS;
+}
+
+hf_adc_err_t Tmc9660Handler::Adc::GetDiagnostics(hf_adc_diagnostics_t& diagnostics) noexcept {
+    RtosMutex::LockGuard lock(mutex_);
+    diagnostics = diagnostics_;
+    return hf_adc_err_t::ADC_SUCCESS;
+}
+
+hf_adc_err_t Tmc9660Handler::Adc::ResetStatistics() noexcept {
+    RtosMutex::LockGuard lock(mutex_);
+    statistics_ = hf_adc_statistics_t{};
+    return hf_adc_err_t::ADC_SUCCESS;
+}
+
+hf_adc_err_t Tmc9660Handler::Adc::ResetDiagnostics() noexcept {
+    RtosMutex::LockGuard lock(mutex_);
+    diagnostics_ = hf_adc_diagnostics_t{};
+    last_error_.store(hf_adc_err_t::ADC_SUCCESS);
+    return hf_adc_err_t::ADC_SUCCESS;
+}
+
+// Private helper methods
+hf_adc_err_t Tmc9660Handler::Adc::ValidateChannelId(hf_channel_id_t channel_id) const noexcept {
+    // Validate channel ID ranges for different channel types
+    if (channel_id <= 3) {
+        // AIN channels (0-3) - external analog inputs
+        return hf_adc_err_t::ADC_SUCCESS;
+    } else if (channel_id >= 10 && channel_id <= 13) {
+        // Current sense channels (10-13) - I0-I3
+        return hf_adc_err_t::ADC_SUCCESS;
+    } else if (channel_id >= 20 && channel_id <= 21) {
+        // Voltage monitoring channels (20-21) - supply, driver
+        return hf_adc_err_t::ADC_SUCCESS;
+    } else if (channel_id >= 30 && channel_id <= 31) {
+        // Temperature channels (30-31) - chip, external
+        return hf_adc_err_t::ADC_SUCCESS;
+    } else if (channel_id >= 40 && channel_id <= 42) {
+        // Motor data channels (40-42) - current, velocity, position
+        return hf_adc_err_t::ADC_SUCCESS;
+    }
+    
+    return hf_adc_err_t::ADC_ERR_INVALID_CHANNEL;
+}
+
+hf_adc_err_t Tmc9660Handler::Adc::RawToVoltage(hf_u32_t raw_count, float& voltage) noexcept {
+    // Convert raw ADC value to voltage (TMC9660 uses 16-bit ADC)
+    voltage = static_cast<float>(raw_count) * 3.3f / 65535.0f;
+    return hf_adc_err_t::ADC_SUCCESS;
+}
+
+hf_adc_err_t Tmc9660Handler::Adc::UpdateStatistics(hf_adc_err_t result, uint64_t start_time_us) noexcept {
+    const uint64_t end_time_us = GetCurrentTimeUs();
+    const uint32_t conversion_time_us = static_cast<uint32_t>(end_time_us - start_time_us);
+    
+    statistics_.totalConversions++;
+    
+    if (result == hf_adc_err_t::ADC_SUCCESS) {
+        statistics_.successfulConversions++;
+        
+        // Update timing statistics
+        if (statistics_.totalConversions == 1) {
+            statistics_.minConversionTimeUs = conversion_time_us;
+            statistics_.maxConversionTimeUs = conversion_time_us;
+            statistics_.averageConversionTimeUs = conversion_time_us;
+        } else {
+            statistics_.minConversionTimeUs = std::min(statistics_.minConversionTimeUs, conversion_time_us);
+            statistics_.maxConversionTimeUs = std::max(statistics_.maxConversionTimeUs, conversion_time_us);
+            
+            // Update average (simple moving average)
+            const uint32_t total_time = statistics_.averageConversionTimeUs * (statistics_.successfulConversions - 1) + conversion_time_us;
+            statistics_.averageConversionTimeUs = total_time / statistics_.successfulConversions;
+        }
+    } else {
+        statistics_.failedConversions++;
+        UpdateDiagnostics(result);
+    }
+    
+    return result;
+}
+
+uint64_t Tmc9660Handler::Adc::GetCurrentTimeUs() const noexcept {
+    // Use OS abstraction time function
+    // os_time_get() returns ticks, convert to microseconds using proper tick rate
+    OS_Ulong ticks = os_time_get();
+    return static_cast<uint64_t>(ticks) * 1000000 / osTickRateHz; // Convert ticks to microseconds
+}
+
+void Tmc9660Handler::Adc::UpdateDiagnostics(hf_adc_err_t error) noexcept {
+    last_error_.store(error);
+    
+    if (error != hf_adc_err_t::ADC_SUCCESS) {
+        diagnostics_.consecutiveErrors++;
+        diagnostics_.lastErrorCode = error;
+        diagnostics_.lastErrorTimestamp = GetCurrentTimeUs();
+        
+        // Mark as unhealthy if too many consecutive errors
+        if (diagnostics_.consecutiveErrors > 10) {
+            diagnostics_.adcHealthy = false;
+        }
+    } else {
+        diagnostics_.consecutiveErrors = 0;
+        diagnostics_.adcHealthy = true;
+    }
+}
+
+//==============================================//
+// TMC9660-SPECIFIC CHANNEL READING METHODS
+//==============================================//
+
+hf_adc_err_t Tmc9660Handler::Adc::ReadAinChannel(uint8_t ain_channel, hf_u32_t& raw_value, float& voltage) noexcept {
+    if (!parent_.tmc9660_) {
+        return hf_adc_err_t::ADC_ERR_CHANNEL_READ_ERR;
+    }
+    
+    // Use TMC9660 GPIO readAnalog for AIN channels
+    uint16_t analog_value = 0;
+    if (!parent_.tmc9660_->gpio.readAnalog(ain_channel, analog_value)) {
+        return hf_adc_err_t::ADC_ERR_CHANNEL_READ_ERR;
+    }
+    
+    raw_value = static_cast<hf_u32_t>(analog_value);
+    voltage = static_cast<float>(analog_value) * 3.3f / 65535.0f; // 16-bit ADC
+    
+    return hf_adc_err_t::ADC_SUCCESS;
+}
+
+hf_adc_err_t Tmc9660Handler::Adc::ReadCurrentSenseChannel(uint8_t current_channel, hf_u32_t& raw_value, float& voltage) noexcept {
+    if (!parent_.tmc9660_) {
+        return hf_adc_err_t::ADC_ERR_CHANNEL_READ_ERR;
+    }
+    
+    // Map current channel to TMC9660 ADC parameter
+    tmc9660::tmcl::Parameters param;
+    switch (current_channel) {
+        case 0: param = tmc9660::tmcl::Parameters::ADC_I0; break;
+        case 1: param = tmc9660::tmcl::Parameters::ADC_I1; break;
+        case 2: param = tmc9660::tmcl::Parameters::ADC_I2; break;
+        case 3: param = tmc9660::tmcl::Parameters::ADC_I3; break;
+        default: return hf_adc_err_t::ADC_ERR_INVALID_CHANNEL;
+    }
+    
+    uint32_t value = 0;
+    if (!parent_.tmc9660_->readParameter(param, value)) {
+        return hf_adc_err_t::ADC_ERR_CHANNEL_READ_ERR;
+    }
+    
+    raw_value = static_cast<hf_u32_t>(value);
+    voltage = static_cast<float>(value) * 3.3f / 65535.0f; // 16-bit ADC
+    
+    return hf_adc_err_t::ADC_SUCCESS;
+}
+
+hf_adc_err_t Tmc9660Handler::Adc::ReadVoltageChannel(uint8_t voltage_channel, hf_u32_t& raw_value, float& voltage) noexcept {
+    if (!parent_.tmc9660_) {
+        return hf_adc_err_t::ADC_ERR_CHANNEL_READ_ERR;
+    }
+    
+    switch (voltage_channel) {
+        case 0: // Supply voltage
+            voltage = parent_.tmc9660_->telemetry.getSupplyVoltage();
+            raw_value = static_cast<hf_u32_t>(voltage * 1000.0f); // Convert to millivolts
+            break;
+        case 1: // Driver voltage (not directly available, use supply voltage as approximation)
+            voltage = parent_.tmc9660_->telemetry.getSupplyVoltage();
+            raw_value = static_cast<hf_u32_t>(voltage * 1000.0f);
+            break;
+        default:
+            return hf_adc_err_t::ADC_ERR_INVALID_CHANNEL;
+    }
+    
+    return hf_adc_err_t::ADC_SUCCESS;
+}
+
+hf_adc_err_t Tmc9660Handler::Adc::ReadTemperatureChannel(uint8_t temp_channel, hf_u32_t& raw_value, float& voltage) noexcept {
+    if (!parent_.tmc9660_) {
+        return hf_adc_err_t::ADC_ERR_CHANNEL_READ_ERR;
+    }
+    
+    switch (temp_channel) {
+        case 0: // Chip temperature
+            {
+                float temp_c = parent_.tmc9660_->telemetry.getChipTemperature();
+                raw_value = static_cast<hf_u32_t>(temp_c * 100.0f); // Convert to centidegrees
+                voltage = temp_c; // Store temperature as voltage for compatibility
+            }
+            break;
+        case 1: // External temperature
+            {
+                uint16_t ext_temp_raw = parent_.tmc9660_->telemetry.getExternalTemperature();
+                raw_value = static_cast<hf_u32_t>(ext_temp_raw);
+                voltage = static_cast<float>(ext_temp_raw) * 3.3f / 65535.0f; // Convert to voltage
+            }
+            break;
+        default:
+            return hf_adc_err_t::ADC_ERR_INVALID_CHANNEL;
+    }
+    
+    return hf_adc_err_t::ADC_SUCCESS;
+}
+
+hf_adc_err_t Tmc9660Handler::Adc::ReadMotorDataChannel(uint8_t motor_channel, hf_u32_t& raw_value, float& voltage) noexcept {
+    if (!parent_.tmc9660_) {
+        return hf_adc_err_t::ADC_ERR_CHANNEL_READ_ERR;
+    }
+    
+    switch (motor_channel) {
+        case 0: // Motor current
+            {
+                int16_t current_ma = parent_.tmc9660_->telemetry.getMotorCurrent();
+                raw_value = static_cast<hf_u32_t>(current_ma);
+                voltage = static_cast<float>(current_ma) / 1000.0f; // Convert to amps
+            }
+            break;
+        case 1: // Motor velocity
+            {
+                int32_t velocity = parent_.tmc9660_->telemetry.getActualVelocity();
+                raw_value = static_cast<hf_u32_t>(velocity);
+                voltage = static_cast<float>(velocity); // Store as voltage for compatibility
+            }
+            break;
+        case 2: // Motor position
+            {
+                int32_t position = parent_.tmc9660_->telemetry.getActualPosition();
+                raw_value = static_cast<hf_u32_t>(position);
+                voltage = static_cast<float>(position); // Store as voltage for compatibility
+            }
+            break;
+        default:
+            return hf_adc_err_t::ADC_ERR_INVALID_CHANNEL;
+    }
+    
+    return hf_adc_err_t::ADC_SUCCESS;
+}
+
+const char* Tmc9660Handler::Adc::GetChannelTypeString(hf_channel_id_t channel_id) const noexcept {
+    if (channel_id <= 3) {
+        return "AIN";
+    } else if (channel_id >= 10 && channel_id <= 13) {
+        return "Current";
+    } else if (channel_id >= 20 && channel_id <= 21) {
+        return "Voltage";
+    } else if (channel_id >= 30 && channel_id <= 31) {
+        return "Temperature";
+    } else if (channel_id >= 40 && channel_id <= 42) {
+        return "Motor";
+    }
+    return "Unknown";
 } 

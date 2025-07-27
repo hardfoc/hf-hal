@@ -13,6 +13,10 @@ set(COMPONENT_SOURCES
     CommonIDs.h
     ThingsToString.h
     
+    # Logger system
+    Logger.cpp
+    Logger.h
+    
     # GPIO management system
     GpioManager.cpp
     GpioManager.h
@@ -22,6 +26,8 @@ set(COMPONENT_SOURCES
     # ADC management system
     AdcManager.cpp
     AdcManager.h
+    Tmc9660AdcWrapper.cpp
+    Tmc9660AdcWrapper.h
     
     # TMC9660 motor controller system
     Tmc9660Handler.cpp

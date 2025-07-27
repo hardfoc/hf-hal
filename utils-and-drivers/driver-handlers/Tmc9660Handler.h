@@ -193,8 +193,15 @@ public:
     };
 
     /**
-     * @brief ADC wrapper for TMC9660 internal ADC channels.
-     *        Implements BaseAdc interface.
+     * @brief Enhanced ADC wrapper for TMC9660 ADC channels.
+     *        Implements BaseAdc interface and supports all TMC9660 ADC channel types.
+     * 
+     * @details This class provides access to:
+     * - AIN channels (0-3) for external analog inputs
+     * - Current sensing channels (I0-I3) 
+     * - Voltage monitoring channels (supply, driver)
+     * - Temperature channels (chip, external)
+     * - Motor control data channels (current, velocity, position)
      */
     class Adc : public BaseAdc {
     public:
@@ -213,8 +220,81 @@ public:
         hf_adc_err_t ReadChannel(hf_channel_id_t channel_id, hf_u32_t& channel_reading_count,
                                float& channel_reading_v, hf_u8_t numOfSamplesToAvg = 1,
                                hf_time_t timeBetweenSamples = 0) noexcept override;
+        hf_adc_err_t ReadMultipleChannels(const hf_channel_id_t* channel_ids, hf_u8_t num_channels,
+                                         hf_u32_t* readings, float* voltages) noexcept override;
+        hf_adc_err_t GetStatistics(hf_adc_statistics_t& statistics) noexcept override;
+        hf_adc_err_t GetDiagnostics(hf_adc_diagnostics_t& diagnostics) noexcept override;
+        hf_adc_err_t ResetStatistics() noexcept override;
+        hf_adc_err_t ResetDiagnostics() noexcept override;
+
+        //==============================================//
+        // TMC9660-SPECIFIC CHANNEL READING METHODS
+        //==============================================//
+
+        /**
+         * @brief Read AIN channel value (external analog input).
+         * @param ain_channel AIN channel number (0-3)
+         * @param raw_value Reference to store raw value
+         * @param voltage Reference to store voltage
+         * @return Error code
+         */
+        hf_adc_err_t ReadAinChannel(uint8_t ain_channel, hf_u32_t& raw_value, float& voltage) noexcept;
+
+        /**
+         * @brief Read current sense channel value.
+         * @param current_channel Current channel number (0-3)
+         * @param raw_value Reference to store raw value
+         * @param voltage Reference to store voltage
+         * @return Error code
+         */
+        hf_adc_err_t ReadCurrentSenseChannel(uint8_t current_channel, hf_u32_t& raw_value, float& voltage) noexcept;
+
+        /**
+         * @brief Read voltage monitoring channel value.
+         * @param voltage_channel Voltage channel number (0=supply, 1=driver)
+         * @param raw_value Reference to store raw value
+         * @param voltage Reference to store voltage
+         * @return Error code
+         */
+        hf_adc_err_t ReadVoltageChannel(uint8_t voltage_channel, hf_u32_t& raw_value, float& voltage) noexcept;
+
+        /**
+         * @brief Read temperature channel value.
+         * @param temp_channel Temperature channel number (0=chip, 1=external)
+         * @param raw_value Reference to store raw value
+         * @param voltage Reference to store voltage
+         * @return Error code
+         */
+        hf_adc_err_t ReadTemperatureChannel(uint8_t temp_channel, hf_u32_t& raw_value, float& voltage) noexcept;
+
+        /**
+         * @brief Read motor data channel value.
+         * @param motor_channel Motor channel number (0=current, 1=velocity, 2=position)
+         * @param raw_value Reference to store raw value
+         * @param voltage Reference to store voltage
+         * @return Error code
+         */
+        hf_adc_err_t ReadMotorDataChannel(uint8_t motor_channel, hf_u32_t& raw_value, float& voltage) noexcept;
+
     private:
         Tmc9660Handler& parent_;
+        mutable RtosMutex mutex_;
+        mutable hf_adc_statistics_t statistics_;
+        mutable hf_adc_diagnostics_t diagnostics_;
+        std::atomic<hf_adc_err_t> last_error_;
+        
+        hf_adc_err_t ValidateChannelId(hf_channel_id_t channel_id) const noexcept;
+        hf_adc_err_t RawToVoltage(hf_u32_t raw_count, float& voltage) noexcept;
+        hf_adc_err_t UpdateStatistics(hf_adc_err_t result, uint64_t start_time_us) noexcept;
+        uint64_t GetCurrentTimeUs() const noexcept;
+        void UpdateDiagnostics(hf_adc_err_t error) noexcept;
+
+        /**
+         * @brief Determine channel type from channel ID.
+         * @param channel_id Channel ID to analyze
+         * @return Channel type string for logging
+         */
+        const char* GetChannelTypeString(hf_channel_id_t channel_id) const noexcept;
     };
 
     /**
