@@ -10,7 +10,7 @@
  * @copyright HardFOC
  */
 
-#include "component-handlers/Logger.h"
+#include "utils-and-drivers/driver-handlers/Logger.h"
 #include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/utils/AsciiArtGenerator.h"
 
 #include <cstdio>

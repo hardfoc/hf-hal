@@ -13,21 +13,15 @@ set(COMPONENT_SOURCES
     CommonIDs.h
     ThingsToString.h
     
-    # Logger system
-    Logger.cpp
-    Logger.h
+    # Logger system (moved to driver-handlers)
     
     # GPIO management system
     GpioManager.cpp
     GpioManager.h
-    Pcal95555GpioWrapper.cpp
-    Pcal95555GpioWrapper.h
     
     # ADC management system
     AdcManager.cpp
     AdcManager.h
-    Tmc9660AdcWrapper.cpp
-    Tmc9660AdcWrapper.h
     
     # TMC9660 motor controller system
     Tmc9660Handler.cpp

@@ -36,7 +36,9 @@
 #include "AdcManager.h"
 #include "MotorController.h"
 #include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/utils/RtosMutex.h"
-#include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/utils/ConsolePort.h"
+
+// Logger for unified logging
+#include "utils-and-drivers/driver-handlers/Logger.h"
 
 #include <algorithm>
 #include "utils-and-drivers/hf-core-utils/hf-utils-rtos-wrap/include/OsAbstraction.h"
@@ -247,17 +249,17 @@ size_t AdcManager::Size() const noexcept {
 
 void AdcManager::LogAllRegisteredChannels() const noexcept {
     if (!is_initialized_.load()) {
-        ConsolePort::Printf("AdcManager: System not initialized\n");
+                 Logger::GetInstance().Info("AdcManager", "System not initialized");
         return;
     }
     
     std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
     
-    ConsolePort::Printf("AdcManager: Registered Channels (%zu total):\n", adc_registry_.size());
+    Logger::GetInstance().Info("AdcManager", "Registered Channels (%zu total):", adc_registry_.size());
     
     for (const auto& [name, channel_info] : adc_registry_) {
         if (channel_info && channel_info->is_registered) {
-            ConsolePort::Printf("  - %.*s (Chip: %d, Channel: %d, Access: %u, Errors: %u)\n",
+            Logger::GetInstance().Info("AdcManager", "  - %.*s (Chip: %d, Channel: %d, Access: %u, Errors: %u)",
                                static_cast<int>(name.length()), name.data(),
                                static_cast<int>(channel_info->hardware_chip),
                                channel_info->hardware_channel_id,
@@ -731,7 +733,7 @@ hf_adc_err_t AdcManager::Initialize() noexcept {
     // Mark as initialized
     is_initialized_.store(true);
     
-    ConsolePort::Printf("AdcManager: Initialized with %zu channels\n", Size());
+    Logger::GetInstance().Info("AdcManager", "Initialized with %zu channels", Size());
     
     return hf_adc_err_t::ADC_SUCCESS;
 }
@@ -843,7 +845,7 @@ hf_adc_err_t AdcManager::ValidateChannelName(std::string_view name) noexcept {
 }
 
 hf_adc_err_t AdcManager::RegisterPlatformChannels() noexcept {
-    ConsolePort::Printf("AdcManager: Registering platform channels...\n");
+    Logger::GetInstance().Info("AdcManager", "Registering platform channels...");
     
     hf_adc_err_t overall_result = hf_adc_err_t::ADC_SUCCESS;
     uint32_t registered_count = 0;
@@ -856,7 +858,7 @@ hf_adc_err_t AdcManager::RegisterPlatformChannels() noexcept {
         
         // Skip ESP32 internal ADC channels for now (as per user requirements)
         if (mapping.chip_type == static_cast<uint8_t>(HfAdcChipType::ESP32_INTERNAL)) {
-            ConsolePort::Printf("AdcManager: Skipping ESP32 internal channel %.*s (not currently used)\n", 
+            Logger::GetInstance().Info("AdcManager", "Skipping ESP32 internal channel %.*s (not currently used)", 
                                static_cast<int>(channel_name.length()), channel_name.data());
             continue;
         }
@@ -868,17 +870,17 @@ hf_adc_err_t AdcManager::RegisterPlatformChannels() noexcept {
             if (tmc9660_wrapper) {
                 hf_adc_err_t result = RegisterChannel(channel_name, std::move(tmc9660_wrapper));
                 if (result == hf_adc_err_t::ADC_SUCCESS) {
-                    ConsolePort::Printf("AdcManager: Registered TMC9660 channel %.*s\n", 
+                    Logger::GetInstance().Info("AdcManager", "Registered TMC9660 channel %.*s", 
                                        static_cast<int>(channel_name.length()), channel_name.data());
                     registered_count++;
                 } else {
-                    ConsolePort::Printf("AdcManager: Failed to register TMC9660 channel %.*s (error: %d)\n", 
+                    Logger::GetInstance().Info("AdcManager", "Failed to register TMC9660 channel %.*s (error: %d)", 
                                        static_cast<int>(channel_name.length()), channel_name.data(), static_cast<int>(result));
                     failed_count++;
                     overall_result = result; // Keep track of first error
                 }
             } else {
-                ConsolePort::Printf("AdcManager: Failed to create TMC9660 wrapper for channel %.*s\n", 
+                Logger::GetInstance().Info("AdcManager", "Failed to create TMC9660 wrapper for channel %.*s", 
                                    static_cast<int>(channel_name.length()), channel_name.data());
                 failed_count++;
                 overall_result = hf_adc_err_t::ADC_ERR_HARDWARE_FAULT;
@@ -886,7 +888,7 @@ hf_adc_err_t AdcManager::RegisterPlatformChannels() noexcept {
         }
     }
     
-    ConsolePort::Printf("AdcManager: Platform registration complete - %d registered, %d failed\n", 
+    Logger::GetInstance().Info("AdcManager", "Platform registration complete - %d registered, %d failed", 
                        registered_count, failed_count);
     
     return overall_result;

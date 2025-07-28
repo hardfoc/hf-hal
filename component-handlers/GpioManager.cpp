@@ -674,15 +674,15 @@ bool GpioManager::EnsurePcal95555Handler() noexcept {
         return false;
     }
     
-    // Get I2C interface for PCAL95555
-    auto i2c_interface = comm_manager.GetI2cInterface(0); // Assuming PCAL95555 is on I2C0
-    if (!i2c_interface) {
+    // Get I2C device for PCAL95555
+    auto i2c_device = comm_manager.GetI2cDevice(I2cDeviceId::PCAL9555_GPIO_EXPANDER);
+    if (!i2c_device) {
         UpdateLastError(hf_gpio_err_t::GPIO_ERR_HARDWARE_FAULT);
         return false;
     }
     
     // Create PCAL95555 handler
-    pcal95555_handler_ = std::make_unique<Pcal95555Handler>(*i2c_interface);
+    pcal95555_handler_ = std::make_unique<Pcal95555Handler>(*i2c_device);
     if (!pcal95555_handler_->Initialize()) {
         UpdateLastError(hf_gpio_err_t::GPIO_ERR_HARDWARE_FAULT);
         pcal95555_handler_.reset();

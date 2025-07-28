@@ -22,6 +22,11 @@
 #include <algorithm>
 #include "utils/RtosTask.h"
 
+// Include SH2 error codes for proper error handling
+extern "C" {
+#include "sh2_err.h"
+}
+
 //======================================================//
 // BNO08X I2C ADAPTER IMPLEMENTATION
 //======================================================//
@@ -299,52 +304,50 @@ Bno08xError Bno08xHandler::Initialize() noexcept {
         return last_error_;
     }
     
-    try {
-        // Open transport interface
-        if (!transport_adapter_->open()) {
-            last_error_ = Bno08xError::COMMUNICATION_FAILED;
-            return last_error_;
-        }
-        
-        // Create BNO08x sensor instance with transport
-        bno08x_sensor_ = std::make_shared<BNO085>(*transport_adapter_);
-        
-        if (!bno08x_sensor_) {
-            last_error_ = Bno08xError::INITIALIZATION_FAILED;
-            return last_error_;
-        }
-        
-        // Perform hardware reset if GPIO available
-        if (reset_gpio_) {
-            HardwareReset(10);
-            RtosTask::Delay(100); // Wait for reset to complete
-        }
-        
-        // Initialize sensor
-        if (!bno08x_sensor_->initialize()) {
-            last_error_ = Bno08xError::SENSOR_NOT_RESPONDING;
-            return last_error_;
-        }
-        
-        // Apply initial configuration
-        if (!ApplyConfiguration(config_)) {
-            last_error_ = Bno08xError::INITIALIZATION_FAILED;
-            return last_error_;
-        }
-        
-        // Set internal callback for sensor events
-        bno08x_sensor_->setCallback([this](const SensorEvent& event) {
-            this->HandleSensorEvent(event);
-        });
-        
-        initialized_ = true;
-        last_error_ = Bno08xError::SUCCESS;
-        
-    } catch (...) {
+    // Open transport interface
+    if (!transport_adapter_->open()) {
+        last_error_ = Bno08xError::COMMUNICATION_FAILED;
+        return last_error_;
+    }
+    
+    // Create BNO08x sensor instance with transport
+    bno08x_sensor_ = std::make_shared<BNO085>(*transport_adapter_);
+    
+    if (!bno08x_sensor_) {
+        transport_adapter_->close();
         last_error_ = Bno08xError::INITIALIZATION_FAILED;
+        return last_error_;
+    }
+    
+    // Perform hardware reset if GPIO available
+    if (reset_gpio_) {
+        HardwareReset(10);
+        RtosTask::Delay(100); // Wait for reset to complete
+    }
+    
+    // Initialize sensor (driver returns true on success, false on failure)
+    if (!bno08x_sensor_->begin()) {
         bno08x_sensor_.reset();
         transport_adapter_->close();
+        last_error_ = Bno08xError::SENSOR_NOT_RESPONDING;
+        return last_error_;
     }
+    
+    // Apply initial configuration
+    if (!ApplyConfiguration(config_)) {
+        bno08x_sensor_.reset();
+        transport_adapter_->close();
+        last_error_ = Bno08xError::INITIALIZATION_FAILED;
+        return last_error_;
+    }
+    
+    // Set internal callback for sensor events
+    bno08x_sensor_->setCallback([this](const SensorEvent& event) {
+        this->HandleSensorEvent(event);
+    });
+    
+    initialized_ = true;
+    last_error_ = Bno08xError::SUCCESS;
     
     return last_error_;
 }
@@ -361,26 +364,21 @@ Bno08xError Bno08xHandler::Deinitialize() noexcept {
         return last_error_;
     }
     
-    try {
-        // Clear callback
-        if (bno08x_sensor_) {
-            bno08x_sensor_->setCallback(nullptr);
-        }
-        
-        // Reset sensor instance
-        bno08x_sensor_.reset();
-        
-        // Close transport
-        if (transport_adapter_) {
-            transport_adapter_->close();
-        }
-        
-        initialized_ = false;
-        last_error_ = Bno08xError::SUCCESS;
-        
-    } catch (...) {
-        last_error_ = Bno08xError::HARDWARE_ERROR;
+    // Clear callback
+    if (bno08x_sensor_) {
+        bno08x_sensor_->setCallback(nullptr);
     }
+    
+    // Reset sensor instance
+    bno08x_sensor_.reset();
+    
+    // Close transport
+    if (transport_adapter_) {
+        transport_adapter_->close();
+    }
+    
+    initialized_ = false;
+    last_error_ = Bno08xError::SUCCESS;
     
     return last_error_;
 }
@@ -415,16 +413,26 @@ Bno08xError Bno08xHandler::Update() noexcept {
         return last_error_;
     }
     
-    try {
-        // Process any available sensor data
-        bno08x_sensor_->process();
-        last_error_ = Bno08xError::SUCCESS;
-        
-    } catch (...) {
+    // Process any available sensor data (driver handles errors internally)
+    bno08x_sensor_->update();
+    
+    // Check for driver errors after update
+    int driver_error = bno08x_sensor_->getLastError();
+    if (driver_error != SH2_OK) {
         last_error_ = Bno08xError::COMMUNICATION_FAILED;
+    } else {
+        last_error_ = Bno08xError::SUCCESS;
     }
     
     return last_error_;
+}
+
+bool Bno08xHandler::HasNewData(BNO085Sensor sensor) const noexcept {
+    if (!initialized_ || !ValidateSensor()) {
+        return false;
+    }
+    
+    return bno08x_sensor_->hasNewData(sensor);
 }
 
 Bno08xError Bno08xHandler::ReadImuData(Bno08xImuData& imu_data) noexcept {
@@ -437,38 +445,32 @@ Bno08xError Bno08xHandler::ReadImuData(Bno08xImuData& imu_data) noexcept {
         return Bno08xError::NOT_INITIALIZED;
     }
     
-    try {
-        // Read acceleration
-        ReadAcceleration(imu_data.acceleration);
-        
-        // Read gyroscope
-        ReadGyroscope(imu_data.gyroscope);
-        
-        // Read magnetometer
-        ReadMagnetometer(imu_data.magnetometer);
-        
-        // Read linear acceleration
-        ReadLinearAcceleration(imu_data.linear_acceleration);
-        
-        // Read gravity
-        ReadGravity(imu_data.gravity);
-        
-        // Read rotation quaternion
-        ReadQuaternion(imu_data.rotation);
-        
-        // Convert to Euler angles
-        QuaternionToEuler(imu_data.rotation, imu_data.euler);
-        
-        // Set overall timestamp
-        imu_data.timestamp_us = getTimeUs();
-        imu_data.valid = true;
-        
-        return Bno08xError::SUCCESS;
-        
-    } catch (...) {
-        imu_data.valid = false;
-        return Bno08xError::COMMUNICATION_FAILED;
-    }
+    // Read acceleration
+    ReadAcceleration(imu_data.acceleration);
+    
+    // Read gyroscope
+    ReadGyroscope(imu_data.gyroscope);
+    
+    // Read magnetometer
+    ReadMagnetometer(imu_data.magnetometer);
+    
+    // Read linear acceleration
+    ReadLinearAcceleration(imu_data.linear_acceleration);
+    
+    // Read gravity
+    ReadGravity(imu_data.gravity);
+    
+    // Read rotation quaternion
+    ReadQuaternion(imu_data.rotation);
+    
+    // Convert to Euler angles
+    QuaternionToEuler(imu_data.rotation, imu_data.euler);
+    
+    // Set overall timestamp
+    imu_data.timestamp_us = this->getTimeUs();
+    imu_data.valid = true;
+    
+    return Bno08xError::SUCCESS;
 }
 
 Bno08xError Bno08xHandler::ReadAcceleration(Bno08xVector3& acceleration) noexcept {
@@ -476,21 +478,22 @@ Bno08xError Bno08xHandler::ReadAcceleration(Bno08xVector3& acceleration) noexcep
         return Bno08xError::NOT_INITIALIZED;
     }
     
-    try {
-        Vector3 accel = bno08x_sensor_->getAcceleration();
-        acceleration.x = accel.x;
-        acceleration.y = accel.y;
-        acceleration.z = accel.z;
-        acceleration.accuracy = bno08x_sensor_->getAccelerationAccuracy();
-        acceleration.timestamp_us = getTimeUs();
-        acceleration.valid = true;
-        
-        return Bno08xError::SUCCESS;
-        
-    } catch (...) {
+    // Check if new data is available before reading
+    if (!bno08x_sensor_->hasNewData(BNO085Sensor::Accelerometer)) {
         acceleration.valid = false;
         return Bno08xError::DATA_NOT_AVAILABLE;
     }
+    
+    // The driver uses getLatest() to retrieve sensor data
+    SensorEvent event = bno08x_sensor_->getLatest(BNO085Sensor::Accelerometer);
+    acceleration.x = event.vector.x;
+    acceleration.y = event.vector.y;
+    acceleration.z = event.vector.z;
+    acceleration.accuracy = event.vector.accuracy;
+    acceleration.timestamp_us = event.timestamp;
+    acceleration.valid = true;  // Data is valid if we got here
+    
+    return Bno08xError::SUCCESS;
 }
 
 Bno08xError Bno08xHandler::ReadGyroscope(Bno08xVector3& gyroscope) noexcept {
@@ -498,21 +501,22 @@ Bno08xError Bno08xHandler::ReadGyroscope(Bno08xVector3& gyroscope) noexcept {
         return Bno08xError::NOT_INITIALIZED;
     }
     
-    try {
-        Vector3 gyro = bno08x_sensor_->getGyroscope();
-        gyroscope.x = gyro.x;
-        gyroscope.y = gyro.y;
-        gyroscope.z = gyro.z;
-        gyroscope.accuracy = bno08x_sensor_->getGyroscopeAccuracy();
-        gyroscope.timestamp_us = getTimeUs();
-        gyroscope.valid = true;
-        
-        return Bno08xError::SUCCESS;
-        
-    } catch (...) {
+    // Check if new data is available before reading
+    if (!bno08x_sensor_->hasNewData(BNO085Sensor::Gyroscope)) {
         gyroscope.valid = false;
         return Bno08xError::DATA_NOT_AVAILABLE;
     }
+    
+    // The driver uses getLatest() to retrieve sensor data
+    SensorEvent event = bno08x_sensor_->getLatest(BNO085Sensor::Gyroscope);
+    gyroscope.x = event.vector.x;
+    gyroscope.y = event.vector.y;
+    gyroscope.z = event.vector.z;
+    gyroscope.accuracy = event.vector.accuracy;
+    gyroscope.timestamp_us = event.timestamp;
+    gyroscope.valid = true;  // Data is valid if we got here
+    
+    return Bno08xError::SUCCESS;
 }
 
 Bno08xError Bno08xHandler::ReadMagnetometer(Bno08xVector3& magnetometer) noexcept {
@@ -520,21 +524,22 @@ Bno08xError Bno08xHandler::ReadMagnetometer(Bno08xVector3& magnetometer) noexcep
         return Bno08xError::NOT_INITIALIZED;
     }
     
-    try {
-        Vector3 mag = bno08x_sensor_->getMagnetometer();
-        magnetometer.x = mag.x;
-        magnetometer.y = mag.y;
-        magnetometer.z = mag.z;
-        magnetometer.accuracy = bno08x_sensor_->getMagnetometerAccuracy();
-        magnetometer.timestamp_us = getTimeUs();
-        magnetometer.valid = true;
-        
-        return Bno08xError::SUCCESS;
-        
-    } catch (...) {
+    // Check if new data is available before reading
+    if (!bno08x_sensor_->hasNewData(BNO085Sensor::Magnetometer)) {
         magnetometer.valid = false;
         return Bno08xError::DATA_NOT_AVAILABLE;
     }
+    
+    // The driver uses getLatest() to retrieve sensor data
+    SensorEvent event = bno08x_sensor_->getLatest(BNO085Sensor::Magnetometer);
+    magnetometer.x = event.vector.x;
+    magnetometer.y = event.vector.y;
+    magnetometer.z = event.vector.z;
+    magnetometer.accuracy = event.vector.accuracy;
+    magnetometer.timestamp_us = event.timestamp;
+    magnetometer.valid = true;  // Data is valid if we got here
+    
+    return Bno08xError::SUCCESS;
 }
 
 Bno08xError Bno08xHandler::ReadQuaternion(Bno08xQuaternion& quaternion) noexcept {
@@ -542,22 +547,23 @@ Bno08xError Bno08xHandler::ReadQuaternion(Bno08xQuaternion& quaternion) noexcept
         return Bno08xError::NOT_INITIALIZED;
     }
     
-    try {
-        Quaternion quat = bno08x_sensor_->getQuaternion();
-        quaternion.w = quat.w;
-        quaternion.x = quat.x;
-        quaternion.y = quat.y;
-        quaternion.z = quat.z;
-        quaternion.accuracy = bno08x_sensor_->getQuaternionAccuracy();
-        quaternion.timestamp_us = getTimeUs();
-        quaternion.valid = true;
-        
-        return Bno08xError::SUCCESS;
-        
-    } catch (...) {
+    // Check if new data is available before reading
+    if (!bno08x_sensor_->hasNewData(BNO085Sensor::RotationVector)) {
         quaternion.valid = false;
         return Bno08xError::DATA_NOT_AVAILABLE;
     }
+    
+    // The driver uses getLatest() to retrieve sensor data
+    SensorEvent event = bno08x_sensor_->getLatest(BNO085Sensor::RotationVector);
+    quaternion.w = event.rotation.w;
+    quaternion.x = event.rotation.x;
+    quaternion.y = event.rotation.y;
+    quaternion.z = event.rotation.z;
+    quaternion.accuracy = event.rotation.accuracy;
+    quaternion.timestamp_us = event.timestamp;
+    quaternion.valid = true;  // Data is valid if we got here
+    
+    return Bno08xError::SUCCESS;
 }
 
 Bno08xError Bno08xHandler::ReadEulerAngles(Bno08xEulerAngles& euler_angles) noexcept {
@@ -578,21 +584,22 @@ Bno08xError Bno08xHandler::ReadLinearAcceleration(Bno08xVector3& linear_accel) n
         return Bno08xError::NOT_INITIALIZED;
     }
     
-    try {
-        Vector3 lin_accel = bno08x_sensor_->getLinearAcceleration();
-        linear_accel.x = lin_accel.x;
-        linear_accel.y = lin_accel.y;
-        linear_accel.z = lin_accel.z;
-        linear_accel.accuracy = bno08x_sensor_->getLinearAccelerationAccuracy();
-        linear_accel.timestamp_us = getTimeUs();
-        linear_accel.valid = true;
-        
-        return Bno08xError::SUCCESS;
-        
-    } catch (...) {
+    // Check if new data is available before reading
+    if (!bno08x_sensor_->hasNewData(BNO085Sensor::LinearAcceleration)) {
         linear_accel.valid = false;
         return Bno08xError::DATA_NOT_AVAILABLE;
     }
+    
+    // The driver uses getLatest() to retrieve sensor data
+    SensorEvent event = bno08x_sensor_->getLatest(BNO085Sensor::LinearAcceleration);
+    linear_accel.x = event.vector.x;
+    linear_accel.y = event.vector.y;
+    linear_accel.z = event.vector.z;
+    linear_accel.accuracy = event.vector.accuracy;
+    linear_accel.timestamp_us = event.timestamp;
+    linear_accel.valid = true;  // Data is valid if we got here
+    
+    return Bno08xError::SUCCESS;
 }
 
 Bno08xError Bno08xHandler::ReadGravity(Bno08xVector3& gravity) noexcept {
@@ -600,21 +607,22 @@ Bno08xError Bno08xHandler::ReadGravity(Bno08xVector3& gravity) noexcept {
         return Bno08xError::NOT_INITIALIZED;
     }
     
-    try {
-        Vector3 grav = bno08x_sensor_->getGravity();
-        gravity.x = grav.x;
-        gravity.y = grav.y;
-        gravity.z = grav.z;
-        gravity.accuracy = bno08x_sensor_->getGravityAccuracy();
-        gravity.timestamp_us = getTimeUs();
-        gravity.valid = true;
-        
-        return Bno08xError::SUCCESS;
-        
-    } catch (...) {
+    // Check if new data is available before reading
+    if (!bno08x_sensor_->hasNewData(BNO085Sensor::Gravity)) {
         gravity.valid = false;
         return Bno08xError::DATA_NOT_AVAILABLE;
     }
+    
+    // The driver uses getLatest() to retrieve sensor data
+    SensorEvent event = bno08x_sensor_->getLatest(BNO085Sensor::Gravity);
+    gravity.x = event.vector.x;
+    gravity.y = event.vector.y;
+    gravity.z = event.vector.z;
+    gravity.accuracy = event.vector.accuracy;
+    gravity.timestamp_us = event.timestamp;
+    gravity.valid = true;  // Data is valid if we got here
+    
+    return Bno08xError::SUCCESS;
 }
 
 Bno08xError Bno08xHandler::EnableSensor(BNO085Sensor sensor, uint32_t interval_ms, float sensitivity) noexcept {
@@ -627,15 +635,19 @@ Bno08xError Bno08xHandler::EnableSensor(BNO085Sensor sensor, uint32_t interval_m
         return Bno08xError::NOT_INITIALIZED;
     }
     
-    try {
-        if (bno08x_sensor_->enableReport(sensor, interval_ms, sensitivity)) {
-            return Bno08xError::SUCCESS;
-        } else {
+    // The driver returns true on success, false on failure
+    if (bno08x_sensor_->enableSensor(sensor, interval_ms, sensitivity)) {
+        return Bno08xError::SUCCESS;
+    } else {
+        // Check driver's last error for more specific error information
+        int driver_error = bno08x_sensor_->getLastError();
+        if (driver_error == SH2_ERR_BAD_PARAM) {
             return Bno08xError::INVALID_PARAMETER;
+        } else if (driver_error == SH2_ERR_HUB) {
+            return Bno08xError::SENSOR_NOT_RESPONDING;
+        } else {
+            return Bno08xError::COMMUNICATION_FAILED;
         }
-        
-    } catch (...) {
-        return Bno08xError::COMMUNICATION_FAILED;
     }
 }
 
@@ -649,15 +661,19 @@ Bno08xError Bno08xHandler::DisableSensor(BNO085Sensor sensor) noexcept {
         return Bno08xError::NOT_INITIALIZED;
     }
     
-    try {
-        if (bno08x_sensor_->disableReport(sensor)) {
-            return Bno08xError::SUCCESS;
-        } else {
+    // The driver returns true on success, false on failure
+    if (bno08x_sensor_->disableSensor(sensor)) {
+        return Bno08xError::SUCCESS;
+    } else {
+        // Check driver's last error for more specific error information
+        int driver_error = bno08x_sensor_->getLastError();
+        if (driver_error == SH2_ERR_BAD_PARAM) {
             return Bno08xError::INVALID_PARAMETER;
+        } else if (driver_error == SH2_ERR_HUB) {
+            return Bno08xError::SENSOR_NOT_RESPONDING;
+        } else {
+            return Bno08xError::COMMUNICATION_FAILED;
         }
-        
-    } catch (...) {
-        return Bno08xError::COMMUNICATION_FAILED;
     }
 }
 
@@ -666,20 +682,15 @@ Bno08xError Bno08xHandler::HardwareReset(uint32_t reset_duration_ms) noexcept {
         return Bno08xError::HARDWARE_ERROR;
     }
     
-    try {
-        // Hold reset low
-        reset_gpio_->SetValue(BaseGpio::Value::LOW);
-        RtosTask::Delay(reset_duration_ms);
-        
-        // Release reset
-        reset_gpio_->SetValue(BaseGpio::Value::HIGH);
-        RtosTask::Delay(100); // Allow time for reset to complete
-        
-        return Bno08xError::SUCCESS;
-        
-    } catch (...) {
-        return Bno08xError::HARDWARE_ERROR;
-    }
+    // Hold reset low
+    reset_gpio_->SetValue(BaseGpio::Value::LOW);
+    RtosTask::Delay(reset_duration_ms);
+    
+    // Release reset
+    reset_gpio_->SetValue(BaseGpio::Value::HIGH);
+    RtosTask::Delay(100); // Allow time for reset to complete
+    
+    return Bno08xError::SUCCESS;
 }
 
 void Bno08xHandler::SetSensorCallback(SensorCallback callback) noexcept {
@@ -793,64 +804,54 @@ bool Bno08xHandler::ValidateSensor() const noexcept {
 bool Bno08xHandler::ApplyConfiguration(const Bno08xConfig& config) noexcept {
     if (!ValidateSensor()) return false;
     
-    try {
-        // Enable sensors based on configuration
-        if (config.enable_accelerometer) {
-            EnableSensor(BNO085Sensor::ACCELEROMETER, config.accelerometer_interval_ms);
-        }
-        
-        if (config.enable_gyroscope) {
-            EnableSensor(BNO085Sensor::GYROSCOPE_CALIBRATED, config.gyroscope_interval_ms);
-        }
-        
-        if (config.enable_magnetometer) {
-            EnableSensor(BNO085Sensor::MAGNETIC_FIELD_CALIBRATED, config.magnetometer_interval_ms);
-        }
-        
-        if (config.enable_rotation_vector) {
-            EnableSensor(BNO085Sensor::ROTATION_VECTOR, config.rotation_interval_ms);
-        }
-        
-        if (config.enable_linear_acceleration) {
-            EnableSensor(BNO085Sensor::LINEAR_ACCELERATION, config.linear_accel_interval_ms);
-        }
-        
-        if (config.enable_gravity) {
-            EnableSensor(BNO085Sensor::GRAVITY, config.gravity_interval_ms);
-        }
-        
-        // Enable activity detection
-        if (config.enable_tap_detector) {
-            EnableSensor(BNO085Sensor::TAP_DETECTOR, 0);
-        }
-        
-        if (config.enable_step_counter) {
-            EnableSensor(BNO085Sensor::STEP_COUNTER, 0);
-        }
-        
-        if (config.enable_shake_detector) {
-            EnableSensor(BNO085Sensor::SHAKE_DETECTOR, 0);
-        }
-        
-        return true;
-        
-    } catch (...) {
-        return false;
+    // Enable sensors based on configuration
+    if (config.enable_accelerometer) {
+        EnableSensor(BNO085Sensor::Accelerometer, config.accelerometer_interval_ms);
     }
+    
+    if (config.enable_gyroscope) {
+        EnableSensor(BNO085Sensor::Gyroscope, config.gyroscope_interval_ms);
+    }
+    
+    if (config.enable_magnetometer) {
+        EnableSensor(BNO085Sensor::Magnetometer, config.magnetometer_interval_ms);
+    }
+    
+    if (config.enable_rotation_vector) {
+        EnableSensor(BNO085Sensor::RotationVector, config.rotation_interval_ms);
+    }
+    
+    if (config.enable_linear_acceleration) {
+        EnableSensor(BNO085Sensor::LinearAcceleration, config.linear_accel_interval_ms);
+    }
+    
+    if (config.enable_gravity) {
+        EnableSensor(BNO085Sensor::Gravity, config.gravity_interval_ms);
+    }
+    
+    // Enable activity detection
+    if (config.enable_tap_detector) {
+        EnableSensor(BNO085Sensor::TapDetector, 0);
+    }
+    
+    if (config.enable_step_counter) {
+        EnableSensor(BNO085Sensor::StepCounter, 0);
+    }
+    
+    if (config.enable_shake_detector) {
+        EnableSensor(BNO085Sensor::ShakeDetector, 0);
+    }
+    
+    return true;
 }
 
 void Bno08xHandler::HandleSensorEvent(const SensorEvent& event) noexcept {
-    try {
-        // Forward to user callback if set
-        if (sensor_callback_) {
-            sensor_callback_(event);
-        }
-        
-        // Internal event processing can be added here
-        
-    } catch (...) {
-        // Ignore callback exceptions
+    // Forward to user callback if set
+    if (sensor_callback_) {
+        sensor_callback_(event);
     }
+    
+    // Internal event processing can be added here
 }
 
 uint32_t Bno08xHandler::getTimeUs() const noexcept {

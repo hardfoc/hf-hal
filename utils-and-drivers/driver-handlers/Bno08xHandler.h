@@ -401,12 +401,18 @@ public:
      * @return Shared pointer to BNO085 driver or nullptr if not initialized
      */
     std::shared_ptr<BNO085> GetSensor() noexcept;
-
     /**
      * @brief Update sensor - must be called regularly for proper operation
      * @return Bno08xError::SUCCESS if successful
      */
     Bno08xError Update() noexcept;
+
+    /**
+     * @brief Check if new data is available for a specific sensor
+     * @param sensor Sensor to check
+     * @return True if new data is available
+     */
+    bool HasNewData(BNO085Sensor sensor) const noexcept;
 
     //======================================================//
     // SENSOR DATA READING

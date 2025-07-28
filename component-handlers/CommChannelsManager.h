@@ -4,6 +4,8 @@
 #include <memory>
 #include <vector>
 #include <cstdint>
+#include <atomic> // Added for std::atomic
+#include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/base/RtosMutex.h" // Added for RtosMutex
 
 // Forward declarations for ESP32 comm interface classes
 class EspSpiBus;
@@ -54,8 +56,6 @@ enum class SpiDeviceId : uint8_t {
 enum class I2cDeviceId : uint8_t {
     BNO08X_IMU = 0,              ///< BNO08x IMU sensor (address 0x4A or 0x4B)
     PCAL9555_GPIO_EXPANDER = 1,  ///< PCAL9555 GPIO expander (address 0x20-0x27)
-    EXTERNAL_DEVICE_1 = 2,       ///< External I2C device 1
-    EXTERNAL_DEVICE_2 = 3,       ///< External I2C device 2
     
     // Aliases for common usage
     IMU = BNO08X_IMU,
@@ -108,110 +108,32 @@ public:
     }
 
     //==================== SPI Accessors ====================//
-    /**
-     * @brief Get reference to the SPI bus.
-     * @return Reference to the SPI bus
-     */
-    EspSpiBus& GetSpiBus() noexcept;
     
     /**
-     * @brief Get reference to a SPI device by index.
-     * @param device_index Index of the device on the bus
+     * @brief Get reference to a SPI device by bus index and device index.
+     * @param bus_index Bus index where device is located
+     * @param device_index Index of the device on that bus
      * @return Pointer to BaseSpi device, or nullptr if invalid
      */
-    BaseSpi* GetSpiDevice(int device_index) noexcept;
-
+    BaseSpi* GetSpiDevice(uint8_t bus_index, int device_index) noexcept;
+    
     /**
      * @brief Get reference to a SPI device by device ID (enumeration-based access).
      * @param device_id Device identifier from SpiDeviceId enum
      * @return Pointer to BaseSpi device, or nullptr if invalid
      */
     BaseSpi* GetSpiDevice(SpiDeviceId device_id) noexcept;
-    
-    /**
-     * @brief Get ESP-specific SPI device by index.
-     * @param device_index Index of the device on the bus
-     * @return Pointer to EspSpiDevice, or nullptr if invalid
-     */
-    EspSpiDevice* GetEspSpiDevice(int device_index) noexcept;
-
-    /**
-     * @brief Get ESP-specific SPI device by device ID (enumeration-based access).
-     * @param device_id Device identifier from SpiDeviceId enum
-     * @return Pointer to EspSpiDevice, or nullptr if invalid
-     */
-    EspSpiDevice* GetEspSpiDevice(SpiDeviceId device_id) noexcept;
-
-    /**
-     * @brief Get number of SPI devices on the bus.
-     * @return Number of SPI devices
-     */
-    std::size_t GetSpiDeviceCount() const noexcept;
-
-    //==================== Convenience SPI Device Accessors ====================//
-    
-    /**
-     * @brief Get the TMC9660 motor controller device.
-     * @return Pointer to BaseSpi device for TMC9660, or nullptr if not available
-     */
-    BaseSpi* GetMotorController() noexcept {
-        return GetSpiDevice(SpiDeviceId::TMC9660_MOTOR_CONTROLLER);
-    }
-    
-    /**
-     * @brief Get the AS5047U position encoder device.
-     * @return Pointer to BaseSpi device for AS5047U, or nullptr if not available
-     */
-    BaseSpi* GetPositionEncoder() noexcept {
-        return GetSpiDevice(SpiDeviceId::AS5047U_POSITION_ENCODER);
-    }
-    
-    /**
-     * @brief Get external SPI device 1.
-     * @return Pointer to BaseSpi device for external device 1, or nullptr if not available
-     */
-    BaseSpi* GetExternalDevice1() noexcept {
-        return GetSpiDevice(SpiDeviceId::EXTERNAL_DEVICE_1);
-    }
-    
-    /**
-     * @brief Get external SPI device 2.
-     * @return Pointer to BaseSpi device for external device 2, or nullptr if not available
-     */
-    BaseSpi* GetExternalDevice2() noexcept {
-        return GetSpiDevice(SpiDeviceId::EXTERNAL_DEVICE_2);
-    }
-
-    /**
-     * @brief Get the TMC9660 motor controller device (ESP-specific interface).
-     * @return Pointer to EspSpiDevice for TMC9660, or nullptr if not available
-     */
-    EspSpiDevice* GetEspMotorController() noexcept {
-        return GetEspSpiDevice(SpiDeviceId::TMC9660_MOTOR_CONTROLLER);
-    }
-    
-    /**
-     * @brief Get the AS5047U position encoder device (ESP-specific interface).
-     * @return Pointer to EspSpiDevice for AS5047U, or nullptr if not available
-     */
-    EspSpiDevice* GetEspPositionEncoder() noexcept {
-        return GetEspSpiDevice(SpiDeviceId::AS5047U_POSITION_ENCODER);
-    }
 
     //==================== I2C Accessors ====================//
-    /**
-     * @brief Get reference to the I2C bus.
-     * @return Reference to the I2C bus
-     */
-    EspI2cBus& GetI2cBus() noexcept;
     
     /**
-     * @brief Get reference to an I2C device by index.
-     * @param device_index Index of the device on the bus
+     * @brief Get reference to an I2C device by bus index and device index.
+     * @param bus_index Bus index where device is located
+     * @param device_index Index of the device on that bus
      * @return Pointer to BaseI2c device, or nullptr if invalid
      */
-    BaseI2c* GetI2cDevice(int device_index) noexcept;
-
+    BaseI2c* GetI2cDevice(uint8_t bus_index, int device_index) noexcept;
+    
     /**
      * @brief Get reference to an I2C device by device ID (enumeration-based access).
      * @param device_id Device identifier from I2cDeviceId enum
@@ -219,142 +141,205 @@ public:
      */
     BaseI2c* GetI2cDevice(I2cDeviceId device_id) noexcept;
     
-    /**
-     * @brief Get ESP-specific I2C device by index.
-     * @param device_index Index of the device on the bus
-     * @return Pointer to EspI2cDevice, or nullptr if invalid
-     */
-    EspI2cDevice* GetEspI2cDevice(int device_index) noexcept;
-
-    /**
-     * @brief Get ESP-specific I2C device by device ID (enumeration-based access).
-     * @param device_id Device identifier from I2cDeviceId enum
-     * @return Pointer to EspI2cDevice, or nullptr if invalid
-     */
-    EspI2cDevice* GetEspI2cDevice(I2cDeviceId device_id) noexcept;
-
-    /**
-     * @brief Get number of I2C devices on the bus.
-     * @return Number of I2C devices
-     */
-    std::size_t GetI2cDeviceCount() const noexcept;
-
-    //==================== Convenience I2C Device Accessors ====================//
+    //==================== RUNTIME I2C DEVICE MANAGEMENT ====================//
     
     /**
-     * @brief Get the BNO08x IMU device.
-     * @return Pointer to BaseI2c device for BNO08x, or nullptr if not available
+     * @brief Create an I2C device on the primary bus (Bus 0).
+     * @param device_address 7-bit I2C device address
+     * @param speed_hz I2C bus speed in Hz (default: 400kHz)
+     * @return Device index if successful, -1 if failed
+     * @note Device will be created on Bus 0 (primary ESP32 I2C bus)
      */
-    BaseI2c* GetImu() noexcept {
-        return GetI2cDevice(I2cDeviceId::BNO08X_IMU);
-    }
+    int CreateI2cDevice(uint8_t device_address, uint32_t speed_hz = 400000) noexcept;
     
     /**
-     * @brief Get the PCAL9555 GPIO expander device.
-     * @return Pointer to BaseI2c device for PCAL9555, or nullptr if not available
+     * @brief Create an I2C device on a specific bus.
+     * @param bus_index Bus index where to create the device (0-255)
+     * @param device_address 7-bit I2C device address
+     * @param speed_hz I2C bus speed in Hz (default: 400kHz)
+     * @return Device index if successful, -1 if failed
+     * @note The manager takes ownership of the created device
      */
-    BaseI2c* GetGpioExpander() noexcept {
-        return GetI2cDevice(I2cDeviceId::PCAL9555_GPIO_EXPANDER);
-    }
-
-    /**
-     * @brief Get the BNO08x IMU device (ESP-specific interface).
-     * @return Pointer to EspI2cDevice for BNO08x, or nullptr if not available
-     */
-    EspI2cDevice* GetEspImu() noexcept {
-        return GetEspI2cDevice(I2cDeviceId::BNO08X_IMU);
-    }
+    int CreateI2cDevice(uint8_t bus_index, uint8_t device_address, uint32_t speed_hz = 400000) noexcept;
     
     /**
-     * @brief Get the PCAL9555 GPIO expander device (ESP-specific interface).
-     * @return Pointer to EspI2cDevice for PCAL9555, or nullptr if not available
+     * @brief Register a custom BaseI2c device with the manager on a specific bus.
+     * @param bus_index Bus index where to register the device (0-255)
+     * @param custom_device Shared pointer to custom BaseI2c implementation
+     * @param device_address I2C address for tracking (optional, 0xFF for unknown)
+     * @return Device index if successful, -1 if failed
+     * @note The manager takes ownership of the device
      */
-    EspI2cDevice* GetEspGpioExpander() noexcept {
-        return GetEspI2cDevice(I2cDeviceId::PCAL9555_GPIO_EXPANDER);
-    }
-
-    //==================== Legacy I2C Accessors (Deprecated) ====================//
-
+    int RegisterCustomI2cDevice(uint8_t bus_index, std::shared_ptr<BaseI2c> custom_device, uint8_t device_address = 0xFF) noexcept;
+    
     /**
-     * @brief Get reference to an I2C bus by index.
+     * @brief Register a custom BaseI2c device with the manager using direct interface.
+     * @param custom_device Shared pointer to custom BaseI2c implementation
+     * @param device_address I2C address for tracking (optional, 0xFF for unknown)
+     * @param bus_index Bus index for association (optional, 0xFF for auto-assign)
+     * @return Device index if successful, -1 if failed
+     * @note This is the most flexible method - allows any external I2C interface
+     * @note The manager takes ownership of the device
+     * @note If bus_index is 0xFF, device will be assigned to next available bus
      */
-    BaseI2c& GetI2c(std::size_t which = 0) noexcept;
-    std::size_t GetI2cCount() const noexcept;
+    int RegisterCustomI2cDevice(std::shared_ptr<BaseI2c> custom_device, uint8_t device_address = 0xFF, uint8_t bus_index = 0xFF) noexcept;
+    
+    /**
+     * @brief Check if an I2C device exists at the specified address on a specific bus.
+     * @param bus_index Bus index to check
+     * @param device_address 7-bit I2C device address to check
+     * @return true if device exists on the specified bus, false otherwise
+     */
+    bool HasI2cDeviceAtAddress(uint8_t bus_index, uint8_t device_address) const noexcept;
+    
+    //==================== RUNTIME SPI DEVICE MANAGEMENT ====================//
+    
+    /**
+     * @brief Register a custom BaseSpi device with the manager using direct interface.
+     * @param custom_device Shared pointer to custom BaseSpi implementation
+     * @param device_index Optional device index for tracking (-1 for auto-assign)
+     * @param bus_index Bus index for association (optional, 0xFF for auto-assign)
+     * @return Device index if successful, -1 if failed
+     * @note This is the most flexible method - allows any external SPI interface
+     * @note The manager takes ownership of the device
+     * @note If bus_index is 0xFF, device will be assigned to next available bus
+     */
+    int RegisterCustomSpiDevice(std::shared_ptr<BaseSpi> custom_device, int device_index = -1, uint8_t bus_index = 0xFF) noexcept;
 
+    //==================== UART Accessors ====================//
+    
     /**
      * @brief Get reference to a UART bus by index.
+     * @param bus_index Index of the UART bus
+     * @param bus Reference to store the UART bus if successful
+     * @return true if bus is available and reference is valid, false otherwise
      */
-    BaseUart& GetUart(std::size_t which = 0) noexcept;
-    std::size_t GetUartCount() const noexcept;
+    bool GetUart(std::size_t bus_index, BaseUart*& bus) noexcept;
     
     /**
-     * @brief Get reference to TMC9660 UART communication interface.
-     * @return Reference to the UART configured for TMC9660 TMCL protocol
-     * @note This is a convenience method that returns GetUart(0) with proper documentation
+     * @brief Get count of available UART buses.
+     * @return Number of UART buses
      */
-    BaseUart& GetTmc9660Uart() noexcept { return GetUart(0); }
+    std::size_t GetUartCount() const noexcept;
 
-    /**
-     * @brief Get TMC9660 SPI device for easy TMC9660Handler creation.
-     * @return Pointer to BaseSpi for TMC9660, or nullptr if not available
-     * @note Convenience method for TMC9660Handler construction
-     */
-    BaseSpi* GetTmc9660Spi() noexcept {
-        return GetSpiDevice(SpiDeviceId::TMC9660_SPI);
-    }
-
-    /**
-     * @brief Get AS5047U SPI device for easy As5047uHandler creation.
-     * @return Pointer to BaseSpi for AS5047U position encoder, or nullptr if not available
-     * @note Convenience method for As5047uHandler construction
-     */
-    BaseSpi* GetAs5047uSpi() noexcept {
-        return GetSpiDevice(SpiDeviceId::AS5047U_POSITION_ENCODER);
-    }
-
-    /**
-     * @brief Get BNO08x I2C device for easy Bno08xHandler creation.
-     * @return Pointer to BaseI2c for BNO08x IMU, or nullptr if not available
-     * @note Convenience method for Bno08xHandler I2C construction
-     */
-    BaseI2c* GetBno08xI2c() noexcept {
-        return GetI2cDevice(I2cDeviceId::BNO08X_IMU);
-    }
-
-    /**
-     * @brief Get BNO08x SPI device for easy Bno08xHandler creation.
-     * @return Pointer to BaseSpi for BNO08x IMU via SPI, or nullptr if not available  
-     * @note Convenience method for Bno08xHandler SPI construction
-     * @note Uses external device slot - configure appropriately for your board
-     */
-    BaseSpi* GetBno08xSpi() noexcept {
-        return GetSpiDevice(SpiDeviceId::EXTERNAL_DEVICE_1); // Configurable based on board design
-    }
-
+    //==================== CAN Accessors ====================//
+    
     /**
      * @brief Get reference to a CAN bus by index.
+     * @param bus_index Index of the CAN bus
+     * @param bus Reference to store the CAN bus if successful
+     * @return true if bus is available and reference is valid, false otherwise
      */
-    BaseCan& GetCan(std::size_t which = 0) noexcept;
+    bool GetCan(std::size_t bus_index, BaseCan*& bus) noexcept;
+    
+    /**
+     * @brief Get count of available CAN buses.
+     * @return Number of CAN buses
+     */
     std::size_t GetCanCount() const noexcept;
+
+    //==================== BUS MANAGEMENT ====================//
+    
+    /**
+     * @brief Get total number of buses (built-in + external).
+     * @return Total bus count
+     */
+    uint8_t GetBusCount() const noexcept;
+    
+    /**
+     * @brief Check if a bus index is available.
+     * @param bus_index Bus index to check
+     * @return true if bus is available, false otherwise
+     */
+    bool IsBusAvailable(uint8_t bus_index) const noexcept;
+    
+    /**
+     * @brief Get number of devices on a specific bus.
+     * @param bus_index Bus index
+     * @return Number of devices on the bus
+     */
+    uint8_t GetDeviceCountOnBus(uint8_t bus_index) const noexcept;
+    
+    /**
+     * @brief Get MCU-specific I2C bus reference (ESP32 buses only).
+     * @param bus_index Bus index (0-2 for built-in ESP32 buses)
+     * @param bus Reference to store the ESP32 I2C bus if successful
+     * @return true if bus is available and reference is valid, false otherwise
+     * @note Use only for advanced ESP32-specific operations
+     */
+    bool GetMcuI2cBus(uint8_t bus_index, EspI2cBus*& bus) noexcept;
+    
+    /**
+     * @brief Get MCU-specific SPI bus reference (ESP32 buses only).
+     * @param bus_index Bus index (0-2 for built-in ESP32 buses)
+     * @param bus Reference to store the ESP32 SPI bus if successful
+     * @return true if bus is available and reference is valid, false otherwise
+     * @note Use only for advanced ESP32-specific operations
+     */
+    bool GetMcuSpiBus(uint8_t bus_index, EspSpiBus*& bus) noexcept;
 
 private:
     CommChannelsManager();
-    ~CommChannelsManager();
+    ~CommChannelsManager() = default;
+    CommChannelsManager(const CommChannelsManager&) = delete;
+    CommChannelsManager& operator=(const CommChannelsManager&) = delete;
 
+    //==================== PRIVATE METHODS ====================//
+    
     /**
      * @brief Initialize all comm channels.
      * @return true if successful, false otherwise
      */
     bool Initialize() noexcept;
-
+    
     /**
      * @brief Deinitialize all comm channels.
      * @return true if successful, false otherwise
      */
     bool Deinitialize() noexcept;
+    
+    /**
+     * @brief Register built-in devices with proper bus associations.
+     */
+    void RegisterBuiltinDevices() noexcept;
+    
+    /**
+     * @brief Get next available device index for a given bus.
+     * @param bus_index Bus index
+     * @return Next available device index, or -1 if no slots available
+     */
+    int GetNextAvailableDeviceIndex(uint8_t bus_index) const noexcept;
+
+    //==================== BUS MANAGEMENT ====================//
+    
+    // Built-in ESP32 buses (currently 1 each, but extensible)
+    std::unique_ptr<EspSpiBus> spi_bus_;      // ESP32 SPI bus (Bus Index 0)
+    std::unique_ptr<EspI2cBus> i2c_bus_;      // ESP32 I2C bus (Bus Index 0)
+    
+    // External buses (user-managed, we only track device associations)
+    std::set<uint8_t> external_spi_buses_;    // Track external SPI bus indices (10+)
+    std::set<uint8_t> external_i2c_buses_;    // Track external I2C bus indices (10+)
+    
+    //==================== DEVICE TRACKING ====================//
+    
+    // Built-in device indices (all on Bus 0)
+    std::vector<int> spi_device_indices_;     // Built-in SPI device indices (Bus 0)
+    std::vector<int> i2c_device_indices_;     // Built-in I2C device indices (Bus 0)
+    
+    // External device tracking (user-registered BaseI2c/BaseSpi)
+    std::map<int, std::shared_ptr<BaseSpi>> custom_spi_devices_;    // device_index -> BaseSpi
+    std::map<int, std::shared_ptr<BaseI2c>> custom_i2c_devices_;    // device_index -> BaseI2c
+    
+    // Device-to-bus mapping (for all devices)
+    std::map<int, uint8_t> spi_device_to_bus_mapping_;    // device_index -> bus_index
+    std::map<int, uint8_t> i2c_device_to_bus_mapping_;    // device_index -> bus_index
+    
+    // I2C-specific tracking
+    std::vector<uint8_t> i2c_device_addresses_;    // Built-in I2C device addresses
 
     // Initialization state
-    bool initialized_ = false;
+    std::atomic<bool> initialized_{false};
+    mutable RtosMutex mutex_;
 
     // Static configuration for SPI CS pins
     static constexpr HfFunctionalGpioPin kSpiCsPins[] = {
@@ -365,14 +350,7 @@ private:
     };
     static constexpr std::size_t kSpiCsPinCount = sizeof(kSpiCsPins) / sizeof(kSpiCsPins[0]);
 
-    // Internal storage for comm buses
-    std::unique_ptr<EspSpiBus> spi_bus_;
-    std::vector<int> spi_device_indices_; ///< Track device indices for easy access
-
-    std::unique_ptr<EspI2cBus> i2c_bus_;
-    std::vector<int> i2c_device_indices_; ///< Track device indices for easy access
-
-    // Internal vectors for managing multiple buses (legacy support)
+    // Internal vectors for managing multiple buses
     std::vector<std::unique_ptr<EspUart>> uart_buses_;
     std::vector<std::unique_ptr<EspCan>> can_buses_;
 };

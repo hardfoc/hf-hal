@@ -3,6 +3,7 @@
 #include <memory>
 #include <vector>
 #include <functional>
+#include <array>
 #include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/utils/RtosMutex.h"
 
 // Forward declarations
@@ -13,49 +14,64 @@ class BaseGpio;
 
 /**
  * @class ImuManager
- * @brief Singleton for managing IMUs on the board using Bno08xHandler abstraction.
+ * @brief Singleton for managing multiple IMU devices with indexed access and flexible device management.
  *
- * This manager provides access to BNO08x IMU devices through the Bno08xHandler
- * which offers a unified, exception-free interface with proper RTOS synchronization.
- * It handles initialization of I2C transport through CommChannelsManager and 
- * provides type-safe access to IMU devices on the board.
+ * This manager provides a global singleton for managing IMU devices, following the same pattern as MotorController:
+ * - Always creates and manages the onboard BNO08x IMU device (device index 0)
+ * - Allows dynamic creation/deletion of external IMU devices (indices 1-3)
+ * - Array-based access to IMU handler instances by device index
+ * - Thread-safe device registration and access
+ * - Board-aware device management with predefined I2C/SPI assignments
+ * - Currently supports BNO08x IMU family (extensible for other IMU types)
  *
  * **Key Features:**
- * - Bno08xHandler-based abstraction (consistent with MotorController/Tmc9660Handler pattern)
- * - Automatic I2C transport setup using CommChannelsManager
+ * - Multiple IMU device support with indexed access
+ * - Lazy initialization of onboard BNO08x device
+ * - Dynamic external device creation/deletion
  * - Thread-safe singleton pattern with RtosMutex
  * - Exception-free operation with pointer-based returns
  * - Proper device initialization and lifecycle management
- * - ESP-IDF v5.5+ I2C integration
+ * - ESP-IDF v5.5+ I2C/SPI integration
  *
- * **BNO08x Callback Operation:**
- * - **Polling Mode**: Call handler->update() regularly (50-100Hz) to trigger callbacks
- * - **Interrupt Mode**: Connect INT pin to GPIO, call update() when interrupt occurs
- * - **Callback Context**: SensorCallback executes in the task that calls update()
- * - **No INT Pin Required**: Polling mode works perfectly without interrupt connection
+ * **Device Indexing:**
+ * - Index 0: Onboard BNO08x IMU (always available, auto-created)
+ * - Index 1: External IMU device 1 (optional, user-created)
+ * - Index 2: External IMU device 2 (optional, user-created)
+ * - Index 3: External IMU device 3 (optional, user-created)
  *
  * **Usage Example:**
  * @code
  * auto& imu_mgr = ImuManager::GetInstance();
- * if (imu_mgr.Initialize()) {
- *     Bno08xHandler* handler = imu_mgr.GetBno08xHandler();
- *     if (handler) {
- *         // Configure sensors through handler
- *         if (handler->EnableSensor(Bno08xSensorType::ROTATION_VECTOR, 50)) {
- *             // In your main loop or task:
- *             while (true) {
- *                 handler->Update();  // This triggers callbacks when new data arrives
- *                 vTaskDelay(pdMS_TO_TICKS(10)); // 100Hz polling rate
- *             }
+ * if (imu_mgr.EnsureInitialized()) {
+ *     // Access onboard BNO08x (index 0)
+ *     Bno08xHandler* onboard_handler = imu_mgr.GetBno08xHandler(0);
+ *     if (onboard_handler) {
+ *         // Configure and use onboard IMU
+ *         onboard_handler->EnableSensor(Bno08xSensorType::ROTATION_VECTOR, 50);
+ *     }
+ *     
+ *     // Create external BNO08x device (index 1)
+ *     if (imu_mgr.CreateExternalBno08xDevice(1, I2cDeviceId::EXTERNAL_IMU_1)) {
+ *         Bno08xHandler* external_handler = imu_mgr.GetBno08xHandler(1);
+ *         if (external_handler) {
+ *             // Configure and use external IMU
+ *             external_handler->EnableSensor(Bno08xSensorType::ACCELEROMETER, 100);
  *         }
  *     }
  * }
  * @endcode
  *
- * @note This manager now uses Bno08xHandler for consistent architecture across
- *       all device handlers in the HardFOC system.
+ * @note This manager follows the same architectural excellence as MotorController
+ *       for consistent device management across the HardFOC system.
  */
 class ImuManager {
+public:
+    static constexpr uint8_t MAX_IMU_DEVICES = 4;           ///< Maximum supported IMU devices
+    static constexpr uint8_t ONBOARD_IMU_INDEX = 0;         ///< Onboard IMU device index (BNO08x)
+    static constexpr uint8_t EXTERNAL_IMU_1_INDEX = 1;      ///< External IMU device 1 index
+    static constexpr uint8_t EXTERNAL_IMU_2_INDEX = 2;      ///< External IMU device 2 index
+    static constexpr uint8_t EXTERNAL_IMU_3_INDEX = 3;      ///< External IMU device 3 index
+
 public:
     /**
      * @brief Get the singleton instance of ImuManager.
@@ -63,12 +79,16 @@ public:
      */
     static ImuManager& GetInstance() noexcept;
 
+    //**************************************************************************//
+    //**                  DEVICE MANAGEMENT METHODS                           **//
+    //**************************************************************************//
+
     /**
-     * @brief Initialize the IMU manager system.
-     * @note This automatically creates the BNO08x IMU handler using CommChannelsManager
+     * @brief Ensure the IMU manager system is initialized.
+     * @note This automatically creates the onboard BNO08x IMU device using CommChannelsManager
      * @return true if initialization successful, false otherwise
      */
-    bool Initialize() noexcept;
+    bool EnsureInitialized() noexcept;
 
     /**
      * @brief Check if the IMU manager is initialized.
@@ -82,29 +102,141 @@ public:
      */
     bool Deinitialize() noexcept;
 
-    //==================== Handler Access ====================//
+    //**************************************************************************//
+    //**                  HANDLER AND DRIVER MANAGEMENT                       **//
+    //**************************************************************************//
 
     /**
-     * @brief Get access to the BNO08x IMU handler.
-     * @return Pointer to Bno08xHandler if available and initialized, nullptr otherwise
-     * @note Returns nullptr if not initialized or device not available
-     * @note This provides access to the unified BNO08x handler interface
+     * @brief Get access to BNO08x IMU handler by device index.
+     * @param deviceIndex Device index (0=onboard, 1-3=external)
+     * @return Pointer to Bno08xHandler if valid and active, nullptr otherwise
+     * @note Returns nullptr if deviceIndex is invalid, device not active, or not initialized
      */
-    Bno08xHandler* GetBno08xHandler() noexcept;
+    Bno08xHandler* GetBno08xHandler(uint8_t deviceIndex = ONBOARD_IMU_INDEX) noexcept;
 
     /**
-     * @brief Check if the BNO08x IMU handler is available and initialized.
-     * @return true if BNO08x handler is available, false otherwise
+     * @brief Get access to the underlying BNO085 driver by device index.
+     * @param deviceIndex Device index (0=onboard, 1-3=external)
+     * @return Shared pointer to BNO085 driver, nullptr if invalid/not ready
+     * @note Returns nullptr if deviceIndex is invalid, device not active/initialized, or driver unavailable
      */
-    bool IsBno08xAvailable() const noexcept;
+    std::shared_ptr<BNO085> GetBno085Driver(uint8_t deviceIndex = ONBOARD_IMU_INDEX) noexcept;
 
-    //==================== Device Information ====================//
+    //**************************************************************************//
+    //**                  DEVICES MANAGEMENT METHODS                           **//
+    //**************************************************************************//
 
     /**
-     * @brief Get the number of initialized IMUs.
-     * @return Number of successfully initialized IMU devices
+     * @brief Create an external BNO08x IMU device on I2C interface with specified address.
+     * @param deviceIndex External device index (1, 2, or 3 only)
+     * @param i2c_address 7-bit I2C device address (0x08-0x77)
+     * @param i2c_speed_hz I2C speed in Hz (default: 400000 for 400kHz)
+     * @param config Optional BNO08x configuration (defaults to default config)
+     * @return true if device created successfully, false otherwise
+     * @note This method handles both I2C device creation and BNO08x handler creation internally
      */
-    uint8_t GetImuCount() const noexcept;
+    bool CreateExternalBno08xDevice(uint8_t deviceIndex, 
+                                   uint8_t i2c_address,
+                                   uint32_t i2c_speed_hz = 400000,
+                                   const Bno08xConfig& config = Bno08xHandler::GetDefaultConfig());
+
+    /**
+     * @brief Create an external BNO08x IMU device on I2C interface using predefined device ID.
+     * @param deviceIndex External device index (1, 2, or 3 only)
+     * @param i2cDeviceId I2C device ID for communication
+     * @param config Optional BNO08x configuration (defaults to default config)
+     * @return true if device created successfully, false otherwise
+     * @note This method uses predefined I2C device IDs from CommChannelsManager
+     */
+    bool CreateExternalBno08xDevice(uint8_t deviceIndex, 
+                                   I2cDeviceId i2cDeviceId,
+                                   const Bno08xConfig& config = Bno08xHandler::GetDefaultConfig());
+
+    /**
+     * @brief Create an external BNO08x IMU device on SPI interface.
+     * @param deviceIndex External device index (1, 2, or 3 only)
+     * @param spiDeviceId SPI device ID for communication
+     * @param config Optional BNO08x configuration (defaults to default config)
+     * @return true if device created successfully, false otherwise
+     */
+    bool CreateExternalBno08xDevice(uint8_t deviceIndex, 
+                                   SpiDeviceId spiDeviceId,
+                                   const Bno08xConfig& config = Bno08xHandler::GetDefaultConfig());
+
+    /**
+     * @brief Create an external BNO08x IMU device using direct BaseI2c interface.
+     * @param deviceIndex External device index (1, 2, or 3 only)
+     * @param i2c_interface Direct reference to BaseI2c interface
+     * @param config Optional BNO08x configuration (defaults to default config)
+     * @return true if device created successfully, false otherwise
+     * @note This is the most flexible method - allows any external I2C interface
+     */
+    bool CreateExternalBno08xDevice(uint8_t deviceIndex, 
+                                   BaseI2c& i2c_interface,
+                                   const Bno08xConfig& config = Bno08xHandler::GetDefaultConfig());
+
+    /**
+     * @brief Create an external BNO08x IMU device using direct BaseSpi interface.
+     * @param deviceIndex External device index (1, 2, or 3 only)
+     * @param spi_interface Direct reference to BaseSpi interface
+     * @param config Optional BNO08x configuration (defaults to default config)
+     * @return true if device created successfully, false otherwise
+     * @note This is the most flexible method - allows any external SPI interface
+     */
+    bool CreateExternalBno08xDevice(uint8_t deviceIndex, 
+                                   BaseSpi& spi_interface,
+                                   const Bno08xConfig& config = Bno08xHandler::GetDefaultConfig());
+
+    /**
+     * @brief Delete an external IMU device.
+     * @param deviceIndex External device index (1, 2, or 3 only)
+     * @return true if device deleted successfully, false otherwise
+     * @note Cannot delete onboard device (index 0). Only external devices can be deleted.
+     */
+    bool DeleteExternalDevice(uint8_t deviceIndex);
+
+    /**
+     * @brief Get the number of active IMU devices.
+     * @return Number of active devices (1 to MAX_IMU_DEVICES)
+     * @note Always includes onboard device, plus any active external devices
+     */
+    uint8_t GetDeviceCount() const noexcept;
+
+    /**
+     * @brief Check if a device index is valid and has an active device.
+     * @param deviceIndex Device index to check
+     * @return true if device exists and is active, false otherwise
+     */
+    bool IsDeviceValid(uint8_t deviceIndex) const noexcept;
+
+    /**
+     * @brief Check if an external device slot is available for creation.
+     * @param deviceIndex External device index (1, 2, or 3 only)
+     * @return true if slot is available, false if occupied or invalid index
+     */
+    bool IsExternalSlotAvailable(uint8_t deviceIndex) const noexcept;
+
+    /**
+     * @brief Get list of active device indices.
+     * @return Vector of active device indices
+     */
+    std::vector<uint8_t> GetActiveDeviceIndices() const noexcept;
+
+    /**
+     * @brief Initialize all devices and report status.
+     * @return Vector of initialization results (true/false) for each active device
+     */
+    std::vector<bool> InitializeAllDevices();
+
+    /**
+     * @brief Get initialization status for all devices.
+     * @return Vector of initialization status for each active device
+     */
+    std::vector<bool> GetInitializationStatus() const;
+
+    //**************************************************************************//
+    //**                  DEVICE INFORMATION METHODS                          **//
+    //**************************************************************************//
 
     /**
      * @brief Get information about available IMU devices.
@@ -112,49 +244,64 @@ public:
      */
     std::vector<std::string> GetAvailableDevices() const noexcept;
 
-    //==================== Interrupt Support ====================//
+    /**
+     * @brief Get device type by index.
+     * @param deviceIndex Device index
+     * @return Device type string or "Unknown" if invalid
+     */
+    std::string GetDeviceType(uint8_t deviceIndex) const noexcept;
+
+    //**************************************************************************//
+    //**                  INTERRUPT SUPPORT METHODS                           **//
+    //**************************************************************************//
 
     /**
-     * @brief Configure GPIO interrupt for BNO08x INT pin.
+     * @brief Configure GPIO interrupt for BNO08x INT pin on specific device.
+     * @param deviceIndex Device index (0=onboard, 1-3=external)
      * @param callback Optional callback function executed in interrupt context (keep minimal)
      * @return true if interrupt configuration successful, false otherwise
-     * @note Uses PCAL_IMU_INT functional pin through GpioManager
-     * @note Callback executes in ISR context - keep operations minimal
+     * @note Uses PCAL_IMU_INT functional pin through GpioManager for onboard device
+     * @note External devices may use different interrupt pins
      */
-    bool ConfigureInterrupt(std::function<void()> callback = nullptr) noexcept;
+    bool ConfigureInterrupt(uint8_t deviceIndex, std::function<void()> callback = nullptr) noexcept;
 
     /**
-     * @brief Enable BNO08x GPIO interrupt.
+     * @brief Enable BNO08x GPIO interrupt for specific device.
+     * @param deviceIndex Device index (0=onboard, 1-3=external)
      * @return true if interrupt enabled successfully, false otherwise
      * @note Must call ConfigureInterrupt() first
      */
-    bool EnableInterrupt() noexcept;
+    bool EnableInterrupt(uint8_t deviceIndex) noexcept;
 
     /**
-     * @brief Disable BNO08x GPIO interrupt.
+     * @brief Disable BNO08x GPIO interrupt for specific device.
+     * @param deviceIndex Device index (0=onboard, 1-3=external)
      * @return true if interrupt disabled successfully, false otherwise
      */
-    bool DisableInterrupt() noexcept;
+    bool DisableInterrupt(uint8_t deviceIndex) noexcept;
 
     /**
-     * @brief Check if interrupt is configured and enabled.
+     * @brief Check if interrupt is configured and enabled for specific device.
+     * @param deviceIndex Device index (0=onboard, 1-3=external)
      * @return true if interrupt is active, false otherwise
      */
-    bool IsInterruptEnabled() const noexcept;
+    bool IsInterruptEnabled(uint8_t deviceIndex) const noexcept;
 
     /**
-     * @brief Wait for interrupt signal with timeout.
+     * @brief Wait for interrupt signal with timeout for specific device.
+     * @param deviceIndex Device index (0=onboard, 1-3=external)
      * @param timeout_ms Timeout in milliseconds (0 = wait indefinitely)
      * @return true if interrupt occurred, false on timeout
      * @note Useful for interrupt-driven processing in tasks
      */
-    bool WaitForInterrupt(uint32_t timeout_ms = 0) noexcept;
+    bool WaitForInterrupt(uint8_t deviceIndex, uint32_t timeout_ms = 0) noexcept;
 
     /**
-     * @brief Get interrupt statistics for monitoring.
+     * @brief Get interrupt statistics for monitoring for specific device.
+     * @param deviceIndex Device index (0=onboard, 1-3=external)
      * @return Number of interrupts processed since initialization
      */
-    uint32_t GetInterruptCount() const noexcept;
+    uint32_t GetInterruptCount(uint8_t deviceIndex) const noexcept;
 
     // Delete copy/move constructors and assignment operators
     ImuManager(const ImuManager&) = delete;
@@ -174,16 +321,30 @@ private:
     ~ImuManager() noexcept;
 
     /**
-     * @brief Initialize the BNO08x IMU handler with I2C transport.
+     * @brief Initialize the IMU manager system.
+     * @note This automatically creates the onboard BNO08x IMU device using CommChannelsManager
      * @return true if initialization successful, false otherwise
      */
-    bool InitializeBno08xHandler() noexcept;
+    bool Initialize() noexcept;
+
+    /**
+     * @brief Initialize the onboard BNO08x IMU device with I2C transport.
+     * @return true if initialization successful, false otherwise
+     */
+    bool InitializeOnboardBno08xDevice() noexcept;
 
     /**
      * @brief Initialize GPIO interrupt for BNO08x INT pin.
      * @return true if GPIO setup successful, false otherwise
      */
     bool InitializeInterruptGpio() noexcept;
+
+    /**
+     * @brief Validate if device index is for external device.
+     * @param deviceIndex Device index to validate
+     * @return true if index is for external device (1, 2, or 3), false otherwise
+     */
+    bool IsExternalDeviceIndex(uint8_t deviceIndex) const noexcept;
 
     /**
      * @brief GPIO interrupt handler for BNO08x INT pin.
@@ -193,23 +354,88 @@ private:
      */
     static void GpioInterruptHandler(BaseGpio* gpio, hf_gpio_interrupt_trigger_t trigger, void* user_data) noexcept;
 
-    // State tracking
-    bool initialized_ = false;
+    // ===============================
+    // SYSTEM STATE
+    // ===============================
+
+    /**
+     * @brief System initialization state (atomic for thread safety).
+     */
+    std::atomic<bool> initialized_{false};
+
+    /**
+     * @brief Main system mutex for thread-safe operations.
+     * Uses RtosMutex for embedded RTOS compatibility.
+     */
     mutable RtosMutex manager_mutex_;
 
-    // Device handler (unified interface, consistent with MotorController pattern)
-    std::unique_ptr<Bno08xHandler> bno08x_handler_;
+    // ===============================
+    // DEVICE STORAGE
+    // ===============================
 
-    // Reference to communication manager for I2C access
+    /**
+     * @brief Array of BNO08x IMU handlers (one per device slot).
+     * Uses unique_ptr for exclusive ownership of each handler.
+     * Protected by RtosMutex for thread-safe access.
+     */
+    std::array<std::unique_ptr<Bno08xHandler>, MAX_IMU_DEVICES> bno08x_handlers_;
+
+    /**
+     * @brief Device initialization status tracking.
+     * Tracks which devices have been successfully initialized.
+     */
+    std::array<bool, MAX_IMU_DEVICES> device_initialized_;
+
+    /**
+     * @brief Device active status tracking.
+     * Tracks which device slots have active devices.
+     */
+    std::array<bool, MAX_IMU_DEVICES> device_active_;
+
+    /**
+     * @brief Onboard device creation tracking.
+     * Tracks if onboard device has been created.
+     */
+    bool onboard_device_created_ = false;
+
+    /**
+     * @brief Track I2C device indices created by ImuManager for proper cleanup.
+     * This is needed because external I2C devices are managed by ImuManager,
+     * but their actual I2C handles are managed by CommChannelsManager.
+     * We need to keep track of which external I2C devices were created by ImuManager
+     * to ensure they are deleted when the ImuManager is deinitialized.
+     */
+    std::array<int, MAX_IMU_DEVICES> i2c_device_indices_;
+
+    // ===============================
+    // DEPENDENCIES
+    // ===============================
+
+    /**
+     * @brief Reference to communication manager for I2C/SPI access.
+     * Used for creating IMU devices with proper transport interfaces.
+     */
     CommChannelsManager* comm_manager_ = nullptr;
 
-    // GPIO interrupt support
+    /**
+     * @brief Reference to GPIO manager for interrupt pin access.
+     * Used for configuring interrupt pins for IMU devices.
+     */
     GpioManager* gpio_manager_ = nullptr;
-    BaseGpio* interrupt_gpio_ = nullptr;                    // Raw pointer for compatibility
-    std::shared_ptr<BaseGpio> interrupt_gpio_shared_;       // Shared pointer for safe ownership
+
+    // ===============================
+    // INTERRUPT SUPPORT
+    // ===============================
+
+    /**
+     * @brief GPIO interrupt support for onboard device.
+     * External devices may have their own interrupt configurations.
+     */
+    BaseGpio* interrupt_gpio_ = nullptr;                    ///< Raw pointer for compatibility
+    std::shared_ptr<BaseGpio> interrupt_gpio_shared_;       ///< Shared pointer for safe ownership
     std::function<void()> interrupt_callback_;
     bool interrupt_configured_ = false;
     bool interrupt_enabled_ = false;
     std::atomic<uint32_t> interrupt_count_{0};
-    void* interrupt_semaphore_ = nullptr;  // FreeRTOS semaphore for WaitForInterrupt()
+    void* interrupt_semaphore_ = nullptr;  ///< FreeRTOS semaphore for WaitForInterrupt()
 }; 
