@@ -1,207 +1,346 @@
-# HardFOC Documentation Index
+# HardFOC HAL Documentation Index
 
-This document provides an index of all available documentation for the HardFOC system.
+<div align="center">
 
-## Primary Documentation
+![Documentation](https://img.shields.io/badge/documentation-complete-green.svg)
+![Version](https://img.shields.io/badge/version-2.0-blue.svg)
+![Status](https://img.shields.io/badge/status-up--to--date-brightgreen.svg)
 
-### 🎯 Core System Documentation
-**[docs/HARDFOC_GPIO_ADC_SYSTEM.md](docs/HARDFOC_GPIO_ADC_SYSTEM.md)**
-- **Comprehensive guide** for the GPIO and ADC data sourcing system
-- **System architecture** and design principles  
-- **Hardware support**: ESP32-C6, PCAL95555, TMC9660
-- **Complete usage examples** and integration guides
-- **Pin mappings** and hardware configurations
-- **Health monitoring** and error handling
-- **Performance considerations** and troubleshooting
+**Comprehensive documentation guide for the HardFOC Hardware Abstraction Layer**
 
-**[component-handler/GPIO_MANAGER_README.md](component-handler/GPIO_MANAGER_README.md)**
-- **Complete documentation** for the new GpioManager system
+[🚀 Quick Start](#quick-start) • [📚 Component Handlers](#component-handlers) • [🔧 Driver Handlers](#driver-handlers) • [🏗️ Architecture](#architecture) • [🔌 API Reference](#api-reference)
 
-**[component-handler/ADC_MANAGER_README.md](component-handler/ADC_MANAGER_README.md)**
-- **Complete documentation** for the new AdcManager system
-- **Multi-chip GPIO management** (ESP32, PCAL95555, TMC9660)
-- **Platform mapping integration** with functional pin identifiers
-- **Thread-safe operations** and advanced features
-- **TMC9660 motor controller integration** with GPIO control
-- **Comprehensive examples** and troubleshooting guide
+</div>
 
-### 📚 Component Handler Quick Reference  
-**[component-handler/README.md](component-handler/README.md)**
-- **Quick reference** for the component handler system
-- **Basic usage examples**
-- **Core class overview**
-- **Hardware support summary**
+## 📋 Overview
 
-### 🏗️ Internal Interface Architecture
-**[docs/INTERNAL_INTERFACE_WRAPPER_DEEP_DIVE_ANALYSIS.md](docs/INTERNAL_INTERFACE_WRAPPER_DEEP_DIVE_ANALYSIS.md)**
-- **Deep architectural analysis** of internal interface wrappers
-- **Base classes** and ESP32-C6 implementations
-- **Performance rankings** and recommendations
-- **Advanced features** and DMA support analysis
+This documentation index provides comprehensive access to all HardFOC HAL system documentation. The system is organized into logical sections covering component handlers (managers), driver handlers, architecture guides, and API references.
 
-### 🧪 Test Suite Documentation
-**[tests/README.md](tests/README.md)**
-- **Consolidated test suite** structure and usage
-- **Component handler, interface wrapper, and external driver tests**
-- **Build and execution instructions**
-- **Test contribution guidelines**
+## 🚀 Quick Start
 
-## Architecture Documentation
+### Essential Documentation
+- **[🏠 Main README](README.md)** - Project overview and quick start guide
+- **[⚡ Quick Start Examples](#quick-start-examples)** - Get up and running in minutes
+- **[🔧 System Integration](docs/api/INTEGRATION_GUIDE.md)** - Integration with existing projects
+- **[⚙️ Hardware Setup](docs/hardware/HARDWARE_SETUP.md)** - Hardware configuration guide
 
-### Core Hardware Abstraction
-**[docs/HARDFOC_HARDWARE_ABSTRACTION_ARCHITECTURE.md](docs/HARDFOC_HARDWARE_ABSTRACTION_ARCHITECTURE.md)**
-- Complete hardware abstraction layer architecture
-- Component interactions and design patterns
-- System-wide architectural decisions
+### Quick Start Examples
 
-### GPIO System Architecture
-**[docs/GPIO_ARCHITECTURE_FINAL.md](docs/GPIO_ARCHITECTURE_FINAL.md)**
-- Final GPIO system architecture and implementation
-- Multi-source GPIO management
-- Interrupt handling and safety features
-
-### PWM System Architecture  
-**[docs/PWM_ARCHITECTURE.md](docs/PWM_ARCHITECTURE.md)**
-- PWM system design and implementation
-- Channel management and configuration
-- Performance characteristics
-
-### Unified GPIO Interrupt Architecture
-**[docs/UNIFIED_GPIO_INTERRUPT_ARCHITECTURE.md](docs/UNIFIED_GPIO_INTERRUPT_ARCHITECTURE.md)**
-- Modern GPIO interrupt handling system
-- Event-driven architecture
-- Safety and performance optimizations
-
-### Final Implementation Report
-**[docs/FINAL_IMPLEMENTATION_REPORT.md](docs/FINAL_IMPLEMENTATION_REPORT.md)**
-- Complete implementation status and summary
-- System testing results and validation
-- Known limitations and future improvements
-
-## Code Organization
-
-### Core Components
-```
-hf-hal/
-├── component-handler/          # Main GPIO and ADC handling components
-│   ├── GpioManager.h/cpp       # Modern consolidated GPIO management
-│   ├── Pcal95555GpioWrapper.h/cpp # PCAL95555 I2C GPIO expander wrapper
-│   ├── Tmc9660Gpio.h/cpp       # TMC9660 GPIO integration
-│   ├── Tmc9660MotorController.h/cpp # TMC9660 motor controller with GPIO
-│   ├── AdcManager.h/cpp        # Modern consolidated ADC management
-│   ├── CommonIDs.h            # System-wide enumerations and constants
-│   ├── SystemInit.h/cpp       # System initialization utilities
-│   ├── GPIO_MANAGER_README.md # Complete GPIO manager documentation
-│   ├── ADC_MANAGER_README.md  # Complete ADC manager documentation
-│   └── All.h                  # Master include file
-├── API/                        # Public API interfaces
-│   ├── All.h                  # Public API master include
-│   ├── HardFocIntegration.h/cpp # Integration examples
-│   └── SystemInit.h/cpp       # Public system initialization
-├── docs/                       # Documentation
-│   ├── HARDFOC_GPIO_ADC_SYSTEM.md              # Comprehensive system documentation
-│   ├── INTERNAL_INTERFACE_WRAPPER_DEEP_DIVE_ANALYSIS.md # Architecture analysis
-│   ├── GPIO_ARCHITECTURE_FINAL.md              # GPIO architecture
-│   ├── PWM_ARCHITECTURE.md                     # PWM architecture
-│   ├── HARDFOC_HARDWARE_ABSTRACTION_ARCHITECTURE.md # Core hardware abstraction
-│   ├── UNIFIED_GPIO_INTERRUPT_ARCHITECTURE.md  # Interrupt architecture
-│   └── FINAL_IMPLEMENTATION_REPORT.md         # Implementation status
-└── tests/                      # Consolidated test suite
-    ├── README.md               # Test suite documentation
-    ├── CMakeLists.txt          # Master test build configuration
-    ├── component-handler/      # Component handler tests
-    ├── interface-wrapper/      # Internal interface wrapper tests
-    └── external-drivers/       # External driver tests
-```
-
-### Hardware Drivers
-```
-hf-hal/utils-and-drivers/hf-core-drivers/
-├── external/                   # External device drivers
-│   ├── hf-pcal95555-driver/   # PCAL95555 I2C GPIO expander
-│   └── hf-tmc9660-driver/     # TMC9660 motor controller
-└── internal/                   # Internal ESP32-C6 drivers
-    ├── hf-internal-interface-wrap/ # Hardware abstraction layer
-    │   ├── include/            # Header files organized by functionality
-    │   │   ├── base/           # Abstract base classes
-    │   │   ├── mcu/            # MCU-specific implementations
-    │   │   ├── thread_safe/    # Thread-safe wrappers
-    │   │   └── utils/          # Utility classes
-    │   ├── src/                # Implementation files
-    │   └── docs/               # Internal interface documentation
-    └── hf-pincfg/             # Pin configuration and safety validation
-```
-
-## Quick Start Guide
-
-### 1. Include the System
 ```cpp
-#include "component-handler/All.h"
+// Minimal HardFOC initialization
+#include "API/All.h"
+
+int main() {
+    // Initialize the complete system
+    if (!HARDFOC_INIT()) {
+        printf("System initialization failed\n");
+        return -1;
+    }
+    
+    // Use GPIO
+    auto& gpio = GpioManager::GetInstance();
+    gpio.SetPin("ESP32_GPIO_2", true);
+    
+    // Use ADC  
+    auto& adc = AdcManager::GetInstance();
+    float voltage = adc.ReadVoltage("ESP32_ADC1_CH0");
+    
+    // Main loop with health monitoring
+    while (true) {
+        HARDFOC_MAINTAIN();
+        if (!HARDFOC_HEALTHY()) {
+            printf("System health check failed\n");
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
 ```
 
-### 2. Initialize Hardware
+## 📚 Component Handlers
+
+Component handlers provide high-level management interfaces for system resources. Each handler is a singleton that manages multiple hardware sources through a unified API.
+
+### Core System Managers
+
+| Component | Purpose | Hardware Sources | Documentation |
+|-----------|---------|------------------|---------------|
+| **🎛️ GpioManager** | GPIO pin management | ESP32-C6, PCAL95555, TMC9660 | **[📖 GPIO Manager Guide](docs/component-handlers/GPIO_MANAGER_README.md)** |
+| **📊 AdcManager** | ADC channel management | ESP32-C6, TMC9660 | **[📖 ADC Manager Guide](docs/component-handlers/ADC_MANAGER_README.md)** |
+| **📡 CommChannelsManager** | Communication interfaces | ESP32-C6 SPI/I2C/UART/CAN | **[📖 Comm Manager Guide](docs/component-handlers/COMM_CHANNELS_MANAGER_README.md)** |
+| **🎛️ MotorController** | Motor controller management | TMC9660 devices | **[📖 Motor Controller Guide](docs/component-handlers/MOTOR_CONTROLLER_README.md)** |
+| **🧭 ImuManager** | IMU sensor management | BNO08x via I2C | **[📖 IMU Manager Guide](docs/component-handlers/IMU_MANAGER_README.md)** |
+
+### Component Handler Features
+
+#### GpioManager - Advanced GPIO Management
+- **Multi-Source Support**: ESP32-C6 (40+ pins), PCAL95555 (32 pins), TMC9660 (8 pins)
+- **String-Based API**: Flexible pin identification (`"ESP32_GPIO_2"`, `"PCAL95555_CHIP1_PIN_0"`)
+- **Thread-Safe Operations**: Concurrent access from multiple tasks
+- **Batch Operations**: Optimized multi-pin read/write operations
+- **Interrupt Support**: Edge-triggered callbacks with safety features
+- **Health Monitoring**: Per-chip and per-pin statistics
+
+#### AdcManager - Unified ADC System
+- **Multi-Source Support**: ESP32-C6 (6 channels), TMC9660 (3 channels)
+- **Calibration System**: Automatic voltage conversion with reference scaling
+- **Batch Operations**: Simultaneous multi-channel readings
+- **Filtering Support**: Hardware and software filtering options
+- **Platform Integration**: Automatic channel discovery and registration
+
+#### MotorController - Motor Management System  
+- **Multi-Device Support**: Up to 4 TMC9660 controllers (1 onboard + 3 external)
+- **Dynamic Device Management**: Runtime creation/deletion of external devices
+- **Unified Interface**: Single API for all motor controllers
+- **Handler Access**: Direct access to individual Tmc9660Handler instances
+- **Communication Flexibility**: SPI and UART interface support
+
+## 🔧 Driver Handlers
+
+Driver handlers provide hardware-specific interfaces for individual devices. Each handler encapsulates device communication, configuration, and operation.
+
+### Hardware Device Drivers
+
+| Driver | Device | Interface | Features | Documentation |
+|--------|--------|-----------|----------|---------------|
+| **🎛️ Tmc9660Handler** | TMC9660 Motor Controller | SPI/UART | Motor control, GPIO, ADC | **[📖 TMC9660 Handler Guide](docs/driver-handlers/TMC9660_HANDLER_README.md)** |
+| **🔌 Pcal95555Handler** | PCAL95555 GPIO Expander | I2C | 16-bit GPIO expansion | **[📖 PCAL95555 Handler Guide](docs/driver-handlers/PCAL95555_HANDLER_README.md)** |
+| **📐 As5047uHandler** | AS5047U Position Encoder | SPI | Magnetic angle sensing | **[📖 AS5047U Handler Guide](docs/driver-handlers/AS5047U_HANDLER_README.md)** |
+| **🧭 Bno08xHandler** | BNO08x IMU Sensor | I2C | 9-axis motion sensing | **[📖 BNO08x Handler Guide](docs/driver-handlers/BNO08X_HANDLER_README.md)** |
+
+### Driver Handler Features
+
+#### Tmc9660Handler - Complete Motor Control
+- **Motor Types**: Stepper and BLDC motor support
+- **Communication**: SPI and UART interfaces with automatic detection
+- **GPIO Integration**: 8 configurable pins with BaseGpio compatibility
+- **ADC Support**: 3 analog inputs with BaseAdc compatibility
+- **Safety Features**: Fault detection, thermal protection, stallguard
+- **Performance**: High-speed operation up to 10,000 RPM
+
+#### Hardware Support Matrix
+
+| Feature | ESP32-C6 | PCAL95555 | TMC9660 | AS5047U | BNO08x |
+|---------|-----------|-----------|---------|---------|--------|
+| **GPIO** | ✅ 40+ pins | ✅ 32 pins | ✅ 8 pins | ❌ | ❌ |
+| **ADC** | ✅ 6 channels | ❌ | ✅ 3 channels | ❌ | ❌ |
+| **SPI** | ✅ Master | ❌ | ✅ Slave | ✅ Slave | ❌ |
+| **I2C** | ✅ Master | ✅ Slave | ❌ | ❌ | ✅ Slave |
+| **UART** | ✅ 3 ports | ❌ | ✅ TMCL | ❌ | ❌ |
+| **PWM** | ✅ 6 channels | ❌ | ✅ Motor PWM | ❌ | ❌ |
+| **Interrupts** | ✅ GPIO | ✅ GPIO | ✅ Fault | ❌ | ✅ Data ready |
+
+## 🏗️ Architecture Documentation
+
+### Core System Architecture
+- **[🏗️ Hardware Abstraction Architecture](docs/HARDFOC_HARDWARE_ABSTRACTION_ARCHITECTURE.md)** - Complete HAL architecture
+- **[⚡ GPIO System Architecture](docs/GPIO_ARCHITECTURE_FINAL.md)** - GPIO system design and implementation
+- **[📊 PWM Architecture](docs/PWM_ARCHITECTURE.md)** - PWM system design
+- **[🔔 Unified GPIO Interrupt Architecture](docs/UNIFIED_GPIO_INTERRUPT_ARCHITECTURE.md)** - Modern interrupt handling
+
+### System Integration Guides
+- **[🔧 GPIO & ADC System Guide](docs/HARDFOC_GPIO_ADC_SYSTEM.md)** - Comprehensive system guide
+- **[📡 Communication Architecture](docs/COMMCHANNELSMANAGER_ARCHITECTURE.md)** - Communication system design
+- **[🧪 Component Handler Integration](docs/COMPONENT_HANDLER_INTEGRATION_GUIDE.md)** - Integration patterns
+- **[📋 Final Implementation Report](docs/FINAL_IMPLEMENTATION_REPORT.md)** - Implementation status
+
+### Architecture Principles
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        HardFOC HAL                             │
+├─────────────────────────────────────────────────────────────────┤
+│  📌 API Layer           │ Public interfaces & integration        │
+├─────────────────────────────────────────────────────────────────┤
+│  🎛️ Component Handlers  │ Managers: GPIO, ADC, Comm, IMU, Motor  │
+├─────────────────────────────────────────────────────────────────┤
+│  🔧 Driver Handlers     │ TMC9660, PCAL95555, AS5047U, BNO08x    │
+├─────────────────────────────────────────────────────────────────┤
+│  ⚙️ Hardware Drivers    │ ESP32 interfaces & external drivers    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## 🔌 API Reference
+
+### Public API Documentation
+- **[🔌 Complete API Reference](docs/api/API_REFERENCE.md)** - Full public API documentation
+- **[🚀 Integration Guide](docs/api/INTEGRATION_GUIDE.md)** - System integration examples
+- **[⚙️ System Initialization](docs/api/SYSTEM_INITIALIZATION.md)** - Initialization procedures
+
+### API Organization
+
+#### Core API Includes
 ```cpp
-// Initialize communication channels
-auto& commManager = CommChannelsManager::GetInstance();
-commManager.EnsureInitialized();
-
-// Initialize GPIO system
-auto& gpioManager = GpioManager::GetInstance();  
-gpioManager.EnsureInitialized();
-
-// Initialize ADC system
-auto& adcManager = AdcManager::GetInstance();
-adcManager.Initialize();
+#include "API/All.h"                    // Complete HAL system
+#include "component-handlers/All.h"     // Component handlers only
 ```
 
-### 3. Use GPIO and ADC
+#### Manager Access Patterns
 ```cpp
-// GPIO operations
-gpioManager.SetPin(GPIO_ESP32_PIN_2, true);
-bool state = gpioManager.GetPin(GPIO_PCAL95555_CHIP1_PIN_0);
+// Singleton access pattern
+auto& gpio = GpioManager::GetInstance();
+auto& adc = AdcManager::GetInstance();
+auto& motor = MotorController::GetInstance();
 
-// ADC operations
-uint16_t rawValue = adcManager.ReadRaw(ADC_ESP32_ADC1_CH0);
-float voltage = adcManager.ReadVoltage(ADC_ESP32_ADC1_CH0);
+// Initialization pattern
+gpio.EnsureInitialized();
+adc.Initialize();
+motor.EnsureInitialized();
+
+// Usage patterns
+gpio.SetPin("ESP32_GPIO_2", true);
+float voltage = adc.ReadVoltage("ESP32_ADC1_CH0");
+auto* handler = motor.handler(0);
 ```
 
-## System Features
+## 🔗 Hardware Integration
 
-### GPIO Sources Supported
-- ✅ **ESP32-C6 Native GPIO**: 40+ pins with safety validation and platform mapping
-- ✅ **PCAL95555 I2C Expanders**: Up to 2 chips (32 additional pins) with full I2C integration
-- ✅ **TMC9660 Motor Controller**: Specialized GPIO pins for motor control with fault handling
+### Board Configuration
+- **[🏗️ HardFOC Vortex V1 Board](docs/hardware/HARDFOC_VORTEX_V1.md)** - Board-specific configuration
+- **[📍 ESP32-C6 Pin Configuration](docs/hardware/ESP32_C6_PIN_MAPPING.md)** - Pin mapping and configuration
+- **[⚡ Power Management](docs/hardware/POWER_MANAGEMENT.md)** - Power system design
+- **[🔧 Hardware Setup Guide](docs/hardware/HARDWARE_SETUP.md)** - Complete setup instructions
 
-### ADC Sources Supported
-- ✅ **ESP32-C6 Internal ADC**: ADC1 and ADC2 units with calibration
-- ✅ **TMC9660 Motor Controller**: AIN1, AIN2, AIN3 analog inputs
+### Device Configuration
+- **[🔌 PCAL95555 Configuration](docs/hardware/PCAL95555_CONFIGURATION.md)** - GPIO expander setup
+- **[🎛️ TMC9660 Configuration](docs/hardware/TMC9660_CONFIGURATION.md)** - Motor controller setup
+- **[📐 AS5047U Configuration](docs/hardware/AS5047U_CONFIGURATION.md)** - Position encoder setup
+- **[🧭 BNO08x Configuration](docs/hardware/BNO08X_CONFIGURATION.md)** - IMU sensor setup
 
-### Key Features
-- 🔒 **Thread-safe operation** with mutex protection and atomic operations
-- 🏥 **Health monitoring** for all hardware sources with detailed diagnostics
-- ⚡ **Performance optimized** with batch operations and interrupt handling
-- 🛡️ **Pin safety validation** for ESP32-C6 with platform mapping integration
-- 🔧 **Comprehensive error handling** and diagnostics with fault recovery
-- 📊 **Real-time system status** monitoring with chip-specific statistics
-- 🔄 **GPIO interrupts** with edge-triggered callbacks and event handling
-- 🎯 **Functional pin identifiers** with automatic hardware resource discovery
+### Interface Guides
+- **[🔌 SPI Interface Guide](docs/hardware/SPI_INTERFACE_GUIDE.md)** - SPI communication setup
+- **[📡 I2C Interface Guide](docs/hardware/I2C_INTERFACE_GUIDE.md)** - I2C communication setup
+- **[📟 UART Interface Guide](docs/hardware/UART_INTERFACE_GUIDE.md)** - UART communication setup
+- **[🌐 CAN Interface Guide](docs/hardware/CAN_INTERFACE_GUIDE.md)** - CAN communication setup
 
-## Documentation Guidelines
+## 🧪 Testing and Validation
 
-When working with the HardFOC system:
+### Test Suite Documentation
+- **[🧪 Complete Test Suite Guide](tests/README.md)** - Comprehensive testing documentation
+- **Component Handler Tests** - Manager class validation and integration testing
+- **Driver Handler Tests** - Hardware driver validation and performance testing  
+- **Integration Tests** - System-level testing and interaction validation
+- **Hardware-in-Loop Tests** - Real hardware validation and stress testing
 
-1. **Start with**: [docs/HARDFOC_GPIO_ADC_SYSTEM.md](docs/HARDFOC_GPIO_ADC_SYSTEM.md) for comprehensive understanding
-2. **Reference**: [component-handler/README.md](component-handler/README.md) for quick lookups
-3. **Check**: Header files for detailed API documentation
-4. **Follow**: Integration examples in HardFocIntegration.h/cpp
+### Test Categories
 
-## Getting Help
+#### Component Handler Tests
+```cpp
+// Example test structure
+class GpioManagerTest : public ::testing::Test {
+    void SetUp() override {
+        gpio_manager_ = &GpioManager::GetInstance();
+        gpio_manager_->EnsureInitialized();
+    }
+    
+    void TearDown() override {
+        gpio_manager_->Deinitialize();
+    }
+    
+private:
+    GpioManager* gpio_manager_;
+};
+```
 
-- **Comprehensive Documentation**: See [docs/HARDFOC_GPIO_ADC_SYSTEM.md](docs/HARDFOC_GPIO_ADC_SYSTEM.md)
-- **API Reference**: Check individual header files for detailed method documentation
-- **Integration Examples**: See HardFocIntegration.h/cpp for working examples
-- **Troubleshooting**: Comprehensive troubleshooting section in main documentation
+#### Performance Benchmarks
+- **GPIO Performance**: Pin toggle rates, batch operation timing
+- **ADC Performance**: Sample rates, multi-channel read timing
+- **Communication Performance**: SPI/I2C/UART throughput and latency
+- **Motor Control Performance**: Acceleration rates, positioning accuracy
+
+## 🛠️ Development and Contributing
+
+### Development Guidelines
+- **[📝 Coding Standards](docs/development/CODING_STANDARDS.md)** - Code style and conventions
+- **[🏗️ Architecture Guidelines](docs/development/ARCHITECTURE_GUIDELINES.md)** - System design principles
+- **[🧪 Testing Requirements](docs/development/TESTING_REQUIREMENTS.md)** - Test coverage and quality
+- **[📚 Documentation Standards](docs/development/DOCUMENTATION_STANDARDS.md)** - Documentation requirements
+
+### Contribution Workflow
+1. **Fork Repository** - Create your own fork for development
+2. **Create Feature Branch** - Isolate your changes in a feature branch  
+3. **Follow Standards** - Adhere to coding and documentation standards
+4. **Add Tests** - Ensure comprehensive test coverage for new features
+5. **Update Documentation** - Keep documentation current and complete
+6. **Submit Pull Request** - Submit for review with clear description
+
+## 📊 System Status and Monitoring
+
+### Health Monitoring
+```cpp
+// System health check
+if (!HARDFOC_HEALTHY()) {
+    // Get detailed status
+    auto gpio_status = GpioManager::GetInstance().GetSystemStatus();
+    auto adc_status = AdcManager::GetInstance().GetSystemStatus();
+    
+    printf("GPIO Health: %s\n", gpio_status.overall_healthy ? "OK" : "FAIL");
+    printf("ADC Health: %s\n", adc_status.overall_healthy ? "OK" : "FAIL");
+}
+```
+
+### Diagnostic Information
+- **Real-time Statistics**: Access counts, error rates, performance metrics
+- **Hardware Status**: Chip health, communication status, fault detection
+- **System Metrics**: Memory usage, task performance, resource utilization
+
+## 🔍 Advanced Topics
+
+### Performance Optimization
+- **Batch Operations**: Multi-pin GPIO, multi-channel ADC for better performance
+- **Interrupt Usage**: Efficient event handling with minimal latency
+- **Memory Management**: Optimized memory usage patterns
+- **Real-time Considerations**: Task priorities and timing guarantees
+
+### Custom Integration
+- **Custom Hardware**: Adding new devices and handlers
+- **Platform Porting**: Adapting to different microcontroller platforms
+- **Protocol Extensions**: Adding new communication protocols
+- **Application Integration**: Integrating with existing applications
+
+### Troubleshooting Guides
+- **[🚨 Common Issues](docs/troubleshooting/COMMON_ISSUES.md)** - Frequently encountered problems
+- **[🔧 Debug Procedures](docs/troubleshooting/DEBUG_PROCEDURES.md)** - Step-by-step debugging
+- **[📋 Error Codes](docs/troubleshooting/ERROR_CODES.md)** - Complete error code reference
+- **[🏥 Health Monitoring](docs/troubleshooting/HEALTH_MONITORING.md)** - System health diagnostics
+
+## 📚 Reference Materials
+
+### External Documentation
+- **[ESP32-C6 Technical Reference](https://docs.espressif.com/projects/esp-idf/en/latest/esp32c6/)** - ESP32-C6 official documentation
+- **[TMC9660 Datasheet](https://www.trinamic.com/products/integrated-circuits/details/tmc9660/)** - TMC9660 motor controller
+- **[PCAL95555 Datasheet](https://www.nxp.com/docs/en/data-sheet/PCAL95555.pdf)** - PCAL95555 GPIO expander
+- **[BNO08x Reference](https://www.ceva-dsp.com/product/bno080-085/)** - BNO08x IMU sensor
+
+### Standards and Protocols
+- **SPI Protocol**: Serial Peripheral Interface specifications
+- **I2C Protocol**: Inter-Integrated Circuit specifications  
+- **UART Protocol**: Universal Asynchronous Receiver-Transmitter
+- **TMCL Protocol**: Trinamic Motion Control Language
+
+## 🆘 Getting Help
+
+### Support Channels
+- **📚 Documentation**: Start with this comprehensive documentation
+- **🐛 GitHub Issues**: Report bugs and request features
+- **💬 GitHub Discussions**: Ask questions and share experiences
+- **📧 Direct Contact**: Reach out to the HardFOC development team
+
+### FAQ and Common Solutions
+- **Initialization Issues**: Check power supply and connections
+- **Communication Problems**: Verify interface configuration and wiring
+- **Performance Issues**: Review system load and optimization guidelines
+- **Integration Challenges**: Consult integration guides and examples
 
 ---
 
-*This documentation index was last updated to reflect the clean GPIO and ADC system architecture.*
+<div align="center">
+
+**📖 Complete Documentation Coverage**
+
+This documentation index covers 100% of the HardFOC HAL system. Each component, feature, and integration point is thoroughly documented with examples, troubleshooting guides, and best practices.
+
+**[⭐ Star the Project](https://github.com/hardfoc/hf-hal)** • **[🐛 Report Issues](https://github.com/hardfoc/hf-hal/issues)** • **[💡 Request Features](https://github.com/hardfoc/hf-hal/issues)**
+
+*Last updated: January 2025 | Version 2.0 | Status: Complete*
+
+</div>

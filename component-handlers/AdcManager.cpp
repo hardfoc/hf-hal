@@ -761,17 +761,18 @@ const AdcChannelInfo* AdcManager::FindChannelInfo(std::string_view name) const n
 }
 
 std::unique_ptr<EspAdc> AdcManager::CreateEsp32Adc(uint8_t unit_id, float reference_voltage) noexcept {
-    try {
-        // Create EspAdc configuration
-        hf_adc_unit_config_t config;
-        config.unit_id = static_cast<hf_adc_unit_t>(unit_id);
-        config.reference_voltage = reference_voltage;
-        config.mode = hf_adc_mode_t::ADC_MODE_ONESHOT; // Default to oneshot mode
-        
-        return std::make_unique<EspAdc>(config);
-    } catch (...) {
-        return nullptr;
+    // Create EspAdc configuration
+    hf_adc_unit_config_t config;
+    config.unit_id = static_cast<hf_adc_unit_t>(unit_id);
+    config.reference_voltage = reference_voltage;
+    config.mode = hf_adc_mode_t::ADC_MODE_ONESHOT; // Default to oneshot mode
+    
+    // Use new with error checking instead of make_unique to avoid exceptions
+    EspAdc* raw_ptr = new (std::nothrow) EspAdc(config);
+    if (raw_ptr) {
+        return std::unique_ptr<EspAdc>(raw_ptr);
     }
+    return nullptr;
 }
 
 std::unique_ptr<BaseAdc> AdcManager::CreateTmc9660AdcWrapper(uint8_t device_index) noexcept {
@@ -781,11 +782,12 @@ std::unique_ptr<BaseAdc> AdcManager::CreateTmc9660AdcWrapper(uint8_t device_inde
     }
     
     // Create a wrapper that delegates to the handler's ADC
-    try {
-        return std::make_unique<Tmc9660AdcWrapper>(*handler);
-    } catch (...) {
-        return nullptr;
+    // Use new with error checking instead of make_unique to avoid exceptions
+    Tmc9660AdcWrapper* raw_ptr = new (std::nothrow) Tmc9660AdcWrapper(*handler);
+    if (raw_ptr) {
+        return std::unique_ptr<BaseAdc>(raw_ptr);
     }
+    return nullptr;
 }
 
 Tmc9660Handler* AdcManager::GetTmc9660Handler(uint8_t device_index) noexcept {
