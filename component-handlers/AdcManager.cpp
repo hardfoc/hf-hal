@@ -722,22 +722,37 @@ hf_adc_err_t AdcManager::ResetAllChannels() noexcept {
         return hf_adc_err_t::ADC_ERR_NOT_INITIALIZED;
     }
     
-    std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
+    // Collect channel information with minimal lock scope
+    std::vector<std::pair<BaseAdc*, uint8_t>> adc_operations;
     
-    for (auto& [name, channel_info] : adc_registry_) {
-        if (channel_info && channel_info->is_registered) {
-            // Reset local statistics
-            channel_info->access_count = 0;
-            channel_info->error_count = 0;
-            channel_info->last_access_time = 0;
-            
-            // Reset driver statistics and diagnostics
-            channel_info->adc_driver->ResetStatistics(channel_info->hardware_channel_id);
-            channel_info->adc_driver->ResetDiagnostics(channel_info->hardware_channel_id);
+    {
+        std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
+        
+        adc_operations.reserve(adc_registry_.size());
+        
+        for (auto& [name, channel_info] : adc_registry_) {
+            if (channel_info && channel_info->is_registered) {
+                // Reset local statistics while holding lock
+                channel_info->access_count = 0;
+                channel_info->error_count = 0;
+                channel_info->last_access_time = 0;
+                
+                // Collect ADC operations to perform outside lock
+                adc_operations.emplace_back(channel_info->adc_driver.get(), 
+                                          channel_info->hardware_channel_id);
+            }
+        }
+    } // Lock released here
+    
+    // Perform ADC reset operations without holding locks
+    for (const auto& [adc_driver, channel_id] : adc_operations) {
+        if (adc_driver) {
+            adc_driver->ResetStatistics(channel_id);
+            adc_driver->ResetDiagnostics(channel_id);
         }
     }
     
-    // Reset global statistics
+    // Reset global statistics (atomic operations, no locks needed)
     total_operations_.store(0);
     successful_operations_.store(0);
     failed_operations_.store(0);
@@ -769,19 +784,30 @@ hf_adc_err_t AdcManager::PerformSelfTest(std::string& result) noexcept {
     }
     
     // Test 2: Test reading from each channel
-    std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
-    int successful_reads = 0;
-    int total_tests = 0;
+    std::vector<std::tuple<std::string_view, BaseAdc*, uint8_t>> test_channels;
     
-    for (const auto& [name, channel_info] : adc_registry_) {
-        if (channel_info && channel_info->is_registered) {
-            total_tests++;
-            
+    {
+        std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
+        test_channels.reserve(adc_registry_.size());
+        
+        for (const auto& [name, channel_info] : adc_registry_) {
+            if (channel_info && channel_info->is_registered) {
+                test_channels.emplace_back(name, channel_info->adc_driver.get(), 
+                                         channel_info->hardware_channel_id);
+            }
+        }
+    } // Lock released here
+    
+    int successful_reads = 0;
+    int total_tests = static_cast<int>(test_channels.size());
+    
+    // Perform ADC tests without holding locks
+    for (const auto& [name, adc_driver, channel_id] : test_channels) {
+        if (adc_driver) {
             // Try to read from the channel
             float voltage;
             hf_u32_t raw_value;
-            hf_adc_err_t read_result = channel_info->adc_driver->ReadChannel(
-                channel_info->hardware_channel_id, raw_value, voltage, 1, 0);
+            hf_adc_err_t read_result = adc_driver->ReadChannel(channel_id, raw_value, voltage, 1, 0);
             
             if (read_result == hf_adc_err_t::ADC_SUCCESS) {
                 successful_reads++;
