@@ -791,9 +791,8 @@ Tmc9660Handler* AdcManager::GetTmc9660Handler(uint8_t device_index) noexcept {
         return nullptr;
     }
     
-    // This would need to be implemented based on the MotorController API
-    // For now, return nullptr as this needs proper implementation
-    return nullptr;
+    // Get the handler from MotorController
+    return motor_controller_->handler(device_index);
 }
 
 void AdcManager::UpdateStatistics(bool success) noexcept {
@@ -844,8 +843,11 @@ hf_adc_err_t AdcManager::ValidateChannelName(std::string_view name) noexcept {
 }
 
 hf_adc_err_t AdcManager::RegisterPlatformChannels() noexcept {
-    // Register channels based on the platform mapping
     ConsolePort::Printf("AdcManager: Registering platform channels...\n");
+    
+    hf_adc_err_t overall_result = hf_adc_err_t::ADC_SUCCESS;
+    uint32_t registered_count = 0;
+    uint32_t failed_count = 0;
     
     // Iterate through all ADC channels defined in the platform mapping
     for (size_t i = 0; i < HF_ADC_MAPPING_SIZE; ++i) {
@@ -868,22 +870,24 @@ hf_adc_err_t AdcManager::RegisterPlatformChannels() noexcept {
                 if (result == hf_adc_err_t::ADC_SUCCESS) {
                     ConsolePort::Printf("AdcManager: Registered TMC9660 channel %.*s\n", 
                                        static_cast<int>(channel_name.length()), channel_name.data());
+                    registered_count++;
                 } else {
                     ConsolePort::Printf("AdcManager: Failed to register TMC9660 channel %.*s (error: %d)\n", 
                                        static_cast<int>(channel_name.length()), channel_name.data(), static_cast<int>(result));
+                    failed_count++;
+                    overall_result = result; // Keep track of first error
                 }
             } else {
                 ConsolePort::Printf("AdcManager: Failed to create TMC9660 wrapper for channel %.*s\n", 
                                    static_cast<int>(channel_name.length()), channel_name.data());
+                failed_count++;
+                overall_result = hf_adc_err_t::ADC_ERR_HARDWARE_FAULT;
             }
         }
     }
     
-    // Register TMC9660 ADC channels
-    // This would need to be implemented based on the actual TMC9660Handler API
-    // For now, we'll skip this as it requires proper integration
+    ConsolePort::Printf("AdcManager: Platform registration complete - %d registered, %d failed\n", 
+                       registered_count, failed_count);
     
-    ConsolePort::Printf("AdcManager: Platform channel registration complete\n");
-    
-    return hf_adc_err_t::ADC_SUCCESS;
+    return overall_result;
 }

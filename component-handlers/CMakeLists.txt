@@ -51,7 +51,11 @@ set(COMPONENT_SOURCES
 # Create component library
 idf_component_register(
     SRCS ${COMPONENT_SOURCES}
-    INCLUDE_DIRS "."
+    INCLUDE_DIRS 
+    "."
+    "../utils-and-drivers/driver-handlers"
+    "../utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc"
+    "../utils-and-drivers/hf-core-drivers/internal/hf-pincfg/src"
     REQUIRES 
         driver
         esp_timer
