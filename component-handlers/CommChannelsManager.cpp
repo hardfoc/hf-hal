@@ -428,10 +428,6 @@ BaseI2c* CommChannelsManager::GetI2cDevice(I2cDeviceId device_id) noexcept {
             return GetI2cDevice(0, static_cast<int>(I2cDeviceId::BNO08X_IMU));
         case I2cDeviceId::PCAL9555_GPIO_EXPANDER:
             return GetI2cDevice(0, static_cast<int>(I2cDeviceId::PCAL9555_GPIO_EXPANDER));
-        case I2cDeviceId::EXTERNAL_DEVICE_1:
-            return GetI2cDevice(0, static_cast<int>(I2cDeviceId::EXTERNAL_DEVICE_1));
-        case I2cDeviceId::EXTERNAL_DEVICE_2:
-            return GetI2cDevice(0, static_cast<int>(I2cDeviceId::EXTERNAL_DEVICE_2));
         default:
             return nullptr;
     }
