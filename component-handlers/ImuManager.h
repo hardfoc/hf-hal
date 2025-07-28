@@ -50,12 +50,21 @@ class BaseGpio;
  *         onboard_handler->EnableSensor(Bno08xSensorType::ROTATION_VECTOR, 50);
  *     }
  *     
- *     // Create external BNO08x device (index 1)
- *     if (imu_mgr.CreateExternalBno08xDevice(1, I2cDeviceId::EXTERNAL_IMU_1)) {
+ *     // Create external BNO08x device (index 1) with runtime I2C device creation
+ *     if (imu_mgr.CreateExternalBno08xDevice(1, 0x48, 400000)) {
  *         Bno08xHandler* external_handler = imu_mgr.GetBno08xHandler(1);
  *         if (external_handler) {
  *             // Configure and use external IMU
  *             external_handler->EnableSensor(Bno08xSensorType::ACCELEROMETER, 100);
+ *         }
+ *     }
+ *     
+ *     // Create external BNO08x device (index 2) with SPI interface
+ *     if (imu_mgr.CreateExternalBno08xDevice(2, SpiDeviceId::EXTERNAL_DEVICE_1)) {
+ *         Bno08xHandler* external_handler = imu_mgr.GetBno08xHandler(2);
+ *         if (external_handler) {
+ *             // Configure and use external SPI IMU
+ *             external_handler->EnableSensor(Bno08xSensorType::ROTATION_VECTOR, 50);
  *         }
  *     }
  * }
@@ -140,17 +149,7 @@ public:
                                    uint32_t i2c_speed_hz = 400000,
                                    const Bno08xConfig& config = Bno08xHandler::GetDefaultConfig());
 
-    /**
-     * @brief Create an external BNO08x IMU device on I2C interface using predefined device ID.
-     * @param deviceIndex External device index (1, 2, or 3 only)
-     * @param i2cDeviceId I2C device ID for communication
-     * @param config Optional BNO08x configuration (defaults to default config)
-     * @return true if device created successfully, false otherwise
-     * @note This method uses predefined I2C device IDs from CommChannelsManager
-     */
-    bool CreateExternalBno08xDevice(uint8_t deviceIndex, 
-                                   I2cDeviceId i2cDeviceId,
-                                   const Bno08xConfig& config = Bno08xHandler::GetDefaultConfig());
+
 
     /**
      * @brief Create an external BNO08x IMU device on SPI interface.
