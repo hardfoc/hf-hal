@@ -128,18 +128,13 @@ hf_adc_err_t AdcManager::GetSystemDiagnostics(AdcSystemDiagnostics& diagnostics)
         return hf_adc_err_t::ADC_ERR_NOT_INITIALIZED;
     }
     
-    std::lock_guard<RtosMutex> lock(mutex_);
-    
-    // Get current time for uptime calculation
+    // Get current time for uptime calculation (no lock needed for atomics)
     uint64_t now = GetCurrentTimeMs();
     uint64_t start_time = system_start_time_.load();
     uint64_t uptime = now - start_time;
     
-    // Fill diagnostics structure
+    // Fill diagnostics structure with atomic values (no lock needed)
     diagnostics.system_healthy = (failed_operations_.load() < total_operations_.load() * 0.1); // Less than 10% failure rate
-    diagnostics.total_channels_registered = Size();
-    diagnostics.channels_by_chip[0] = 0; // ESP32 channels
-    diagnostics.channels_by_chip[1] = 0; // TMC9660 channels
     diagnostics.total_operations = total_operations_.load();
     diagnostics.successful_operations = successful_operations_.load();
     diagnostics.failed_operations = failed_operations_.load();
@@ -148,16 +143,26 @@ hf_adc_err_t AdcManager::GetSystemDiagnostics(AdcSystemDiagnostics& diagnostics)
     diagnostics.system_uptime_ms = uptime;
     diagnostics.last_error = last_error_.load();
     
-    // Count channels by chip type
-    std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
-    for (const auto& [name, channel_info] : adc_registry_) {
-        if (channel_info && channel_info->is_registered) {
-            if (channel_info->hardware_chip == HfAdcChipType::ESP32_INTERNAL) {
-                diagnostics.channels_by_chip[0]++;
-            } else if (channel_info->hardware_chip == HfAdcChipType::TMC9660_CONTROLLER) {
-                diagnostics.channels_by_chip[1]++;
+    // Get channel count and count channels by chip type (minimize registry lock scope)
+    {
+        std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
+        
+        size_t total_count = 0;
+        diagnostics.channels_by_chip[0] = 0; // ESP32 channels
+        diagnostics.channels_by_chip[1] = 0; // TMC9660 channels
+        
+        for (const auto& [name, channel_info] : adc_registry_) {
+            if (channel_info && channel_info->is_registered) {
+                total_count++;
+                if (channel_info->hardware_chip == HfAdcChipType::ESP32_INTERNAL) {
+                    diagnostics.channels_by_chip[0]++;
+                } else if (channel_info->hardware_chip == HfAdcChipType::TMC9660_CONTROLLER) {
+                    diagnostics.channels_by_chip[1]++;
+                }
             }
         }
+        
+        diagnostics.total_channels_registered = total_count;
     }
     
     return hf_adc_err_t::ADC_SUCCESS;
@@ -279,24 +284,45 @@ hf_adc_err_t AdcManager::ReadChannelV(std::string_view name, float& voltage,
         return hf_adc_err_t::ADC_ERR_NOT_INITIALIZED;
     }
     
-    AdcChannelInfo* channel_info = FindChannelInfo(name);
-    if (!channel_info || !channel_info->is_registered) {
+    // Find channel info with minimal lock scope
+    BaseAdc* adc_driver = nullptr;
+    uint8_t hardware_channel_id = 0;
+    AdcChannelInfo* channel_info = nullptr;
+    
+    {
+        std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
+        auto it = adc_registry_.find(name);
+        if (it != adc_registry_.end() && it->second && it->second->is_registered) {
+            channel_info = it->second.get();
+            adc_driver = channel_info->adc_driver.get();
+            hardware_channel_id = channel_info->hardware_channel_id;
+        }
+    }
+    
+    if (!channel_info || !adc_driver) {
         UpdateLastError(hf_adc_err_t::ADC_ERR_SENSOR_NOT_FOUND);
         return hf_adc_err_t::ADC_ERR_SENSOR_NOT_FOUND;
     }
     
-    // Update access statistics
-    channel_info->access_count++;
-    channel_info->last_access_time = GetCurrentTimeMs();
+    // Update access statistics (quick lock for statistics update)
+    {
+        std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
+        channel_info->access_count++;
+        channel_info->last_access_time = GetCurrentTimeMs();
+    }
     
-    // Perform the read operation
-    hf_adc_err_t result = channel_info->adc_driver->ReadChannelV(
-        channel_info->hardware_channel_id, voltage, numOfSamplesToAvg, timeBetweenSamples);
+    // Perform the read operation (no locks needed for ADC operation)
+    hf_adc_err_t result = adc_driver->ReadChannelV(
+        hardware_channel_id, voltage, numOfSamplesToAvg, timeBetweenSamples);
     
     // Update statistics
     UpdateStatistics(result == hf_adc_err_t::ADC_SUCCESS);
     if (result != hf_adc_err_t::ADC_SUCCESS) {
-        channel_info->error_count++;
+        // Quick lock for error count update
+        {
+            std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
+            channel_info->error_count++;
+        }
         UpdateLastError(result);
     }
     
@@ -309,24 +335,45 @@ hf_adc_err_t AdcManager::ReadChannelCount(std::string_view name, hf_u32_t& value
         return hf_adc_err_t::ADC_ERR_NOT_INITIALIZED;
     }
     
-    AdcChannelInfo* channel_info = FindChannelInfo(name);
-    if (!channel_info || !channel_info->is_registered) {
+    // Find channel info with minimal lock scope
+    BaseAdc* adc_driver = nullptr;
+    uint8_t hardware_channel_id = 0;
+    AdcChannelInfo* channel_info = nullptr;
+    
+    {
+        std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
+        auto it = adc_registry_.find(name);
+        if (it != adc_registry_.end() && it->second && it->second->is_registered) {
+            channel_info = it->second.get();
+            adc_driver = channel_info->adc_driver.get();
+            hardware_channel_id = channel_info->hardware_channel_id;
+        }
+    }
+    
+    if (!channel_info || !adc_driver) {
         UpdateLastError(hf_adc_err_t::ADC_ERR_SENSOR_NOT_FOUND);
         return hf_adc_err_t::ADC_ERR_SENSOR_NOT_FOUND;
     }
     
-    // Update access statistics
-    channel_info->access_count++;
-    channel_info->last_access_time = GetCurrentTimeMs();
+    // Update access statistics (quick lock for statistics update)
+    {
+        std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
+        channel_info->access_count++;
+        channel_info->last_access_time = GetCurrentTimeMs();
+    }
     
-    // Perform the read operation
-    hf_adc_err_t result = channel_info->adc_driver->ReadChannelCount(
-        channel_info->hardware_channel_id, value, numOfSamplesToAvg, timeBetweenSamples);
+    // Perform the read operation (no locks needed for ADC operation)
+    hf_adc_err_t result = adc_driver->ReadChannelCount(
+        hardware_channel_id, value, numOfSamplesToAvg, timeBetweenSamples);
     
     // Update statistics
     UpdateStatistics(result == hf_adc_err_t::ADC_SUCCESS);
     if (result != hf_adc_err_t::ADC_SUCCESS) {
-        channel_info->error_count++;
+        // Quick lock for error count update
+        {
+            std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
+            channel_info->error_count++;
+        }
         UpdateLastError(result);
     }
     
@@ -339,24 +386,45 @@ hf_adc_err_t AdcManager::ReadChannel(std::string_view name, hf_u32_t& raw_value,
         return hf_adc_err_t::ADC_ERR_NOT_INITIALIZED;
     }
     
-    AdcChannelInfo* channel_info = FindChannelInfo(name);
-    if (!channel_info || !channel_info->is_registered) {
+    // Find channel info with minimal lock scope
+    BaseAdc* adc_driver = nullptr;
+    uint8_t hardware_channel_id = 0;
+    AdcChannelInfo* channel_info = nullptr;
+    
+    {
+        std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
+        auto it = adc_registry_.find(name);
+        if (it != adc_registry_.end() && it->second && it->second->is_registered) {
+            channel_info = it->second.get();
+            adc_driver = channel_info->adc_driver.get();
+            hardware_channel_id = channel_info->hardware_channel_id;
+        }
+    }
+    
+    if (!channel_info || !adc_driver) {
         UpdateLastError(hf_adc_err_t::ADC_ERR_SENSOR_NOT_FOUND);
         return hf_adc_err_t::ADC_ERR_SENSOR_NOT_FOUND;
     }
     
-    // Update access statistics
-    channel_info->access_count++;
-    channel_info->last_access_time = GetCurrentTimeMs();
+    // Update access statistics (quick lock for statistics update)
+    {
+        std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
+        channel_info->access_count++;
+        channel_info->last_access_time = GetCurrentTimeMs();
+    }
     
-    // Perform the read operation
-    hf_adc_err_t result = channel_info->adc_driver->ReadChannel(
-        channel_info->hardware_channel_id, raw_value, voltage, numOfSamplesToAvg, timeBetweenSamples);
+    // Perform the read operation (no locks needed for ADC operation)
+    hf_adc_err_t result = adc_driver->ReadChannel(
+        hardware_channel_id, raw_value, voltage, numOfSamplesToAvg, timeBetweenSamples);
     
     // Update statistics
     UpdateStatistics(result == hf_adc_err_t::ADC_SUCCESS);
     if (result != hf_adc_err_t::ADC_SUCCESS) {
-        channel_info->error_count++;
+        // Quick lock for error count update
+        {
+            std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
+            channel_info->error_count++;
+        }
         UpdateLastError(result);
     }
     
@@ -454,7 +522,7 @@ AdcBatchResult AdcManager::ReadAllChannels() noexcept {
         return result;
     }
     
-    // Get all registered channel names
+    // Get all registered channel names with minimal lock scope
     std::vector<std::string_view> channel_names;
     {
         std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
@@ -478,13 +546,25 @@ hf_adc_err_t AdcManager::GetStatistics(std::string_view name, BaseAdc::AdcStatis
         return hf_adc_err_t::ADC_ERR_NOT_INITIALIZED;
     }
     
-    const AdcChannelInfo* channel_info = FindChannelInfo(name);
-    if (!channel_info || !channel_info->is_registered) {
+    // Find channel info with minimal lock scope
+    BaseAdc* adc_driver = nullptr;
+    uint8_t hardware_channel_id = 0;
+    
+    {
+        std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
+        auto it = adc_registry_.find(name);
+        if (it != adc_registry_.end() && it->second && it->second->is_registered) {
+            adc_driver = it->second->adc_driver.get();
+            hardware_channel_id = it->second->hardware_channel_id;
+        }
+    }
+    
+    if (!adc_driver) {
         return hf_adc_err_t::ADC_ERR_SENSOR_NOT_FOUND;
     }
     
-    // Get statistics from the ADC driver
-    return channel_info->adc_driver->GetStatistics(channel_info->hardware_channel_id, statistics);
+    // Get statistics from the ADC driver (no locks needed)
+    return adc_driver->GetStatistics(hardware_channel_id, statistics);
 }
 
 hf_adc_err_t AdcManager::ResetStatistics(std::string_view name) noexcept {
@@ -492,18 +572,35 @@ hf_adc_err_t AdcManager::ResetStatistics(std::string_view name) noexcept {
         return hf_adc_err_t::ADC_ERR_NOT_INITIALIZED;
     }
     
-    AdcChannelInfo* channel_info = FindChannelInfo(name);
-    if (!channel_info || !channel_info->is_registered) {
+    // Find channel info with minimal lock scope
+    BaseAdc* adc_driver = nullptr;
+    uint8_t hardware_channel_id = 0;
+    AdcChannelInfo* channel_info = nullptr;
+    
+    {
+        std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
+        auto it = adc_registry_.find(name);
+        if (it != adc_registry_.end() && it->second && it->second->is_registered) {
+            channel_info = it->second.get();
+            adc_driver = channel_info->adc_driver.get();
+            hardware_channel_id = channel_info->hardware_channel_id;
+        }
+    }
+    
+    if (!channel_info || !adc_driver) {
         return hf_adc_err_t::ADC_ERR_SENSOR_NOT_FOUND;
     }
     
-    // Reset local statistics
-    channel_info->access_count = 0;
-    channel_info->error_count = 0;
-    channel_info->last_access_time = 0;
+    // Reset local statistics (quick lock for statistics update)
+    {
+        std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
+        channel_info->access_count = 0;
+        channel_info->error_count = 0;
+        channel_info->last_access_time = 0;
+    }
     
-    // Reset statistics in the ADC driver
-    return channel_info->adc_driver->ResetStatistics(channel_info->hardware_channel_id);
+    // Reset statistics in the ADC driver (no locks needed)
+    return adc_driver->ResetStatistics(hardware_channel_id);
 }
 
 hf_adc_err_t AdcManager::GetDiagnostics(std::string_view name, BaseAdc::AdcDiagnostics& diagnostics) const noexcept {
@@ -511,13 +608,25 @@ hf_adc_err_t AdcManager::GetDiagnostics(std::string_view name, BaseAdc::AdcDiagn
         return hf_adc_err_t::ADC_ERR_NOT_INITIALIZED;
     }
     
-    const AdcChannelInfo* channel_info = FindChannelInfo(name);
-    if (!channel_info || !channel_info->is_registered) {
+    // Find channel info with minimal lock scope
+    BaseAdc* adc_driver = nullptr;
+    uint8_t hardware_channel_id = 0;
+    
+    {
+        std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
+        auto it = adc_registry_.find(name);
+        if (it != adc_registry_.end() && it->second && it->second->is_registered) {
+            adc_driver = it->second->adc_driver.get();
+            hardware_channel_id = it->second->hardware_channel_id;
+        }
+    }
+    
+    if (!adc_driver) {
         return hf_adc_err_t::ADC_ERR_SENSOR_NOT_FOUND;
     }
     
-    // Get diagnostics from the ADC driver
-    return channel_info->adc_driver->GetDiagnostics(channel_info->hardware_channel_id, diagnostics);
+    // Get diagnostics from the ADC driver (no locks needed)
+    return adc_driver->GetDiagnostics(hardware_channel_id, diagnostics);
 }
 
 hf_adc_err_t AdcManager::ResetDiagnostics(std::string_view name) noexcept {
@@ -525,13 +634,25 @@ hf_adc_err_t AdcManager::ResetDiagnostics(std::string_view name) noexcept {
         return hf_adc_err_t::ADC_ERR_NOT_INITIALIZED;
     }
     
-    AdcChannelInfo* channel_info = FindChannelInfo(name);
-    if (!channel_info || !channel_info->is_registered) {
+    // Find channel info with minimal lock scope
+    BaseAdc* adc_driver = nullptr;
+    uint8_t hardware_channel_id = 0;
+    
+    {
+        std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
+        auto it = adc_registry_.find(name);
+        if (it != adc_registry_.end() && it->second && it->second->is_registered) {
+            adc_driver = it->second->adc_driver.get();
+            hardware_channel_id = it->second->hardware_channel_id;
+        }
+    }
+    
+    if (!adc_driver) {
         return hf_adc_err_t::ADC_ERR_SENSOR_NOT_FOUND;
     }
     
-    // Reset diagnostics in the ADC driver
-    return channel_info->adc_driver->ResetDiagnostics(channel_info->hardware_channel_id);
+    // Reset diagnostics in the ADC driver (no locks needed)
+    return adc_driver->ResetDiagnostics(hardware_channel_id);
 }
 
 hf_adc_err_t AdcManager::GetSystemHealth(std::string& health_info) const noexcept {
@@ -736,28 +857,6 @@ hf_adc_err_t AdcManager::Initialize() noexcept {
     Logger::GetInstance().Info("AdcManager", "Initialized with %zu channels", Size());
     
     return hf_adc_err_t::ADC_SUCCESS;
-}
-
-AdcChannelInfo* AdcManager::FindChannelInfo(std::string_view name) noexcept {
-    std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
-    
-    auto it = adc_registry_.find(name);
-    if (it != adc_registry_.end() && it->second) {
-        return it->second.get();
-    }
-    
-    return nullptr;
-}
-
-const AdcChannelInfo* AdcManager::FindChannelInfo(std::string_view name) const noexcept {
-    std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
-    
-    auto it = adc_registry_.find(name);
-    if (it != adc_registry_.end() && it->second) {
-        return it->second.get();
-    }
-    
-    return nullptr;
 }
 
 std::unique_ptr<EspAdc> AdcManager::CreateEsp32Adc(uint8_t unit_id, float reference_voltage) noexcept {
