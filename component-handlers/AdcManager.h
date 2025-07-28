@@ -564,20 +564,6 @@ private:
     // ===============================
     
     /**
-     * @brief Find ADC channel info by name.
-     * @param name Channel name
-     * @return Pointer to channel info or nullptr if not found
-     */
-    [[nodiscard]] AdcChannelInfo* FindChannelInfo(std::string_view name) noexcept;
-    
-    /**
-     * @brief Find ADC channel info by name (const version).
-     * @param name Channel name
-     * @return Pointer to channel info or nullptr if not found
-     */
-    [[nodiscard]] const AdcChannelInfo* FindChannelInfo(std::string_view name) const noexcept;
-    
-    /**
      * @brief Create ESP32 ADC instance for a specific unit.
      * @param unit_id ADC unit ID (0=ADC1, 1=ADC2)
      * @param reference_voltage Reference voltage in volts
