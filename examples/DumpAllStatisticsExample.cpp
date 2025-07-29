@@ -56,67 +56,39 @@ void DumpAllSystemStatistics() noexcept {
     Logger::GetInstance().Info(TAG, "");
     
     // 1. Logger Statistics (first, since others depend on it)
-    try {
-        Logger::GetInstance().Info(TAG, "--- LOGGER MANAGER ---");
-        Logger::GetInstance().DumpStatistics();
-        Logger::GetInstance().Info(TAG, "");
-    } catch (...) {
-        Logger::GetInstance().Error(TAG, "Failed to dump Logger statistics");
-    }
+    Logger::GetInstance().Info(TAG, "--- LOGGER MANAGER ---");
+    Logger::GetInstance().DumpStatistics();
+    Logger::GetInstance().Info(TAG, "");
     
     // 2. LED Manager Statistics
-    try {
-        Logger::GetInstance().Info(TAG, "--- LED MANAGER ---");
-        LedManager::GetInstance().DumpStatistics();
-        Logger::GetInstance().Info(TAG, "");
-    } catch (...) {
-        Logger::GetInstance().Error(TAG, "Failed to dump LED Manager statistics");
-    }
+    Logger::GetInstance().Info(TAG, "--- LED MANAGER ---");
+    LedManager::GetInstance().DumpStatistics();
+    Logger::GetInstance().Info(TAG, "");
     
     // 3. GPIO Manager Statistics
-    try {
-        Logger::GetInstance().Info(TAG, "--- GPIO MANAGER ---");
-        GpioManager::GetInstance().DumpStatistics();
-        Logger::GetInstance().Info(TAG, "");
-    } catch (...) {
-        Logger::GetInstance().Error(TAG, "Failed to dump GPIO Manager statistics");
-    }
+    Logger::GetInstance().Info(TAG, "--- GPIO MANAGER ---");
+    GpioManager::GetInstance().DumpStatistics();
+    Logger::GetInstance().Info(TAG, "");
     
     // 4. ADC Manager Statistics
-    try {
-        Logger::GetInstance().Info(TAG, "--- ADC MANAGER ---");
-        AdcManager::GetInstance().DumpStatistics();
-        Logger::GetInstance().Info(TAG, "");
-    } catch (...) {
-        Logger::GetInstance().Error(TAG, "Failed to dump ADC Manager statistics");
-    }
+    Logger::GetInstance().Info(TAG, "--- ADC MANAGER ---");
+    AdcManager::GetInstance().DumpStatistics();
+    Logger::GetInstance().Info(TAG, "");
     
     // 5. Communication Channels Manager Statistics
-    try {
-        Logger::GetInstance().Info(TAG, "--- COMM CHANNELS MANAGER ---");
-        CommChannelsManager::GetInstance().DumpStatistics();
-        Logger::GetInstance().Info(TAG, "");
-    } catch (...) {
-        Logger::GetInstance().Error(TAG, "Failed to dump CommChannels Manager statistics");
-    }
+    Logger::GetInstance().Info(TAG, "--- COMM CHANNELS MANAGER ---");
+    CommChannelsManager::GetInstance().DumpStatistics();
+    Logger::GetInstance().Info(TAG, "");
     
     // 6. IMU Manager Statistics
-    try {
-        Logger::GetInstance().Info(TAG, "--- IMU MANAGER ---");
-        ImuManager::GetInstance().DumpStatistics();
-        Logger::GetInstance().Info(TAG, "");
-    } catch (...) {
-        Logger::GetInstance().Error(TAG, "Failed to dump IMU Manager statistics");
-    }
+    Logger::GetInstance().Info(TAG, "--- IMU MANAGER ---");
+    ImuManager::GetInstance().DumpStatistics();
+    Logger::GetInstance().Info(TAG, "");
     
     // 7. Motor Controller Statistics
-    try {
-        Logger::GetInstance().Info(TAG, "--- MOTOR CONTROLLER ---");
-        MotorController::GetInstance().DumpStatistics();
-        Logger::GetInstance().Info(TAG, "");
-    } catch (...) {
-        Logger::GetInstance().Error(TAG, "Failed to dump Motor Controller statistics");
-    }
+    Logger::GetInstance().Info(TAG, "--- MOTOR CONTROLLER ---");
+    MotorController::GetInstance().DumpStatistics();
+    Logger::GetInstance().Info(TAG, "");
     
     // Summary
     Logger::GetInstance().Info(TAG, "########################################");
@@ -220,50 +192,34 @@ void DumpAllHandlerDiagnostics() noexcept {
     Logger::GetInstance().Info(TAG, "Dumping diagnostics from all hardware handlers...");
     
     // TMC9660 Handler Diagnostics
-    try {
-        Logger::GetInstance().Info(TAG, "--- TMC9660 HANDLER ---");
-        // Note: This would require access to a TMC9660Handler instance
-        // In practice, you would get this from the MotorController
-        // auto& motor_controller = MotorController::GetInstance();
-        // auto* tmc_handler = motor_controller.handler(0);
-        // if (tmc_handler) {
-        //     tmc_handler->DumpDiagnostics();
-        // }
-        Logger::GetInstance().Info(TAG, "TMC9660 handler diagnostics would be called here");
-        Logger::GetInstance().Info(TAG, "");
-    } catch (...) {
-        Logger::GetInstance().Error(TAG, "Failed to dump TMC9660 handler diagnostics");
-    }
+    Logger::GetInstance().Info(TAG, "--- TMC9660 HANDLER ---");
+    // Note: This would require access to a TMC9660Handler instance
+    // In practice, you would get this from the MotorController
+    // auto& motor_controller = MotorController::GetInstance();
+    // auto* tmc_handler = motor_controller.handler(0);
+    // if (tmc_handler) {
+    //     tmc_handler->DumpDiagnostics();
+    // }
+    Logger::GetInstance().Info(TAG, "TMC9660 handler diagnostics would be called here");
+    Logger::GetInstance().Info(TAG, "");
     
     // AS5047U Handler Diagnostics
-    try {
-        Logger::GetInstance().Info(TAG, "--- AS5047U HANDLER ---");
-        // Note: This would require access to an AS5047U Handler instance
-        Logger::GetInstance().Info(TAG, "AS5047U handler diagnostics would be called here");
-        Logger::GetInstance().Info(TAG, "");
-    } catch (...) {
-        Logger::GetInstance().Error(TAG, "Failed to dump AS5047U handler diagnostics");
-    }
+    Logger::GetInstance().Info(TAG, "--- AS5047U HANDLER ---");
+    // Note: This would require access to an AS5047U Handler instance
+    Logger::GetInstance().Info(TAG, "AS5047U handler diagnostics would be called here");
+    Logger::GetInstance().Info(TAG, "");
     
     // BNO08x Handler Diagnostics
-    try {
-        Logger::GetInstance().Info(TAG, "--- BNO08X HANDLER ---");
-        // Note: This would require access to a BNO08x Handler instance
-        Logger::GetInstance().Info(TAG, "BNO08x handler diagnostics would be called here");
-        Logger::GetInstance().Info(TAG, "");
-    } catch (...) {
-        Logger::GetInstance().Error(TAG, "Failed to dump BNO08x handler diagnostics");
-    }
+    Logger::GetInstance().Info(TAG, "--- BNO08X HANDLER ---");
+    // Note: This would require access to a BNO08x Handler instance
+    Logger::GetInstance().Info(TAG, "BNO08x handler diagnostics would be called here");
+    Logger::GetInstance().Info(TAG, "");
     
     // PCAL95555 Handler Diagnostics
-    try {
-        Logger::GetInstance().Info(TAG, "--- PCAL95555 HANDLER ---");
-        // Note: This would require access to a PCAL95555 Handler instance
-        Logger::GetInstance().Info(TAG, "PCAL95555 handler diagnostics would be called here");
-        Logger::GetInstance().Info(TAG, "");
-    } catch (...) {
-        Logger::GetInstance().Error(TAG, "Failed to dump PCAL95555 handler diagnostics");
-    }
+    Logger::GetInstance().Info(TAG, "--- PCAL95555 HANDLER ---");
+    // Note: This would require access to a PCAL95555 Handler instance
+    Logger::GetInstance().Info(TAG, "PCAL95555 handler diagnostics would be called here");
+    Logger::GetInstance().Info(TAG, "");
     
     Logger::GetInstance().Info(TAG, "Handler diagnostics dump complete");
     Logger::GetInstance().Info(TAG, "Note: Actual handler diagnostics require active handler instances");
@@ -396,7 +352,7 @@ void RunDumpAllStatisticsExample() noexcept {
  * - Communication interface status
  * - Sensor calibration and health data
  * - Thread-safe statistics collection
- * - Exception-safe statistics dumping
+ * - Robust statistics dumping with error handling
  * 
  * Use Cases:
  * - System debugging and troubleshooting
