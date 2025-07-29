@@ -17,6 +17,7 @@
 #include "component-handlers/AdcManager.h"
 #include "component-handlers/CommChannelsManager.h"
 #include "component-handlers/ImuManager.h"
+#include "component-handlers/EncoderManager.h"
 #include "component-handlers/MotorController.h"
 #include "utils-and-drivers/driver-handlers/Logger.h"
 #include "utils-and-drivers/driver-handlers/Tmc9660Handler.h"
@@ -85,7 +86,12 @@ void DumpAllSystemStatistics() noexcept {
     ImuManager::GetInstance().DumpStatistics();
     Logger::GetInstance().Info(TAG, "");
     
-    // 7. Motor Controller Statistics
+    // 7. Encoder Manager Statistics
+    Logger::GetInstance().Info(TAG, "--- ENCODER MANAGER ---");
+    EncoderManager::GetInstance().DumpStatistics();
+    Logger::GetInstance().Info(TAG, "");
+    
+    // 8. Motor Controller Statistics
     Logger::GetInstance().Info(TAG, "--- MOTOR CONTROLLER ---");
     MotorController::GetInstance().DumpStatistics();
     Logger::GetInstance().Info(TAG, "");
@@ -122,6 +128,9 @@ void DumpSpecificManagerStatistics(const char* manager_name) noexcept {
     else if (strcmp(manager_name, "imu") == 0 || strcmp(manager_name, "ImuManager") == 0) {
         ImuManager::GetInstance().DumpStatistics();
     }
+    else if (strcmp(manager_name, "encoder") == 0 || strcmp(manager_name, "EncoderManager") == 0) {
+        EncoderManager::GetInstance().DumpStatistics();
+    }
     else if (strcmp(manager_name, "motor") == 0 || strcmp(manager_name, "MotorController") == 0) {
         MotorController::GetInstance().DumpStatistics();
     }
@@ -130,7 +139,7 @@ void DumpSpecificManagerStatistics(const char* manager_name) noexcept {
     }
     else {
         Logger::GetInstance().Error(TAG, "Unknown manager: %s", manager_name);
-        Logger::GetInstance().Info(TAG, "Available managers: led, gpio, adc, comm, imu, motor, logger");
+        Logger::GetInstance().Info(TAG, "Available managers: led, gpio, adc, comm, imu, encoder, motor, logger");
     }
 }
 
@@ -171,6 +180,11 @@ void InitializeAllManagers() noexcept {
     // Initialize IMU Manager
     if (!ImuManager::GetInstance().EnsureInitialized()) {
         Logger::GetInstance().Warn(TAG, "IMU Manager initialization failed");
+    }
+    
+    // Initialize Encoder Manager
+    if (!EncoderManager::GetInstance().EnsureInitialized()) {
+        Logger::GetInstance().Warn(TAG, "Encoder Manager initialization failed");
     }
     
     // Initialize Motor Controller

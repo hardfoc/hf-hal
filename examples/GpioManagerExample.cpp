@@ -23,9 +23,8 @@
 
 #include "component-handlers/GpioManager.h"
 #include "utils-and-drivers/hf-core-drivers/internal/hf-pincfg/src/hf_functional_pin_config_vortex_v1.hpp"
-#include <iostream>
-#include <thread>
-#include <chrono>
+#include "utils-and-drivers/driver-handlers/Logger.h"
+#include "utils-and-drivers/hf-core-utils/hf-utils-rtos-wrap/include/OsUtility.h"
 
 //==============================================================================
 // EXAMPLE FUNCTIONS
@@ -35,39 +34,39 @@
  * @brief Demonstrate basic GPIO operations using string names.
  */
 void DemonstrateBasicOperations() {
-    std::cout << "\n=== Basic GPIO Operations ===" << std::endl;
+    Logger::GetInstance().Info("GpioManagerExample", "\n=== Basic GPIO Operations ===");
     
     auto& gpio_manager = GpioManager::GetInstance();
     
     // Set a GPIO pin to active state
     hf_gpio_err_t result = gpio_manager.SetActive("GPIO_WS2812_LED_DAT");
     if (result == hf_gpio_err_t::GPIO_SUCCESS) {
-        std::cout << "✓ Set WS2812 LED pin to active" << std::endl;
+        Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: Set WS2812 LED pin to active");
     } else {
-        std::cout << "✗ Failed to set WS2812 LED pin to active (error: " << static_cast<int>(result) << ")" << std::endl;
+        Logger::GetInstance().Error("GpioManagerExample", "FAILED: Failed to set WS2812 LED pin to active (error: " + std::to_string(static_cast<int>(result)) + ")");
     }
     
     // Read the current state
     bool state;
     result = gpio_manager.Read("GPIO_WS2812_LED_DAT", state);
     if (result == hf_gpio_err_t::GPIO_SUCCESS) {
-        std::cout << "✓ Read WS2812 LED pin state: " << (state ? "ACTIVE" : "INACTIVE") << std::endl;
+        Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: Read WS2812 LED pin state: " + (state ? "ACTIVE" : "INACTIVE"));
     } else {
-        std::cout << "✗ Failed to read WS2812 LED pin state (error: " << static_cast<int>(result) << ")" << std::endl;
+        Logger::GetInstance().Error("GpioManagerExample", "FAILED: Failed to read WS2812 LED pin state (error: " + std::to_string(static_cast<int>(result)) + ")");
     }
     
     // Toggle the pin
     if (gpio_manager.Toggle("GPIO_WS2812_LED_DAT")) {
-        std::cout << "✓ Toggled WS2812 LED pin" << std::endl;
+        Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: Toggled WS2812 LED pin");
     } else {
-        std::cout << "✗ Failed to toggle WS2812 LED pin" << std::endl;
+        Logger::GetInstance().Error("GpioManagerExample", "FAILED: Failed to toggle WS2812 LED pin");
     }
     
     // Set to inactive
     if (gpio_manager.SetInactive("GPIO_WS2812_LED_DAT")) {
-        std::cout << "✓ Set WS2812 LED pin to inactive" << std::endl;
+        Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: Set WS2812 LED pin to inactive");
     } else {
-        std::cout << "✗ Failed to set WS2812 LED pin to inactive" << std::endl;
+        Logger::GetInstance().Error("GpioManagerExample", "FAILED: Failed to set WS2812 LED pin to inactive");
     }
 }
 
@@ -75,45 +74,45 @@ void DemonstrateBasicOperations() {
  * @brief Demonstrate pin configuration operations.
  */
 void DemonstratePinConfiguration() {
-    std::cout << "\n=== Pin Configuration ===" << std::endl;
+    Logger::GetInstance().Info("GpioManagerExample", "\n=== Pin Configuration ===");
     
     auto& gpio_manager = GpioManager::GetInstance();
     
     // Configure pin direction
     if (gpio_manager.SetDirection("GPIO_EXT_GPIO_CS_1", hf_gpio_direction_t::HF_GPIO_DIRECTION_OUTPUT) == hf_gpio_err_t::GPIO_SUCCESS) {
-        std::cout << "✓ Set EXT_GPIO_CS_1 to output direction" << std::endl;
+        Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: Set EXT_GPIO_CS_1 to output direction");
     } else {
-        std::cout << "✗ Failed to set EXT_GPIO_CS_1 direction" << std::endl;
+        Logger::GetInstance().Error("GpioManagerExample", "FAILED: Failed to set EXT_GPIO_CS_1 direction");
     }
     
     // Configure pull mode (this pin has pull-up configured in mapping)
     if (gpio_manager.SetPullMode("GPIO_EXT_GPIO_CS_1", hf_gpio_pull_mode_t::HF_GPIO_PULL_MODE_UP) == hf_gpio_err_t::GPIO_SUCCESS) {
-        std::cout << "✓ Set EXT_GPIO_CS_1 pull mode to UP" << std::endl;
+        Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: Set EXT_GPIO_CS_1 pull mode to UP");
     } else {
-        std::cout << "✗ Failed to set EXT_GPIO_CS_1 pull mode" << std::endl;
+        Logger::GetInstance().Error("GpioManagerExample", "FAILED: Failed to set EXT_GPIO_CS_1 pull mode");
     }
     
     // Configure output mode (push-pull vs open-drain)
     if (gpio_manager.SetOutputMode("GPIO_EXT_GPIO_CS_1", hf_gpio_output_mode_t::HF_GPIO_OUTPUT_MODE_PUSH_PULL) == hf_gpio_err_t::GPIO_SUCCESS) {
-        std::cout << "✓ Set EXT_GPIO_CS_1 to push-pull output mode" << std::endl;
+        Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: Set EXT_GPIO_CS_1 to push-pull output mode");
     } else {
-        std::cout << "✗ Failed to set EXT_GPIO_CS_1 output mode" << std::endl;
+        Logger::GetInstance().Error("GpioManagerExample", "FAILED: Failed to set EXT_GPIO_CS_1 output mode");
     }
     
     // Read back configuration
     hf_gpio_direction_t direction;
     if (gpio_manager.GetDirection("GPIO_EXT_GPIO_CS_1", direction)) {
-        std::cout << "✓ EXT_GPIO_CS_1 direction: " << (direction == hf_gpio_direction_t::HF_GPIO_DIRECTION_OUTPUT ? "OUTPUT" : "INPUT") << std::endl;
+        Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: EXT_GPIO_CS_1 direction: " + (direction == hf_gpio_direction_t::HF_GPIO_DIRECTION_OUTPUT ? "OUTPUT" : "INPUT"));
     }
     
     hf_gpio_pull_mode_t pull_mode;
     if (gpio_manager.GetPullMode("GPIO_EXT_GPIO_CS_1", pull_mode)) {
-        std::cout << "✓ EXT_GPIO_CS_1 pull mode: " << static_cast<int>(pull_mode) << std::endl;
+        Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: EXT_GPIO_CS_1 pull mode: " + std::to_string(static_cast<int>(pull_mode)));
     }
     
     hf_gpio_output_mode_t output_mode;
     if (gpio_manager.GetOutputMode("GPIO_EXT_GPIO_CS_1", output_mode)) {
-        std::cout << "✓ EXT_GPIO_CS_1 output mode: " << (output_mode == hf_gpio_output_mode_t::HF_GPIO_OUTPUT_MODE_PUSH_PULL ? "PUSH_PULL" : "OPEN_DRAIN") << std::endl;
+        Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: EXT_GPIO_CS_1 output mode: " + (output_mode == hf_gpio_output_mode_t::HF_GPIO_OUTPUT_MODE_PUSH_PULL ? "PUSH_PULL" : "OPEN_DRAIN"));
     }
 }
 
@@ -121,17 +120,17 @@ void DemonstratePinConfiguration() {
  * @brief Demonstrate interrupt handling.
  */
 void DemonstrateInterruptHandling() {
-    std::cout << "\n=== Interrupt Handling ===" << std::endl;
+    Logger::GetInstance().Info("GpioManagerExample", "\n=== Interrupt Handling ===");
     
     auto& gpio_manager = GpioManager::GetInstance();
     
     // Check if pin supports interrupts
     if (gpio_manager.SupportsInterrupts("GPIO_PCAL_IMU_INT")) {
-        std::cout << "✓ PCAL_IMU_INT supports interrupts" << std::endl;
+        Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: PCAL_IMU_INT supports interrupts");
         
         // Configure interrupt callback
         auto interrupt_callback = [](BaseGpio* gpio, hf_gpio_interrupt_trigger_t trigger, void* user_data) {
-            std::cout << "🔔 Interrupt triggered on pin!" << std::endl;
+            Logger::GetInstance().Info("GpioManagerExample", "INTERRUPT: Interrupt triggered on pin!");
             (void)gpio; (void)trigger; (void)user_data; // Suppress unused warnings
         };
         
@@ -139,29 +138,29 @@ void DemonstrateInterruptHandling() {
         if (gpio_manager.ConfigureInterrupt("GPIO_PCAL_IMU_INT", 
                                           hf_gpio_interrupt_trigger_t::HF_GPIO_INTERRUPT_TRIGGER_RISING_EDGE,
                                           interrupt_callback) == hf_gpio_err_t::GPIO_SUCCESS) {
-            std::cout << "✓ Configured rising edge interrupt on PCAL_IMU_INT" << std::endl;
+            Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: Configured rising edge interrupt on PCAL_IMU_INT");
         } else {
-            std::cout << "✗ Failed to configure interrupt on PCAL_IMU_INT" << std::endl;
+            Logger::GetInstance().Error("GpioManagerExample", "FAILED: Failed to configure interrupt on PCAL_IMU_INT");
         }
         
         // Enable interrupt
         if (gpio_manager.EnableInterrupt("GPIO_PCAL_IMU_INT") == hf_gpio_err_t::GPIO_SUCCESS) {
-            std::cout << "✓ Enabled interrupt on PCAL_IMU_INT" << std::endl;
+            Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: Enabled interrupt on PCAL_IMU_INT");
         } else {
-            std::cout << "✗ Failed to enable interrupt on PCAL_IMU_INT" << std::endl;
+            Logger::GetInstance().Error("GpioManagerExample", "FAILED: Failed to enable interrupt on PCAL_IMU_INT");
         }
         
         // Wait a bit for potential interrupt
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        os_delay_msec(100);
         
         // Disable interrupt
         if (gpio_manager.DisableInterrupt("GPIO_PCAL_IMU_INT") == hf_gpio_err_t::GPIO_SUCCESS) {
-            std::cout << "✓ Disabled interrupt on PCAL_IMU_INT" << std::endl;
+            Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: Disabled interrupt on PCAL_IMU_INT");
         } else {
-            std::cout << "✗ Failed to disable interrupt on PCAL_IMU_INT" << std::endl;
+            Logger::GetInstance().Error("GpioManagerExample", "FAILED: Failed to disable interrupt on PCAL_IMU_INT");
         }
     } else {
-        std::cout << "✗ PCAL_IMU_INT does not support interrupts" << std::endl;
+        Logger::GetInstance().Info("GpioManagerExample", "FAILED: PCAL_IMU_INT does not support interrupts");
     }
 }
 
@@ -169,7 +168,7 @@ void DemonstrateInterruptHandling() {
  * @brief Demonstrate batch operations for performance.
  */
 void DemonstrateBatchOperations() {
-    std::cout << "\n=== Batch Operations ===" << std::endl;
+    Logger::GetInstance().Info("GpioManagerExample", "\n=== Batch Operations ===");
     
     auto& gpio_manager = GpioManager::GetInstance();
     
@@ -182,12 +181,12 @@ void DemonstrateBatchOperations() {
     
     auto read_result = gpio_manager.BatchRead(pins_to_read);
     if (read_result.AllSuccessful()) {
-        std::cout << "✓ Batch read successful for " << read_result.pin_names.size() << " pins" << std::endl;
+        Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: Batch read successful for " + std::to_string(read_result.pin_names.size()) + " pins");
         for (size_t i = 0; i < read_result.pin_names.size(); ++i) {
-            std::cout << "  " << read_result.pin_names[i] << ": " << (read_result.states[i] ? "ACTIVE" : "INACTIVE") << std::endl;
+            Logger::GetInstance().Info("GpioManagerExample", "  " + std::string(read_result.pin_names[i]) + ": " + (read_result.states[i] ? "ACTIVE" : "INACTIVE"));
         }
     } else {
-        std::cout << "✗ Batch read failed" << std::endl;
+        Logger::GetInstance().Error("GpioManagerExample", "FAILED: Batch read failed");
     }
     
     // Batch write multiple pins
@@ -197,25 +196,25 @@ void DemonstrateBatchOperations() {
     GpioBatchOperation write_operation(pins_to_write, states);
     auto write_result = gpio_manager.BatchWrite(write_operation);
     if (write_result.AllSuccessful()) {
-        std::cout << "✓ Batch write successful for " << write_result.pin_names.size() << " pins" << std::endl;
+        Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: Batch write successful for " + std::to_string(write_result.pin_names.size()) + " pins");
     } else {
-        std::cout << "✗ Batch write failed" << std::endl;
+        Logger::GetInstance().Error("GpioManagerExample", "FAILED: Batch write failed");
     }
     
     // Set multiple pins to active
     auto active_result = gpio_manager.SetMultipleActive({"GPIO_WS2812_LED_DAT"});
     if (active_result.AllSuccessful()) {
-        std::cout << "✓ Set multiple pins to active successful" << std::endl;
+        Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: Set multiple pins to active successful");
     } else {
-        std::cout << "✗ Set multiple pins to active failed" << std::endl;
+        Logger::GetInstance().Error("GpioManagerExample", "FAILED: Set multiple pins to active failed");
     }
     
     // Set multiple pins to inactive
     auto inactive_result = gpio_manager.SetMultipleInactive({"GPIO_WS2812_LED_DAT"});
     if (inactive_result.AllSuccessful()) {
-        std::cout << "✓ Set multiple pins to inactive successful" << std::endl;
+        Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: Set multiple pins to inactive successful");
     } else {
-        std::cout << "✗ Set multiple pins to inactive failed" << std::endl;
+        Logger::GetInstance().Error("GpioManagerExample", "FAILED: Set multiple pins to inactive failed");
     }
 }
 
@@ -223,7 +222,7 @@ void DemonstrateBatchOperations() {
  * @brief Demonstrate user-defined GPIO registration.
  */
 void DemonstrateUserDefinedGpio() {
-    std::cout << "\n=== User-Defined GPIO Registration ===" << std::endl;
+    Logger::GetInstance().Info("GpioManagerExample", "\n=== User-Defined GPIO Registration ===");
     
     auto& gpio_manager = GpioManager::GetInstance();
     
@@ -239,22 +238,22 @@ void DemonstrateUserDefinedGpio() {
     if (custom_gpio->Initialize()) {
         // Register the custom GPIO
         if (gpio_manager.RegisterGpio("USER_CUSTOM_LED", custom_gpio)) {
-            std::cout << "✓ Registered custom GPIO as USER_CUSTOM_LED" << std::endl;
+            Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: Registered custom GPIO as USER_CUSTOM_LED");
         } else {
-            std::cout << "✗ Failed to register custom GPIO" << std::endl;
+            Logger::GetInstance().Error("GpioManagerExample", "FAILED: Failed to register custom GPIO");
             return;
         }
         
         // Use the custom GPIO
         if (gpio_manager.SetActive("USER_CUSTOM_LED")) {
-            std::cout << "✓ Set custom LED to active" << std::endl;
+            Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: Set custom LED to active");
         }
         
         if (gpio_manager.SetInactive("USER_CUSTOM_LED")) {
-            std::cout << "✓ Set custom LED to inactive" << std::endl;
+            Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: Set custom LED to inactive");
         }
     } else {
-        std::cout << "✗ Failed to initialize custom GPIO" << std::endl;
+        Logger::GetInstance().Error("GpioManagerExample", "FAILED: Failed to initialize custom GPIO");
     }
 }
 
@@ -262,73 +261,73 @@ void DemonstrateUserDefinedGpio() {
  * @brief Demonstrate system diagnostics and health monitoring.
  */
 void DemonstrateSystemDiagnostics() {
-    std::cout << "\n=== System Diagnostics ===" << std::endl;
+    Logger::GetInstance().Info("GpioManagerExample", "\n=== System Diagnostics ===");
     
     auto& gpio_manager = GpioManager::GetInstance();
     
     // Get system diagnostics
     GpioSystemDiagnostics diagnostics;
     if (gpio_manager.GetSystemDiagnostics(diagnostics)) {
-        std::cout << "✓ System Diagnostics:" << std::endl;
-        std::cout << "  System Healthy: " << (diagnostics.system_healthy ? "YES" : "NO") << std::endl;
-        std::cout << "  Total Pins Registered: " << diagnostics.total_pins_registered << std::endl;
-        std::cout << "  Total Operations: " << diagnostics.total_operations << std::endl;
-        std::cout << "  Successful Operations: " << diagnostics.successful_operations << std::endl;
-        std::cout << "  Failed Operations: " << diagnostics.failed_operations << std::endl;
-        std::cout << "  Communication Errors: " << diagnostics.communication_errors << std::endl;
-        std::cout << "  Hardware Errors: " << diagnostics.hardware_errors << std::endl;
+        Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: System Diagnostics:");
+        Logger::GetInstance().Info("GpioManagerExample", "  System Healthy: " + (diagnostics.system_healthy ? "YES" : "NO"));
+        Logger::GetInstance().Info("GpioManagerExample", "  Total Pins Registered: " + std::to_string(diagnostics.total_pins_registered));
+        Logger::GetInstance().Info("GpioManagerExample", "  Total Operations: " + std::to_string(diagnostics.total_operations));
+        Logger::GetInstance().Info("GpioManagerExample", "  Successful Operations: " + std::to_string(diagnostics.successful_operations));
+        Logger::GetInstance().Info("GpioManagerExample", "  Failed Operations: " + std::to_string(diagnostics.failed_operations));
+        Logger::GetInstance().Info("GpioManagerExample", "  Communication Errors: " + std::to_string(diagnostics.communication_errors));
+        Logger::GetInstance().Info("GpioManagerExample", "  Hardware Errors: " + std::to_string(diagnostics.hardware_errors));
         
         // Show pins by category
-        std::cout << "  Pins by Category:" << std::endl;
-        std::cout << "    CORE: " << diagnostics.pins_by_category[0] << std::endl;
-        std::cout << "    COMM: " << diagnostics.pins_by_category[1] << std::endl;
-        std::cout << "    GPIO: " << diagnostics.pins_by_category[2] << std::endl;
-        std::cout << "    USER: " << diagnostics.pins_by_category[3] << std::endl;
+        Logger::GetInstance().Info("GpioManagerExample", "  Pins by Category:");
+        Logger::GetInstance().Info("GpioManagerExample", "    CORE: " + std::to_string(diagnostics.pins_by_category[0]));
+        Logger::GetInstance().Info("GpioManagerExample", "    COMM: " + std::to_string(diagnostics.pins_by_category[1]));
+        Logger::GetInstance().Info("GpioManagerExample", "    GPIO: " + std::to_string(diagnostics.pins_by_category[2]));
+        Logger::GetInstance().Info("GpioManagerExample", "    USER: " + std::to_string(diagnostics.pins_by_category[3]));
         
         // Show pins by chip
-        std::cout << "  Pins by Chip:" << std::endl;
-        std::cout << "    ESP32: " << diagnostics.pins_by_chip[0] << std::endl;
-        std::cout << "    PCAL95555: " << diagnostics.pins_by_chip[1] << std::endl;
-        std::cout << "    TMC9660: " << diagnostics.pins_by_chip[2] << std::endl;
+        Logger::GetInstance().Info("GpioManagerExample", "  Pins by Chip:");
+        Logger::GetInstance().Info("GpioManagerExample", "    ESP32: " + std::to_string(diagnostics.pins_by_chip[0]));
+        Logger::GetInstance().Info("GpioManagerExample", "    PCAL95555: " + std::to_string(diagnostics.pins_by_chip[1]));
+        Logger::GetInstance().Info("GpioManagerExample", "    TMC9660: " + std::to_string(diagnostics.pins_by_chip[2]));
         
         // Show recent errors
         if (!diagnostics.error_messages.empty()) {
-            std::cout << "  Recent Errors:" << std::endl;
+            Logger::GetInstance().Info("GpioManagerExample", "  Recent Errors:");
             for (const auto& error : diagnostics.error_messages) {
-                std::cout << "    - " << error << std::endl;
+                Logger::GetInstance().Info("GpioManagerExample", "    - " + error);
             }
         }
     } else {
-        std::cout << "✗ Failed to get system diagnostics" << std::endl;
+        Logger::GetInstance().Error("GpioManagerExample", "FAILED: Failed to get system diagnostics");
     }
     
     // Get system health information
     std::string health_info;
     if (gpio_manager.GetSystemHealth(health_info)) {
-        std::cout << "✓ System Health: " << health_info << std::endl;
+        Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: System Health: " + health_info);
     } else {
-        std::cout << "✗ Failed to get system health" << std::endl;
+        Logger::GetInstance().Error("GpioManagerExample", "FAILED: Failed to get system health");
     }
     
     // Get pin statistics
     BaseGpio::PinStatistics stats;
     if (gpio_manager.GetStatistics("GPIO_WS2812_LED_DAT", stats)) {
-        std::cout << "✓ WS2812 LED Pin Statistics:" << std::endl;
-        std::cout << "  Total Operations: " << stats.totalOperations << std::endl;
-        std::cout << "  Successful Operations: " << stats.successfulOperations << std::endl;
-        std::cout << "  Failed Operations: " << stats.failedOperations << std::endl;
-        std::cout << "  State Changes: " << stats.stateChanges << std::endl;
-        std::cout << "  Direction Changes: " << stats.directionChanges << std::endl;
-        std::cout << "  Interrupt Count: " << stats.interruptCount << std::endl;
+        Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: WS2812 LED Pin Statistics:");
+        Logger::GetInstance().Info("GpioManagerExample", "  Total Operations: " + std::to_string(stats.totalOperations));
+        Logger::GetInstance().Info("GpioManagerExample", "  Successful Operations: " + std::to_string(stats.successfulOperations));
+        Logger::GetInstance().Info("GpioManagerExample", "  Failed Operations: " + std::to_string(stats.failedOperations));
+        Logger::GetInstance().Info("GpioManagerExample", "  State Changes: " + std::to_string(stats.stateChanges));
+        Logger::GetInstance().Info("GpioManagerExample", "  Direction Changes: " + std::to_string(stats.directionChanges));
+        Logger::GetInstance().Info("GpioManagerExample", "  Interrupt Count: " + std::to_string(stats.interruptCount));
     } else {
-        std::cout << "✗ Failed to get pin statistics" << std::endl;
+        Logger::GetInstance().Error("GpioManagerExample", "FAILED: Failed to get pin statistics");
     }
     
     // Reset statistics
     if (gpio_manager.ResetStatistics("GPIO_WS2812_LED_DAT")) {
-        std::cout << "✓ Reset pin statistics" << std::endl;
+        Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: Reset pin statistics");
     } else {
-        std::cout << "✗ Failed to reset pin statistics" << std::endl;
+        Logger::GetInstance().Error("GpioManagerExample", "FAILED: Failed to reset pin statistics");
     }
 }
 
@@ -336,58 +335,58 @@ void DemonstrateSystemDiagnostics() {
  * @brief Demonstrate pin categorization and validation.
  */
 void DemonstratePinCategorization() {
-    std::cout << "\n=== Pin Categorization and Validation ===" << std::endl;
+    Logger::GetInstance().Info("GpioManagerExample", "\n=== Pin Categorization and Validation ===");
     
     auto& gpio_manager = GpioManager::GetInstance();
     
     // Demonstrate pin categorization
-    std::cout << "Pin Categorization:" << std::endl;
+    Logger::GetInstance().Info("GpioManagerExample", "Pin Categorization:");
     
     // CORE pins (system reserved - should not be registered as GPIOs)
-    std::cout << "  CORE pins (system reserved):" << std::endl;
-    std::cout << "    CORE_XTAL_32K_P: " << (gpio_manager.Contains("CORE_XTAL_32K_P") ? "REGISTERED" : "NOT REGISTERED") << std::endl;
-    std::cout << "    CORE_BOOT_SEL: " << (gpio_manager.Contains("CORE_BOOT_SEL") ? "REGISTERED" : "NOT REGISTERED") << std::endl;
+    Logger::GetInstance().Info("GpioManagerExample", "  CORE pins (system reserved):");
+    Logger::GetInstance().Info("GpioManagerExample", "    CORE_XTAL_32K_P: " + (gpio_manager.Contains("CORE_XTAL_32K_P") ? "REGISTERED" : "NOT REGISTERED"));
+    Logger::GetInstance().Info("GpioManagerExample", "    CORE_BOOT_SEL: " + (gpio_manager.Contains("CORE_BOOT_SEL") ? "REGISTERED" : "NOT REGISTERED"));
     
     // COMM pins (communication - should not be registered as GPIOs)
-    std::cout << "  COMM pins (communication):" << std::endl;
-    std::cout << "    COMM_SPI2_MISO: " << (gpio_manager.Contains("COMM_SPI2_MISO") ? "REGISTERED" : "NOT REGISTERED") << std::endl;
-    std::cout << "    COMM_I2C_SDA: " << (gpio_manager.Contains("COMM_I2C_SDA") ? "REGISTERED" : "NOT REGISTERED") << std::endl;
+    Logger::GetInstance().Info("GpioManagerExample", "  COMM pins (communication):");
+    Logger::GetInstance().Info("GpioManagerExample", "    COMM_SPI2_MISO: " + (gpio_manager.Contains("COMM_SPI2_MISO") ? "REGISTERED" : "NOT REGISTERED"));
+    Logger::GetInstance().Info("GpioManagerExample", "    COMM_I2C_SDA: " + (gpio_manager.Contains("COMM_I2C_SDA") ? "REGISTERED" : "NOT REGISTERED"));
     
     // GPIO pins (available for GPIO operations)
-    std::cout << "  GPIO pins (available for GPIO):" << std::endl;
-    std::cout << "    GPIO_WS2812_LED_DAT: " << (gpio_manager.Contains("GPIO_WS2812_LED_DAT") ? "REGISTERED" : "NOT REGISTERED") << std::endl;
-    std::cout << "    GPIO_EXT_GPIO_CS_1: " << (gpio_manager.Contains("GPIO_EXT_GPIO_CS_1") ? "REGISTERED" : "NOT REGISTERED") << std::endl;
+    Logger::GetInstance().Info("GpioManagerExample", "  GPIO pins (available for GPIO):");
+    Logger::GetInstance().Info("GpioManagerExample", "    GPIO_WS2812_LED_DAT: " + (gpio_manager.Contains("GPIO_WS2812_LED_DAT") ? "REGISTERED" : "NOT REGISTERED"));
+    Logger::GetInstance().Info("GpioManagerExample", "    GPIO_EXT_GPIO_CS_1: " + (gpio_manager.Contains("GPIO_EXT_GPIO_CS_1") ? "REGISTERED" : "NOT REGISTERED"));
     
     // PCAL95555 pins
-    std::cout << "  PCAL95555 pins:" << std::endl;
-    std::cout << "    GPIO_PCAL_GPIO17: " << (gpio_manager.Contains("GPIO_PCAL_GPIO17") ? "REGISTERED" : "NOT REGISTERED") << std::endl;
-    std::cout << "    GPIO_PCAL_IMU_INT: " << (gpio_manager.Contains("GPIO_PCAL_IMU_INT") ? "REGISTERED" : "NOT REGISTERED") << std::endl;
+    Logger::GetInstance().Info("GpioManagerExample", "  PCAL95555 pins:");
+    Logger::GetInstance().Info("GpioManagerExample", "    GPIO_PCAL_GPIO17: " + (gpio_manager.Contains("GPIO_PCAL_GPIO17") ? "REGISTERED" : "NOT REGISTERED"));
+    Logger::GetInstance().Info("GpioManagerExample", "    GPIO_PCAL_IMU_INT: " + (gpio_manager.Contains("GPIO_PCAL_IMU_INT") ? "REGISTERED" : "NOT REGISTERED"));
     
     // Demonstrate validation
-    std::cout << "\nPin Name Validation:" << std::endl;
-    std::cout << "  Valid names (should work):" << std::endl;
-    std::cout << "    USER_CUSTOM_LED: " << (gpio_manager.Contains("USER_CUSTOM_LED") ? "EXISTS" : "DOES NOT EXIST") << std::endl;
+    Logger::GetInstance().Info("GpioManagerExample", "\nPin Name Validation:");
+    Logger::GetInstance().Info("GpioManagerExample", "  Valid names (should work):");
+    Logger::GetInstance().Info("GpioManagerExample", "    USER_CUSTOM_LED: " + (gpio_manager.Contains("USER_CUSTOM_LED") ? "EXISTS" : "DOES NOT EXIST"));
     
-    std::cout << "  Reserved prefixes (should be rejected):" << std::endl;
-    std::cout << "    CORE_RESERVED: Reserved prefix" << std::endl;
-    std::cout << "    COMM_RESERVED: Reserved prefix" << std::endl;
-    std::cout << "    SYS_RESERVED: Reserved prefix" << std::endl;
-    std::cout << "    INTERNAL_RESERVED: Reserved prefix" << std::endl;
+    Logger::GetInstance().Info("GpioManagerExample", "  Reserved prefixes (should be rejected):");
+    Logger::GetInstance().Info("GpioManagerExample", "    CORE_RESERVED: Reserved prefix");
+    Logger::GetInstance().Info("GpioManagerExample", "    COMM_RESERVED: Reserved prefix");
+    Logger::GetInstance().Info("GpioManagerExample", "    SYS_RESERVED: Reserved prefix");
+    Logger::GetInstance().Info("GpioManagerExample", "    INTERNAL_RESERVED: Reserved prefix");
     
     // Show total registered pins
-    std::cout << "\nTotal registered pins: " << gpio_manager.Size() << std::endl;
+    Logger::GetInstance().Info("GpioManagerExample", "\nTotal registered pins: " + std::to_string(gpio_manager.Size()));
 }
 
 /**
  * @brief Demonstrate electrical configuration handling.
  */
 void DemonstrateElectricalConfiguration() {
-    std::cout << "\n=== Electrical Configuration ===" << std::endl;
+    Logger::GetInstance().Info("GpioManagerExample", "\n=== Electrical Configuration ===");
     
     auto& gpio_manager = GpioManager::GetInstance();
     
     // Demonstrate how pins are configured with proper electrical characteristics
-    std::cout << "Pin Electrical Configuration (from mapping):" << std::endl;
+    Logger::GetInstance().Info("GpioManagerExample", "Pin Electrical Configuration (from mapping):");
     
     // Show configuration for different pin types
     std::vector<std::string_view> test_pins = {
@@ -399,68 +398,68 @@ void DemonstrateElectricalConfiguration() {
     
     for (const auto& pin_name : test_pins) {
         if (gpio_manager.Contains(pin_name)) {
-            std::cout << "  " << pin_name << ":" << std::endl;
+            Logger::GetInstance().Info("GpioManagerExample", "  " + std::string(pin_name) + ":");
             
             // Get pull mode
             hf_gpio_pull_mode_t pull_mode;
             if (gpio_manager.GetPullMode(pin_name, pull_mode)) {
-                std::cout << "    Pull Mode: ";
+                Logger::GetInstance().Info("GpioManagerExample", "    Pull Mode: ");
                 switch (pull_mode) {
                     case hf_gpio_pull_mode_t::HF_GPIO_PULL_MODE_FLOATING:
-                        std::cout << "FLOATING (no pull)";
+                        Logger::GetInstance().Info("GpioManagerExample", "FLOATING (no pull)");
                         break;
                     case hf_gpio_pull_mode_t::HF_GPIO_PULL_MODE_UP:
-                        std::cout << "PULL-UP";
+                        Logger::GetInstance().Info("GpioManagerExample", "PULL-UP");
                         break;
                     case hf_gpio_pull_mode_t::HF_GPIO_PULL_MODE_DOWN:
-                        std::cout << "PULL-DOWN";
+                        Logger::GetInstance().Info("GpioManagerExample", "PULL-DOWN");
                         break;
                     case hf_gpio_pull_mode_t::HF_GPIO_PULL_MODE_UP_DOWN:
-                        std::cout << "PULL-UP + PULL-DOWN";
+                        Logger::GetInstance().Info("GpioManagerExample", "PULL-UP + PULL-DOWN");
                         break;
                 }
-                std::cout << std::endl;
+                Logger::GetInstance().Info("GpioManagerExample", "");
             }
             
             // Get output mode
             hf_gpio_output_mode_t output_mode;
             if (gpio_manager.GetOutputMode(pin_name, output_mode)) {
-                std::cout << "    Output Mode: ";
+                Logger::GetInstance().Info("GpioManagerExample", "    Output Mode: ");
                 switch (output_mode) {
                     case hf_gpio_output_mode_t::HF_GPIO_OUTPUT_MODE_PUSH_PULL:
-                        std::cout << "PUSH-PULL";
+                        Logger::GetInstance().Info("GpioManagerExample", "PUSH-PULL");
                         break;
                     case hf_gpio_output_mode_t::HF_GPIO_OUTPUT_MODE_OPEN_DRAIN:
-                        std::cout << "OPEN-DRAIN";
+                        Logger::GetInstance().Info("GpioManagerExample", "OPEN-DRAIN");
                         break;
                 }
-                std::cout << std::endl;
+                Logger::GetInstance().Info("GpioManagerExample", "");
             }
             
             // Get direction
             hf_gpio_direction_t direction;
             if (gpio_manager.GetDirection(pin_name, direction)) {
-                std::cout << "    Direction: ";
+                Logger::GetInstance().Info("GpioManagerExample", "    Direction: ");
                 switch (direction) {
                     case hf_gpio_direction_t::HF_GPIO_DIRECTION_INPUT:
-                        std::cout << "INPUT";
+                        Logger::GetInstance().Info("GpioManagerExample", "INPUT");
                         break;
                     case hf_gpio_direction_t::HF_GPIO_DIRECTION_OUTPUT:
-                        std::cout << "OUTPUT";
+                        Logger::GetInstance().Info("GpioManagerExample", "OUTPUT");
                         break;
                 }
-                std::cout << std::endl;
+                Logger::GetInstance().Info("GpioManagerExample", "");
             }
         }
     }
     
-    std::cout << "\nNote: All pins are automatically configured with proper electrical characteristics" << std::endl;
-    std::cout << "based on the primitive configuration fields in the pin mapping:" << std::endl;
-    std::cout << "- has_pull: Whether pin has pull resistor" << std::endl;
-    std::cout << "- pull_is_up: If has_pull=true: true=pull-up, false=pull-down" << std::endl;
-    std::cout << "- is_push_pull: Output mode: true=push-pull, false=open-drain" << std::endl;
-    std::cout << "- is_inverted: Logic inversion: true=inverted, false=normal" << std::endl;
-    std::cout << "- max_current_ma: Maximum current in milliamps" << std::endl;
+    Logger::GetInstance().Info("GpioManagerExample", "\nNote: All pins are automatically configured with proper electrical characteristics");
+    Logger::GetInstance().Info("GpioManagerExample", "based on the primitive configuration fields in the pin mapping:");
+    Logger::GetInstance().Info("GpioManagerExample", "- has_pull: Whether pin has pull resistor");
+    Logger::GetInstance().Info("GpioManagerExample", "- pull_is_up: If has_pull=true: true=pull-up, false=pull-down");
+    Logger::GetInstance().Info("GpioManagerExample", "- is_push_pull: Output mode: true=push-pull, false=open-drain");
+    Logger::GetInstance().Info("GpioManagerExample", "- is_inverted: Logic inversion: true=inverted, false=normal");
+    Logger::GetInstance().Info("GpioManagerExample", "- max_current_ma: Maximum current in milliamps");
 }
 
 //==============================================================================
@@ -468,26 +467,26 @@ void DemonstrateElectricalConfiguration() {
 //==============================================================================
 
 int main() {
-    std::cout << "HardFOC GPIO Manager Example" << std::endl;
-    std::cout << "=============================" << std::endl;
-    std::cout << "Demonstrating advanced GPIO management with:" << std::endl;
-    std::cout << "- String-based pin identification" << std::endl;
-    std::cout << "- Complete BaseGpio function coverage" << std::endl;
-    std::cout << "- Smart pin categorization (CORE, COMM, GPIO, USER)" << std::endl;
-    std::cout << "- Proper electrical configuration handling" << std::endl;
-    std::cout << "- Handler-aware GPIO creation and ownership" << std::endl;
-    std::cout << "- Thread-safe operations with comprehensive error handling" << std::endl;
-    std::cout << "- Batch operations for performance optimization" << std::endl;
-    std::cout << "- Advanced diagnostics and health monitoring" << std::endl;
+    Logger::GetInstance().Info("GpioManagerExample", "HardFOC GPIO Manager Example");
+    Logger::GetInstance().Info("GpioManagerExample", "=============================");
+    Logger::GetInstance().Info("GpioManagerExample", "Demonstrating advanced GPIO management with:");
+    Logger::GetInstance().Info("GpioManagerExample", "- String-based pin identification");
+    Logger::GetInstance().Info("GpioManagerExample", "- Complete BaseGpio function coverage");
+    Logger::GetInstance().Info("GpioManagerExample", "- Smart pin categorization (CORE, COMM, GPIO, USER)");
+    Logger::GetInstance().Info("GpioManagerExample", "- Proper electrical configuration handling");
+    Logger::GetInstance().Info("GpioManagerExample", "- Handler-aware GPIO creation and ownership");
+    Logger::GetInstance().Info("GpioManagerExample", "- Thread-safe operations with comprehensive error handling");
+    Logger::GetInstance().Info("GpioManagerExample", "- Batch operations for performance optimization");
+    Logger::GetInstance().Info("GpioManagerExample", "- Advanced diagnostics and health monitoring");
     
     // Initialize the GPIO manager
     auto& gpio_manager = GpioManager::GetInstance();
     if (!gpio_manager.EnsureInitialized()) {
-        std::cout << "✗ Failed to initialize GPIO manager" << std::endl;
+        Logger::GetInstance().Error("GpioManagerExample", "FAILED: Failed to initialize GPIO manager");
         return -1;
     }
     
-    std::cout << "✓ GPIO manager initialized successfully" << std::endl;
+            Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: GPIO manager initialized successfully");
     
     // Run demonstrations
     DemonstratePinCategorization();
@@ -501,22 +500,22 @@ int main() {
     
     // Reset all pins to inactive state
     if (gpio_manager.ResetAllPins()) {
-        std::cout << "\n✓ Reset all output pins to inactive state" << std::endl;
+        Logger::GetInstance().Info("GpioManagerExample", "\nSUCCESS: Reset all output pins to inactive state");
     } else {
-        std::cout << "\n✗ Failed to reset all pins" << std::endl;
+        Logger::GetInstance().Error("GpioManagerExample", "\nFAILED: Failed to reset all pins");
     }
     
-    std::cout << "\n=== Example Complete ===" << std::endl;
-    std::cout << "The GPIO manager successfully demonstrated:" << std::endl;
-    std::cout << "✓ String-based pin identification for extensibility" << std::endl;
-    std::cout << "✓ Complete BaseGpio function coverage through routing" << std::endl;
-    std::cout << "✓ Smart pin categorization (CORE, COMM, GPIO, USER)" << std::endl;
-    std::cout << "✓ Proper electrical configuration (pull resistors, output modes, inversion)" << std::endl;
-    std::cout << "✓ Handler-aware GPIO creation and ownership" << std::endl;
-    std::cout << "✓ Thread-safe operations with comprehensive error handling" << std::endl;
-    std::cout << "✓ Batch operations for performance optimization" << std::endl;
-    std::cout << "✓ Advanced diagnostics and health monitoring" << std::endl;
-    std::cout << "✓ User-defined GPIO registration and management" << std::endl;
+    Logger::GetInstance().Info("GpioManagerExample", "\n=== Example Complete ===");
+    Logger::GetInstance().Info("GpioManagerExample", "The GPIO manager successfully demonstrated:");
+            Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: String-based pin identification for extensibility");
+            Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: Complete BaseGpio function coverage through routing");
+            Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: Smart pin categorization (CORE, COMM, GPIO, USER)");
+            Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: Proper electrical configuration (pull resistors, output modes, inversion)");
+            Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: Handler-aware GPIO creation and ownership");
+            Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: Thread-safe operations with comprehensive error handling");
+            Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: Batch operations for performance optimization");
+            Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: Advanced diagnostics and health monitoring");
+            Logger::GetInstance().Info("GpioManagerExample", "SUCCESS: User-defined GPIO registration and management");
     
     return 0;
 } 

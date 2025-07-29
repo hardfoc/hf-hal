@@ -16,7 +16,7 @@
 #include "ImuManager.h"
 #include "GpioManager.h"
 #include "utils-and-drivers/driver-handlers/Bno08xHandler.h"
-#include <iostream>
+#include "utils-and-drivers/driver-handlers/Logger.h"
 #include <memory>
 
 // ESP-IDF for tasks and logging
@@ -32,24 +32,24 @@ extern "C" {
 void setupBno08xHandler() {
     auto& imu_mgr = ImuManager::GetInstance();
     
-    std::cout << "=== BNO08x Handler Setup ===" << std::endl;
+    Logger::GetInstance().Info("Bno08xHandlerImuExample", "=== BNO08x Handler Setup ===");
     
     // Initialize with automatic Bno08xHandler creation
     bool initSuccess = imu_mgr.Initialize();
     if (initSuccess) {
-        std::cout << "ImuManager initialized with Bno08xHandler" << std::endl;
+        Logger::GetInstance().Info("Bno08xHandlerImuExample", "ImuManager initialized with Bno08xHandler");
     } else {
-        std::cout << "ImuManager initialization failed!" << std::endl;
+        Logger::GetInstance().Error("Bno08xHandlerImuExample", "ImuManager initialization failed!");
         return;
     }
     
-    std::cout << "Total IMU devices: " << static_cast<int>(imu_mgr.GetImuCount()) << std::endl;
+    Logger::GetInstance().Info("Bno08xHandlerImuExample", "Total IMU devices: " + std::to_string(static_cast<int>(imu_mgr.GetImuCount())));
     
     // List available devices
     auto devices = imu_mgr.GetAvailableDevices();
-    std::cout << "Available IMU devices:" << std::endl;
+    Logger::GetInstance().Info("Bno08xHandlerImuExample", "Available IMU devices:");
     for (const auto& device : devices) {
-        std::cout << "  - " << device << std::endl;
+        Logger::GetInstance().Info("Bno08xHandlerImuExample", "  - " + device);
     }
 }
 
@@ -57,18 +57,18 @@ void setupBno08xHandler() {
  * @brief Example of using Bno08xHandler for sensor operations (no exceptions)
  */
 void useBno08xHandler() {
-    std::cout << "\n=== BNO08x Handler Usage ===" << std::endl;
+    Logger::GetInstance().Info("Bno08xHandlerImuExample", "\n=== BNO08x Handler Usage ===");
     
     auto& imu_mgr = ImuManager::GetInstance();
     
     // Get the BNO08x handler (safe pointer-based access)
     Bno08xHandler* handler = imu_mgr.GetBno08xHandler();
     if (!handler) {
-        std::cout << "✗ BNO08x handler not available" << std::endl;
+        Logger::GetInstance().Error("Bno08xHandlerImuExample", "FAILED: BNO08x handler not available");
         return;
     }
     
-    std::cout << "✓ BNO08x handler available" << std::endl;
+            Logger::GetInstance().Info("Bno08xHandlerImuExample", "SUCCESS: BNO08x handler available");
     
     // Configure sensor callback (if supported by handler)
     // handler->SetSensorCallback([](const SensorEvent& event) {
@@ -89,20 +89,20 @@ void useBno08xHandler() {
     // bool isEnabled = handler->IsSensorEnabled(Bno08xSensorType::ROTATION_VECTOR);
     // std::cout << "Rotation vector enabled: " << (isEnabled ? "Yes" : "No") << std::endl;
     
-    std::cout << "✓ BNO08x handler operations completed" << std::endl;
+            Logger::GetInstance().Info("Bno08xHandlerImuExample", "SUCCESS: BNO08x handler operations completed");
 }
 
 /**
  * @brief Example of configuring and using GPIO interrupts for BNO08x
  */
 void demonstrateInterruptMode() {
-    std::cout << "\n=== BNO08x Interrupt Mode Example ===" << std::endl;
+    Logger::GetInstance().Info("Bno08xHandlerImuExample", "\n=== BNO08x Interrupt Mode Example ===");
     
     auto& imu_mgr = ImuManager::GetInstance();
     
     // Check if interrupt is available
     if (!imu_mgr.IsInterruptEnabled()) {
-        std::cout << "Configuring BNO08x interrupt..." << std::endl;
+        Logger::GetInstance().Info("Bno08xHandlerImuExample", "Configuring BNO08x interrupt...");
         
         // Configure interrupt with callback
         bool interrupt_configured = imu_mgr.ConfigureInterrupt([]() {
@@ -113,60 +113,60 @@ void demonstrateInterruptMode() {
         });
         
         if (interrupt_configured) {
-            std::cout << "✓ Interrupt configured successfully" << std::endl;
+            Logger::GetInstance().Info("Bno08xHandlerImuExample", "SUCCESS: Interrupt configured successfully");
             
             // Enable the interrupt
             if (imu_mgr.EnableInterrupt()) {
-                std::cout << "✓ Interrupt enabled successfully" << std::endl;
+                Logger::GetInstance().Info("Bno08xHandlerImuExample", "SUCCESS: Interrupt enabled successfully");
                 
                 // Demonstrate interrupt-driven operation
-                std::cout << "Waiting for interrupts (10 seconds)..." << std::endl;
+                Logger::GetInstance().Info("Bno08xHandlerImuExample", "Waiting for interrupts (10 seconds)...");
                 for (int i = 0; i < 10; ++i) {
                     if (imu_mgr.WaitForInterrupt(1000)) {  // 1 second timeout
-                        std::cout << "Interrupt received! Count: " << imu_mgr.GetInterruptCount() << std::endl;
+                        Logger::GetInstance().Info("Bno08xHandlerImuExample", "Interrupt received! Count: " + std::to_string(imu_mgr.GetInterruptCount()));
                         
                         // In real application, you would call handler->Update() here
                         // to process the sensor data that triggered the interrupt
                     } else {
-                        std::cout << "." << std::flush;  // Timeout indicator
+                        Logger::GetInstance().Info("Bno08xHandlerImuExample", "." + std::string(1, '\b'));  // Timeout indicator
                     }
                 }
-                std::cout << std::endl;
+                Logger::GetInstance().Info("Bno08xHandlerImuExample", "\n");
                 
                 // Disable interrupt when done
                 imu_mgr.DisableInterrupt();
-                std::cout << "✓ Interrupt disabled" << std::endl;
+                Logger::GetInstance().Info("Bno08xHandlerImuExample", "SUCCESS: Interrupt disabled");
             } else {
-                std::cout << "✗ Failed to enable interrupt" << std::endl;
+                Logger::GetInstance().Error("Bno08xHandlerImuExample", "FAILED: Failed to enable interrupt");
             }
         } else {
-            std::cout << "✗ Failed to configure interrupt - falling back to polling mode" << std::endl;
+            Logger::GetInstance().Error("Bno08xHandlerImuExample", "FAILED: Failed to configure interrupt - falling back to polling mode");
         }
     } else {
-        std::cout << "✓ Interrupt already enabled" << std::endl;
+        Logger::GetInstance().Info("Bno08xHandlerImuExample", "SUCCESS: Interrupt already enabled");
     }
     
-    std::cout << "Total interrupts received: " << imu_mgr.GetInterruptCount() << std::endl;
+    Logger::GetInstance().Info("Bno08xHandlerImuExample", "Total interrupts received: " + std::to_string(imu_mgr.GetInterruptCount()));
 }
 
 /**
  * @brief Example of safe error handling with handler interface
  */
 void demonstrateErrorHandling() {
-    std::cout << "\n=== Error Handling Example ===" << std::endl;
+    Logger::GetInstance().Info("Bno08xHandlerImuExample", "\n=== Error Handling Example ===");
     
     auto& imu_mgr = ImuManager::GetInstance();
     
     // Check if IMU is available before using
     if (!imu_mgr.IsBno08xAvailable()) {
-        std::cout << "✗ BNO08x not available" << std::endl;
+        Logger::GetInstance().Error("Bno08xHandlerImuExample", "FAILED: BNO08x not available");
         return;
     }
     
     // Safe handler access
     Bno08xHandler* handler = imu_mgr.GetBno08xHandler();
     if (handler) {
-        std::cout << "✓ Handler access successful" << std::endl;
+        Logger::GetInstance().Info("Bno08xHandlerImuExample", "SUCCESS: Handler access successful");
         
         // All operations through handler are exception-free
         // Error checking through return values and error codes
@@ -179,7 +179,7 @@ void demonstrateErrorHandling() {
         // }
         
     } else {
-        std::cout << "✗ Handler access failed" << std::endl;
+        Logger::GetInstance().Error("Bno08xHandlerImuExample", "FAILED: Handler access failed");
     }
 }
 
@@ -187,17 +187,17 @@ void demonstrateErrorHandling() {
  * @brief Example of data polling loop (typical usage pattern)
  */
 void dataPollingExample() {
-    std::cout << "\n=== Data Polling Example ===" << std::endl;
+    Logger::GetInstance().Info("Bno08xHandlerImuExample", "\n=== Data Polling Example ===");
     
     auto& imu_mgr = ImuManager::GetInstance();
     Bno08xHandler* handler = imu_mgr.GetBno08xHandler();
     
     if (!handler) {
-        std::cout << "✗ Handler not available for polling" << std::endl;
+        Logger::GetInstance().Error("Bno08xHandlerImuExample", "FAILED: Handler not available for polling");
         return;
     }
     
-    std::cout << "✓ Starting data polling simulation..." << std::endl;
+            Logger::GetInstance().Info("Bno08xHandlerImuExample", "SUCCESS: Starting data polling simulation...");
     
     // Simulate polling loop (in real application, this would be continuous)
     for (int i = 0; i < 5; ++i) {
@@ -211,19 +211,19 @@ void dataPollingExample() {
         //               << ", qz=" << rotation.z << ", qw=" << rotation.w << std::endl;
         // }
         
-        std::cout << "Polling iteration " << (i + 1) << "/5" << std::endl;
+        Logger::GetInstance().Info("Bno08xHandlerImuExample", "Polling iteration " + std::to_string(i + 1) + "/5");
         
         // In real application: vTaskDelay(pdMS_TO_TICKS(20)); // 50Hz polling
     }
     
-    std::cout << "✓ Polling simulation completed" << std::endl;
+            Logger::GetInstance().Info("Bno08xHandlerImuExample", "SUCCESS: Polling simulation completed");
 }
 
 /**
  * @brief Main example function
  */
 int main() {
-    std::cout << "=== Bno08xHandler IMU Example with GPIO Interrupt Support ===" << std::endl;
+    Logger::GetInstance().Info("Bno08xHandlerImuExample", "=== Bno08xHandler IMU Example with GPIO Interrupt Support ===");
     
     // Setup BNO08x handler through ImuManager
     setupBno08xHandler();
@@ -240,6 +240,6 @@ int main() {
     // Demonstrate typical polling usage
     dataPollingExample();
     
-    std::cout << "\n=== Example completed ===" << std::endl;
+    Logger::GetInstance().Info("Bno08xHandlerImuExample", "\n=== Example completed ===");
     return 0;
 }

@@ -16,9 +16,6 @@
  * @date 2025
  */
 
-#include <iostream>
-#include <thread>
-#include <chrono>
 #include <vector>
 
 // IMU Manager
@@ -34,12 +31,8 @@
 #include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/utils/RtosMutex.h"
 #include "utils-and-drivers/hf-core-utils/hf-utils-rtos-wrap/include/OsAbstraction.h"
 
-// ESP-IDF for logging
-extern "C" {
-#include "esp_log.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-}
+// Unified Logger
+#include "utils-and-drivers/driver-handlers/Logger.h"
 
 static const char* TAG = "ImuManagerExample";
 
@@ -90,187 +83,187 @@ public:
  * @brief Demonstrate basic onboard IMU usage
  */
 void DemonstrateOnboardImu() {
-    ESP_LOGI(TAG, "=== Onboard IMU Example ===");
+    Logger::GetInstance().Info(TAG, "=== Onboard IMU Example ===");
     
     auto& imu_mgr = ImuManager::GetInstance();
     
     // Ensure IMU manager is initialized
     if (!imu_mgr.EnsureInitialized()) {
-        ESP_LOGE(TAG, "Failed to initialize IMU Manager");
+        Logger::GetInstance().Error(TAG, "Failed to initialize IMU Manager");
         return;
     }
     
     // Get onboard BNO08x handler (index 0)
     Bno08xHandler* onboard_handler = imu_mgr.GetBno08xHandler(0);
     if (!onboard_handler) {
-        ESP_LOGE(TAG, "Onboard BNO08x handler not available");
+        Logger::GetInstance().Error(TAG, "Onboard BNO08x handler not available");
         return;
     }
     
     // Enable sensors
     Bno08xError result = onboard_handler->EnableSensor(BNO085Sensor::Accelerometer, 50);
     if (result == Bno08xError::SUCCESS) {
-        ESP_LOGI(TAG, "Accelerometer enabled");
+        Logger::GetInstance().Info(TAG, "Accelerometer enabled");
     } else {
-        ESP_LOGE(TAG, "Failed to enable accelerometer: %s", Bno08xErrorToString(result));
+        Logger::GetInstance().Error(TAG, "Failed to enable accelerometer: %s", Bno08xErrorToString(result));
     }
     
     result = onboard_handler->EnableSensor(BNO085Sensor::Gyroscope, 50);
     if (result == Bno08xError::SUCCESS) {
-        ESP_LOGI(TAG, "Gyroscope enabled");
+        Logger::GetInstance().Info(TAG, "Gyroscope enabled");
     } else {
-        ESP_LOGE(TAG, "Failed to enable gyroscope: %s", Bno08xErrorToString(result));
+        Logger::GetInstance().Error(TAG, "Failed to enable gyroscope: %s", Bno08xErrorToString(result));
     }
     
     // Read sensor data for 3 seconds
-    ESP_LOGI(TAG, "Reading sensor data for 3 seconds...");
-    uint32_t start_time = os_time_get();
-    uint32_t end_time = start_time + (3000 / portTICK_PERIOD_MS); // 3 seconds
+    Logger::GetInstance().Info(TAG, "Reading sensor data for 3 seconds...");
+    uint32_t start_time_ms = os_get_elapsed_time_msec();
+    uint32_t end_time_ms = start_time_ms + 3000; // 3 seconds
     
-    while (os_time_get() < end_time) {
+    while (os_get_elapsed_time_msec() < end_time_ms) {
         onboard_handler->Update();
         
         Bno08xVector3 accelerometer;
         result = onboard_handler->ReadAcceleration(accelerometer);
         if (result == Bno08xError::SUCCESS && accelerometer.valid) {
-            ESP_LOGI(TAG, "Accel: x=%.3f, y=%.3f, z=%.3f", 
+            Logger::GetInstance().Info(TAG, "Accel: x=%.3f, y=%.3f, z=%.3f", 
                      accelerometer.x, accelerometer.y, accelerometer.z);
         }
         
         Bno08xVector3 gyroscope;
         result = onboard_handler->ReadGyroscope(gyroscope);
         if (result == Bno08xError::SUCCESS && gyroscope.valid) {
-            ESP_LOGI(TAG, "Gyro: x=%.3f, y=%.3f, z=%.3f", 
+            Logger::GetInstance().Info(TAG, "Gyro: x=%.3f, y=%.3f, z=%.3f", 
                      gyroscope.x, gyroscope.y, gyroscope.z);
         }
         
-        vTaskDelay(pdMS_TO_TICKS(50)); // 50ms delay
+        os_delay_msec(50); // 50ms delay
     }
     
-    ESP_LOGI(TAG, "Onboard IMU example completed");
+    Logger::GetInstance().Info(TAG, "Onboard IMU example completed");
 }
 
 /**
  * @brief Demonstrate external IMU device creation and usage with simplified API
  */
 void DemonstrateExternalImu() {
-    ESP_LOGI(TAG, "=== External IMU Example ===");
+    Logger::GetInstance().Info(TAG, "=== External IMU Example ===");
     
     auto& imu_mgr = ImuManager::GetInstance();
     
     // Ensure IMU manager is initialized
     if (!imu_mgr.EnsureInitialized()) {
-        ESP_LOGE(TAG, "Failed to initialize IMU Manager");
+        Logger::GetInstance().Error(TAG, "Failed to initialize IMU Manager");
         return;
     }
     
     // Check if external slot 1 is available
     if (!imu_mgr.IsExternalSlotAvailable(1)) {
-        ESP_LOGW(TAG, "External slot 1 not available");
+        Logger::GetInstance().Warn(TAG, "External slot 1 not available");
         return;
     }
     
     // Create external BNO08x device with simplified API
     // ImuManager handles I2C device creation internally
-    ESP_LOGI(TAG, "Creating external BNO08x device with simplified API...");
+    Logger::GetInstance().Info(TAG, "Creating external BNO08x device with simplified API...");
     
     bool created = imu_mgr.CreateExternalBno08xDevice(1, 0x4B, 400000); // BNO08x at address 0x4B
     if (!created) {
-        ESP_LOGE(TAG, "Failed to create external BNO08x device");
+        Logger::GetInstance().Error(TAG, "Failed to create external BNO08x device");
         return;
     }
     
-    ESP_LOGI(TAG, "External BNO08x device created successfully");
-    ESP_LOGI(TAG, "Total devices: %u", imu_mgr.GetDeviceCount());
+    Logger::GetInstance().Info(TAG, "External BNO08x device created successfully");
+    Logger::GetInstance().Info(TAG, "Total devices: %u", imu_mgr.GetDeviceCount());
     
     // Get external BNO08x handler
     Bno08xHandler* external_handler = imu_mgr.GetBno08xHandler(1);
     if (!external_handler) {
-        ESP_LOGE(TAG, "External BNO08x handler not available");
+        Logger::GetInstance().Error(TAG, "External BNO08x handler not available");
         return;
     }
     
     // Configure external device
     Bno08xError result = external_handler->EnableSensor(BNO085Sensor::Gyroscope, 50);
     if (result == Bno08xError::SUCCESS) {
-        ESP_LOGI(TAG, "External gyroscope enabled");
+        Logger::GetInstance().Info(TAG, "External gyroscope enabled");
     } else {
-        ESP_LOGE(TAG, "Failed to enable external gyroscope: %s", Bno08xErrorToString(result));
+        Logger::GetInstance().Error(TAG, "Failed to enable external gyroscope: %s", Bno08xErrorToString(result));
     }
     
     // Read data from external device
-    ESP_LOGI(TAG, "Reading external sensor data for 3 seconds...");
-    uint32_t start_time = os_time_get();
-    uint32_t end_time = start_time + (3000 / portTICK_PERIOD_MS); // 3 seconds
+    Logger::GetInstance().Info(TAG, "Reading external sensor data for 3 seconds...");
+    uint32_t start_time_ms = os_get_elapsed_time_msec();
+    uint32_t end_time_ms = start_time_ms + 3000; // 3 seconds
     
-    while (os_time_get() < end_time) {
+    while (os_get_elapsed_time_msec() < end_time_ms) {
         external_handler->Update();
         
         Bno08xVector3 gyroscope;
         result = external_handler->ReadGyroscope(gyroscope);
         if (result == Bno08xError::SUCCESS && gyroscope.valid) {
-            ESP_LOGI(TAG, "External Gyro: x=%.3f, y=%.3f, z=%.3f", 
+            Logger::GetInstance().Info(TAG, "External Gyro: x=%.3f, y=%.3f, z=%.3f", 
                      gyroscope.x, gyroscope.y, gyroscope.z);
         }
         
-        vTaskDelay(pdMS_TO_TICKS(50)); // 50ms delay
+        os_delay_msec(50); // 50ms delay
     }
     
     // Clean up: Delete external device (ImuManager handles I2C device cleanup)
     bool deleted = imu_mgr.DeleteExternalDevice(1);
     if (deleted) {
-        ESP_LOGI(TAG, "External device deleted successfully");
+        Logger::GetInstance().Info(TAG, "External device deleted successfully");
     } else {
-        ESP_LOGE(TAG, "Failed to delete external device");
+        Logger::GetInstance().Error(TAG, "Failed to delete external device");
     }
     
-    ESP_LOGI(TAG, "External IMU example completed");
+    Logger::GetInstance().Info(TAG, "External IMU example completed");
 }
 
 /**
  * @brief Demonstrate interrupt-based IMU usage
  */
 void DemonstrateInterruptMode() {
-    ESP_LOGI(TAG, "=== Interrupt Mode Example ===");
+    Logger::GetInstance().Info(TAG, "=== Interrupt Mode Example ===");
     
     auto& imu_mgr = ImuManager::GetInstance();
     
     // Ensure IMU manager is initialized
     if (!imu_mgr.EnsureInitialized()) {
-        ESP_LOGE(TAG, "Failed to initialize IMU Manager");
+        Logger::GetInstance().Error(TAG, "Failed to initialize IMU Manager");
         return;
     }
     
     // Configure interrupt for onboard device
     bool interrupt_configured = imu_mgr.ConfigureInterrupt(0, []() {
-        ESP_LOGI(TAG, "BNO08x interrupt triggered!");
+        Logger::GetInstance().Info(TAG, "BNO08x interrupt triggered!");
     });
     
     if (!interrupt_configured) {
-        ESP_LOGW(TAG, "Interrupt configuration failed - using polling mode");
+        Logger::GetInstance().Warn(TAG, "Interrupt configuration failed - using polling mode");
         return;
     }
     
     // Enable interrupt
     bool interrupt_enabled = imu_mgr.EnableInterrupt(0);
     if (!interrupt_enabled) {
-        ESP_LOGE(TAG, "Failed to enable interrupt");
+        Logger::GetInstance().Error(TAG, "Failed to enable interrupt");
         return;
     }
     
-    ESP_LOGI(TAG, "Interrupt mode enabled - waiting for interrupts...");
+    Logger::GetInstance().Info(TAG, "Interrupt mode enabled - waiting for interrupts...");
     
     // Wait for interrupts for 5 seconds
-    uint32_t start_time = os_time_get();
-    uint32_t end_time = start_time + (5000 / portTICK_PERIOD_MS); // 5 seconds
+    uint32_t start_time_ms = os_get_elapsed_time_msec();
+    uint32_t end_time_ms = start_time_ms + 5000; // 5 seconds
     
-    while (os_time_get() < end_time) {
+    while (os_get_elapsed_time_msec() < end_time_ms) {
         // Wait for interrupt with timeout
         bool interrupt_received = imu_mgr.WaitForInterrupt(0, 1000); // 1 second timeout
         
         if (interrupt_received) {
             uint32_t interrupt_count = imu_mgr.GetInterruptCount(0);
-            ESP_LOGI(TAG, "Interrupt received! Total count: %u", interrupt_count);
+            Logger::GetInstance().Info(TAG, "Interrupt received! Total count: %u", interrupt_count);
             
             // Process sensor data
             Bno08xHandler* handler = imu_mgr.GetBno08xHandler(0);
@@ -280,37 +273,37 @@ void DemonstrateInterruptMode() {
                 Bno08xVector3 accelerometer;
                 Bno08xError result = handler->ReadAcceleration(accelerometer);
                 if (result == Bno08xError::SUCCESS && accelerometer.valid) {
-                    ESP_LOGI(TAG, "Interrupt data - Accel: x=%.3f, y=%.3f, z=%.3f", 
+                    Logger::GetInstance().Info(TAG, "Interrupt data - Accel: x=%.3f, y=%.3f, z=%.3f", 
                              accelerometer.x, accelerometer.y, accelerometer.z);
                 }
             }
         } else {
-            ESP_LOGI(TAG, "No interrupt received within timeout");
+            Logger::GetInstance().Info(TAG, "No interrupt received within timeout");
         }
     }
     
     // Disable interrupt
     imu_mgr.DisableInterrupt(0);
-    ESP_LOGI(TAG, "Interrupt mode disabled");
+    Logger::GetInstance().Info(TAG, "Interrupt mode disabled");
     
-    ESP_LOGI(TAG, "Interrupt mode example completed");
+    Logger::GetInstance().Info(TAG, "Interrupt mode example completed");
 }
 
 /**
  * @brief Demonstrate device management and status reporting
  */
 void DemonstrateDeviceManagement() {
-    ESP_LOGI(TAG, "=== Device Management Example ===");
+    Logger::GetInstance().Info(TAG, "=== Device Management Example ===");
     
     auto& imu_mgr = ImuManager::GetInstance();
     
     // Ensure IMU manager is initialized
     if (!imu_mgr.EnsureInitialized()) {
-        ESP_LOGE(TAG, "Failed to initialize IMU Manager");
+        Logger::GetInstance().Error(TAG, "Failed to initialize IMU Manager");
         return;
     }
     
-    ESP_LOGI(TAG, "Device count: %u", imu_mgr.GetDeviceCount());
+    Logger::GetInstance().Info(TAG, "Device count: %u", imu_mgr.GetDeviceCount());
     
     // Check device status for all slots
     for (uint8_t i = 0; i < 4; ++i) {
@@ -318,105 +311,105 @@ void DemonstrateDeviceManagement() {
         bool available = imu_mgr.IsExternalSlotAvailable(i);
         std::string device_type = imu_mgr.GetDeviceType(i);
         
-        ESP_LOGI(TAG, "Slot %u: valid=%s, available=%s, type=%s", 
+        Logger::GetInstance().Info(TAG, "Slot %u: valid=%s, available=%s, type=%s", 
                  i, valid ? "true" : "false", available ? "true" : "false", device_type.c_str());
     }
     
     // Get active device indices
     std::vector<uint8_t> active_devices = imu_mgr.GetActiveDeviceIndices();
-    ESP_LOGI(TAG, "Active devices: %zu", active_devices.size());
+    Logger::GetInstance().Info(TAG, "Active devices: %zu", active_devices.size());
     for (uint8_t device_index : active_devices) {
-        ESP_LOGI(TAG, "  - Device %u: %s", device_index, imu_mgr.GetDeviceType(device_index).c_str());
+        Logger::GetInstance().Info(TAG, "  - Device %u: %s", device_index, imu_mgr.GetDeviceType(device_index).c_str());
     }
     
     // Initialize all devices
     std::vector<bool> init_results = imu_mgr.InitializeAllDevices();
-    ESP_LOGI(TAG, "Initialization results:");
+    Logger::GetInstance().Info(TAG, "Initialization results:");
     for (size_t i = 0; i < init_results.size(); ++i) {
-        ESP_LOGI(TAG, "  - Device %zu: %s", i, init_results[i] ? "SUCCESS" : "FAILED");
+        Logger::GetInstance().Info(TAG, "  - Device %zu: %s", i, init_results[i] ? "SUCCESS" : "FAILED");
     }
     
     // Get initialization status
     std::vector<bool> init_status = imu_mgr.GetInitializationStatus();
-    ESP_LOGI(TAG, "Initialization status:");
+    Logger::GetInstance().Info(TAG, "Initialization status:");
     for (size_t i = 0; i < init_status.size(); ++i) {
-        ESP_LOGI(TAG, "  - Device %zu: %s", i, init_status[i] ? "INITIALIZED" : "NOT_INITIALIZED");
+        Logger::GetInstance().Info(TAG, "  - Device %zu: %s", i, init_status[i] ? "INITIALIZED" : "NOT_INITIALIZED");
     }
     
-    ESP_LOGI(TAG, "Device management example completed");
+    Logger::GetInstance().Info(TAG, "Device management example completed");
 }
 
 /**
  * @brief Demonstrate external SPI IMU device creation and usage
  */
 void DemonstrateSpiImu() {
-    ESP_LOGI(TAG, "=== SPI IMU Example ===");
+    Logger::GetInstance().Info(TAG, "=== SPI IMU Example ===");
     
     auto& imu_mgr = ImuManager::GetInstance();
     
     // Ensure IMU manager is initialized
     if (!imu_mgr.EnsureInitialized()) {
-        ESP_LOGE(TAG, "Failed to initialize IMU Manager");
+        Logger::GetInstance().Error(TAG, "Failed to initialize IMU Manager");
         return;
     }
     
     // Check if external slot 2 is available
     if (!imu_mgr.IsExternalSlotAvailable(2)) {
-        ESP_LOGW(TAG, "External slot 2 not available");
+        Logger::GetInstance().Warn(TAG, "External slot 2 not available");
         return;
     }
     
     // Create external BNO08x device on SPI interface
     bool created = imu_mgr.CreateExternalBno08xDevice(2, SpiDeviceId::SPI2_CS_TMC9660);
     if (!created) {
-        ESP_LOGE(TAG, "Failed to create external SPI BNO08x device");
+        Logger::GetInstance().Error(TAG, "Failed to create external SPI BNO08x device");
         return;
     }
     
-    ESP_LOGI(TAG, "External SPI BNO08x device created successfully");
+    Logger::GetInstance().Info(TAG, "External SPI BNO08x device created successfully");
     
     // Get external BNO08x handler
     Bno08xHandler* external_handler = imu_mgr.GetBno08xHandler(2);
     if (!external_handler) {
-        ESP_LOGE(TAG, "External SPI BNO08x handler not available");
+        Logger::GetInstance().Error(TAG, "External SPI BNO08x handler not available");
         return;
     }
     
     // Configure external device
     Bno08xError result = external_handler->EnableSensor(BNO085Sensor::Accelerometer, 100);
     if (result == Bno08xError::SUCCESS) {
-        ESP_LOGI(TAG, "External SPI accelerometer enabled");
+        Logger::GetInstance().Info(TAG, "External SPI accelerometer enabled");
     } else {
-        ESP_LOGE(TAG, "Failed to enable external SPI accelerometer: %s", Bno08xErrorToString(result));
+        Logger::GetInstance().Error(TAG, "Failed to enable external SPI accelerometer: %s", Bno08xErrorToString(result));
     }
     
     // Read data from external device
-    ESP_LOGI(TAG, "Reading external SPI sensor data for 2 seconds...");
-    uint32_t start_time = os_time_get();
-    uint32_t end_time = start_time + (2000 / portTICK_PERIOD_MS); // 2 seconds
+    Logger::GetInstance().Info(TAG, "Reading external SPI sensor data for 2 seconds...");
+    uint32_t start_time = os_get_elapsed_time_msec();
+    uint32_t end_time = start_time + (2000 / 1); // 2 seconds
     
-    while (os_time_get() < end_time) {
+    while (os_get_elapsed_time_msec() < end_time) {
         external_handler->Update();
         
         Bno08xVector3 accelerometer;
         result = external_handler->ReadAcceleration(accelerometer);
         if (result == Bno08xError::SUCCESS && accelerometer.valid) {
-            ESP_LOGI(TAG, "External SPI Accel: x=%.3f, y=%.3f, z=%.3f", 
+            Logger::GetInstance().Info(TAG, "External SPI Accel: x=%.3f, y=%.3f, z=%.3f", 
                      accelerometer.x, accelerometer.y, accelerometer.z);
         }
         
-        vTaskDelay(pdMS_TO_TICKS(100)); // 100ms delay
+        os_delay_msec(100)); // 100ms delay
     }
     
     // Delete external device
     bool deleted = imu_mgr.DeleteExternalDevice(2);
     if (deleted) {
-        ESP_LOGI(TAG, "External SPI device deleted successfully");
+        Logger::GetInstance().Info(TAG, "External SPI device deleted successfully");
     } else {
-        ESP_LOGE(TAG, "Failed to delete external SPI device");
+        Logger::GetInstance().Error(TAG, "Failed to delete external SPI device");
     }
     
-    ESP_LOGI(TAG, "SPI IMU example completed");
+    Logger::GetInstance().Info(TAG, "SPI IMU example completed");
 }
 
 /**
@@ -495,20 +488,20 @@ void DemonstrateFlexibleDeviceCreation() {
  * @brief Demonstrate flexible device creation with external buses and direct interfaces
  */
 void DemonstrateFlexibleExternalBuses() {
-    ESP_LOGI(TAG, "=== Flexible External Bus Example ===");
+    Logger::GetInstance().Info(TAG, "=== Flexible External Bus Example ===");
     
     auto& imu_mgr = ImuManager::GetInstance();
     
     // Ensure IMU manager is initialized
     if (!imu_mgr.EnsureInitialized()) {
-        ESP_LOGE(TAG, "Failed to initialize IMU Manager");
+        Logger::GetInstance().Error(TAG, "Failed to initialize IMU Manager");
         return;
     }
     
-    ESP_LOGI(TAG, "Demonstrating flexible external bus capabilities...");
+    Logger::GetInstance().Info(TAG, "Demonstrating flexible external bus capabilities...");
     
     // Example 1: External I2C bus with custom implementation
-    ESP_LOGI(TAG, "--- External I2C Bus Example ---");
+    Logger::GetInstance().Info(TAG, "--- External I2C Bus Example ---");
     
     // Create a custom I2C bus implementation for external hardware
     class ExternalI2cBus : public BaseI2c {
@@ -516,13 +509,13 @@ void DemonstrateFlexibleExternalBuses() {
         ExternalI2cBus(uint8_t bus_id) : bus_id_(bus_id) {}
         
         hf_i2c_err_t Write(const uint8_t* data, size_t length) override {
-            ESP_LOGI(TAG, "External I2C Bus %u Write: length=%zu", bus_id_, length);
+            Logger::GetInstance().Info(TAG, "External I2C Bus %u Write: length=%zu", bus_id_, length);
             // Custom implementation for external I2C bus
             return hf_i2c_err_t::I2C_SUCCESS;
         }
         
         hf_i2c_err_t Read(uint8_t* data, size_t length) override {
-            ESP_LOGI(TAG, "External I2C Bus %u Read: length=%zu", bus_id_, length);
+            Logger::GetInstance().Info(TAG, "External I2C Bus %u Read: length=%zu", bus_id_, length);
             // Custom implementation for external I2C bus
             for (size_t i = 0; i < length; ++i) {
                 data[i] = static_cast<uint8_t>(i + 0x30);
@@ -532,7 +525,7 @@ void DemonstrateFlexibleExternalBuses() {
         
         hf_i2c_err_t WriteRead(const uint8_t* write_data, size_t write_length,
                               uint8_t* read_data, size_t read_length) override {
-            ESP_LOGI(TAG, "External I2C Bus %u WriteRead: write=%zu, read=%zu", 
+            Logger::GetInstance().Info(TAG, "External I2C Bus %u WriteRead: write=%zu, read=%zu", 
                      bus_id_, write_length, read_length);
             return hf_i2c_err_t::I2C_SUCCESS;
         }
@@ -546,7 +539,7 @@ void DemonstrateFlexibleExternalBuses() {
     auto external_i2c_bus2 = std::make_shared<ExternalI2cBus>(2);
     
     // Example 2: External SPI bus with custom implementation
-    ESP_LOGI(TAG, "--- External SPI Bus Example ---");
+    Logger::GetInstance().Info(TAG, "--- External SPI Bus Example ---");
     
     // Create a custom SPI bus implementation for external hardware
     class ExternalSpiBus : public BaseSpi {
@@ -554,13 +547,13 @@ void DemonstrateFlexibleExternalBuses() {
         ExternalSpiBus(uint8_t bus_id) : bus_id_(bus_id) {}
         
         hf_spi_err_t Write(const uint8_t* data, size_t length) override {
-            ESP_LOGI(TAG, "External SPI Bus %u Write: length=%zu", bus_id_, length);
+            Logger::GetInstance().Info(TAG, "External SPI Bus %u Write: length=%zu", bus_id_, length);
             // Custom implementation for external SPI bus
             return hf_spi_err_t::SPI_SUCCESS;
         }
         
         hf_spi_err_t Read(uint8_t* data, size_t length) override {
-            ESP_LOGI(TAG, "External SPI Bus %u Read: length=%zu", bus_id_, length);
+            Logger::GetInstance().Info(TAG, "External SPI Bus %u Read: length=%zu", bus_id_, length);
             // Custom implementation for external SPI bus
             for (size_t i = 0; i < length; ++i) {
                 data[i] = static_cast<uint8_t>(i + 0x40);
@@ -570,7 +563,7 @@ void DemonstrateFlexibleExternalBuses() {
         
         hf_spi_err_t WriteRead(const uint8_t* write_data, size_t write_length,
                               uint8_t* read_data, size_t read_length) override {
-            ESP_LOGI(TAG, "External SPI Bus %u WriteRead: write=%zu, read=%zu", 
+            Logger::GetInstance().Info(TAG, "External SPI Bus %u WriteRead: write=%zu, read=%zu", 
                      bus_id_, write_length, read_length);
             return hf_spi_err_t::SPI_SUCCESS;
         }
@@ -584,35 +577,35 @@ void DemonstrateFlexibleExternalBuses() {
     auto external_spi_bus2 = std::make_shared<ExternalSpiBus>(2);
     
     // Example 3: Create BNO08x devices on external buses using direct interfaces
-    ESP_LOGI(TAG, "--- Creating BNO08x on External Buses ---");
+    Logger::GetInstance().Info(TAG, "--- Creating BNO08x on External Buses ---");
     
     // Create BNO08x on external I2C bus 1
     bool created_i2c1 = imu_mgr.CreateExternalBno08xDevice(1, *external_i2c_bus1);
     if (created_i2c1) {
-        ESP_LOGI(TAG, "BNO08x created on external I2C bus 1");
+        Logger::GetInstance().Info(TAG, "BNO08x created on external I2C bus 1");
     }
     
     // Create BNO08x on external I2C bus 2
     bool created_i2c2 = imu_mgr.CreateExternalBno08xDevice(2, *external_i2c_bus2);
     if (created_i2c2) {
-        ESP_LOGI(TAG, "BNO08x created on external I2C bus 2");
+        Logger::GetInstance().Info(TAG, "BNO08x created on external I2C bus 2");
     }
     
     // Create BNO08x on external SPI bus 1
     bool created_spi1 = imu_mgr.CreateExternalBno08xDevice(3, *external_spi_bus1);
     if (created_spi1) {
-        ESP_LOGI(TAG, "BNO08x created on external SPI bus 1");
+        Logger::GetInstance().Info(TAG, "BNO08x created on external SPI bus 1");
     }
     
     // Example 4: Use the external devices
-    ESP_LOGI(TAG, "--- Using External Devices ---");
+    Logger::GetInstance().Info(TAG, "--- Using External Devices ---");
     
     // Get and use external I2C device 1
     Bno08xHandler* external_i2c_handler1 = imu_mgr.GetBno08xHandler(1);
     if (external_i2c_handler1) {
         Bno08xError result = external_i2c_handler1->EnableSensor(BNO085Sensor::Accelerometer, 50);
         if (result == Bno08xError::SUCCESS) {
-            ESP_LOGI(TAG, "External I2C BNO08x 1 accelerometer enabled");
+            Logger::GetInstance().Info(TAG, "External I2C BNO08x 1 accelerometer enabled");
         }
     }
     
@@ -621,7 +614,7 @@ void DemonstrateFlexibleExternalBuses() {
     if (external_i2c_handler2) {
         Bno08xError result = external_i2c_handler2->EnableSensor(BNO085Sensor::Gyroscope, 50);
         if (result == Bno08xError::SUCCESS) {
-            ESP_LOGI(TAG, "External I2C BNO08x 2 gyroscope enabled");
+            Logger::GetInstance().Info(TAG, "External I2C BNO08x 2 gyroscope enabled");
         }
     }
     
@@ -630,47 +623,47 @@ void DemonstrateFlexibleExternalBuses() {
     if (external_spi_handler) {
         Bno08xError result = external_spi_handler->EnableSensor(BNO085Sensor::Magnetometer, 100);
         if (result == Bno08xError::SUCCESS) {
-            ESP_LOGI(TAG, "External SPI BNO08x magnetometer enabled");
+            Logger::GetInstance().Info(TAG, "External SPI BNO08x magnetometer enabled");
         }
     }
     
     // Example 5: Demonstrate device management with external buses
-    ESP_LOGI(TAG, "--- Device Management with External Buses ---");
+    Logger::GetInstance().Info(TAG, "--- Device Management with External Buses ---");
     
-    ESP_LOGI(TAG, "Total devices: %u", imu_mgr.GetDeviceCount());
+    Logger::GetInstance().Info(TAG, "Total devices: %u", imu_mgr.GetDeviceCount());
     
     // Check device status for all slots
     for (uint8_t i = 0; i < 4; ++i) {
         bool valid = imu_mgr.IsDeviceValid(i);
         std::string device_type = imu_mgr.GetDeviceType(i);
         
-        ESP_LOGI(TAG, "Slot %u: valid=%s, type=%s", 
+        Logger::GetInstance().Info(TAG, "Slot %u: valid=%s, type=%s", 
                  i, valid ? "true" : "false", device_type.c_str());
     }
     
     // Get active device indices
     std::vector<uint8_t> active_devices = imu_mgr.GetActiveDeviceIndices();
-    ESP_LOGI(TAG, "Active devices: %zu", active_devices.size());
+    Logger::GetInstance().Info(TAG, "Active devices: %zu", active_devices.size());
     for (uint8_t device_index : active_devices) {
-        ESP_LOGI(TAG, "  - Device %u: %s", device_index, imu_mgr.GetDeviceType(device_index).c_str());
+        Logger::GetInstance().Info(TAG, "  - Device %u: %s", device_index, imu_mgr.GetDeviceType(device_index).c_str());
     }
     
     // Example 6: Clean up external devices
-    ESP_LOGI(TAG, "--- Cleanup External Devices ---");
+    Logger::GetInstance().Info(TAG, "--- Cleanup External Devices ---");
     
     if (imu_mgr.DeleteExternalDevice(1)) {
-        ESP_LOGI(TAG, "External I2C device 1 deleted successfully");
+        Logger::GetInstance().Info(TAG, "External I2C device 1 deleted successfully");
     }
     
     if (imu_mgr.DeleteExternalDevice(2)) {
-        ESP_LOGI(TAG, "External I2C device 2 deleted successfully");
+        Logger::GetInstance().Info(TAG, "External I2C device 2 deleted successfully");
     }
     
     if (imu_mgr.DeleteExternalDevice(3)) {
-        ESP_LOGI(TAG, "External SPI device deleted successfully");
+        Logger::GetInstance().Info(TAG, "External SPI device deleted successfully");
     }
     
-    ESP_LOGI(TAG, "Flexible external bus example completed");
+    Logger::GetInstance().Info(TAG, "Flexible external bus example completed");
 }
 
 /**
@@ -912,24 +905,24 @@ void DemonstrateDeviceAddressAmbiguity() {
  * @brief Main example function demonstrating all ImuManager features
  */
 void RunImuManagerExample() {
-    ESP_LOGI(TAG, "Starting ImuManager Example with Multiple Device Support");
-    ESP_LOGI(TAG, "=====================================================");
+    Logger::GetInstance().Info(TAG, "Starting ImuManager Example with Multiple Device Support");
+    Logger::GetInstance().Info(TAG, "=====================================================");
     
     // Example 1: Basic onboard IMU usage
     DemonstrateOnboardImu();
-    vTaskDelay(pdMS_TO_TICKS(1000)); // 1 second delay
+    os_delay_msec(1000)); // 1 second delay
     
     // Example 2: Device management and status
     DemonstrateDeviceManagement();
-    vTaskDelay(pdMS_TO_TICKS(1000)); // 1 second delay
+    os_delay_msec(1000)); // 1 second delay
     
     // Example 3: External I2C IMU device with simplified API
     DemonstrateExternalImu();
-    vTaskDelay(pdMS_TO_TICKS(1000)); // 1 second delay
+    os_delay_msec(1000)); // 1 second delay
     
     // Example 4: External SPI IMU device
     DemonstrateSpiImu();
-    vTaskDelay(pdMS_TO_TICKS(1000)); // 1 second delay
+    os_delay_msec(1000)); // 1 second delay
     
     // Example 5: Interrupt mode (if supported)
     DemonstrateInterruptMode();
@@ -949,8 +942,8 @@ void RunImuManagerExample() {
     // Example 10: Device address ambiguity issue
     DemonstrateDeviceAddressAmbiguity();
     
-    ESP_LOGI(TAG, "=====================================================");
-    ESP_LOGI(TAG, "ImuManager Example completed successfully!");
+    Logger::GetInstance().Info(TAG, "=====================================================");
+    Logger::GetInstance().Info(TAG, "ImuManager Example completed successfully!");
 }
 
 //==============================================================================

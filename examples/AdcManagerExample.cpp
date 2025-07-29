@@ -29,10 +29,10 @@
 
 #include "AdcManager.h"
 #include "MotorController.h"
+#include "utils-and-drivers/driver-handlers/Logger.h"
+#include "utils-and-drivers/hf-core-utils/hf-utils-rtos-wrap/include/OsUtility.h"
 #include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/utils/ConsolePort.h"
 
-#include <chrono>
-#include <thread>
 #include <vector>
 #include <string>
 
@@ -44,7 +44,7 @@
  * @brief Demonstrate basic ADC channel reading operations.
  */
 void DemonstrateBasicReading() {
-    ConsolePort::Printf("\n=== Basic ADC Reading Operations ===\n");
+    Logger::GetInstance().Info("AdcManagerExample", "=== Basic ADC Reading Operations ===");
     
     // Get ADC manager instance
     auto& adc_manager = GetAdcManager();
@@ -52,11 +52,11 @@ void DemonstrateBasicReading() {
     // Ensure system is initialized
     hf_adc_err_t init_result = adc_manager.EnsureInitialized();
     if (init_result != hf_adc_err_t::ADC_SUCCESS) {
-        ConsolePort::Printf("Failed to initialize AdcManager: %d\n", static_cast<int>(init_result));
+        Logger::GetInstance().Error("AdcManagerExample", "Failed to initialize AdcManager: %d", static_cast<int>(init_result));
         return;
     }
     
-    ConsolePort::Printf("AdcManager initialized successfully\n");
+    Logger::GetInstance().Info("AdcManagerExample", "AdcManager initialized successfully");
     
     // Log all registered channels
     adc_manager.LogAllRegisteredChannels();
@@ -73,25 +73,25 @@ void DemonstrateBasicReading() {
     // Test reading from each channel
     for (const auto& channel_name : test_channels) {
         if (adc_manager.Contains(channel_name)) {
-            ConsolePort::Printf("\nReading from channel: %.*s\n", 
+            Logger::GetInstance().Info("AdcManagerExample", "Reading from channel: %.*s", 
                                static_cast<int>(channel_name.length()), channel_name.data());
             
             // Read voltage only
             float voltage;
             hf_adc_err_t result = adc_manager.ReadChannelV(channel_name, voltage);
             if (result == hf_adc_err_t::ADC_SUCCESS) {
-                ConsolePort::Printf("  Voltage: %.3fV\n", voltage);
+                Logger::GetInstance().Info("AdcManagerExample", "  Voltage: %.3fV", voltage);
             } else {
-                ConsolePort::Printf("  Error reading voltage: %d\n", static_cast<int>(result));
+                Logger::GetInstance().Error("AdcManagerExample", "  Error reading voltage: %d", static_cast<int>(result));
             }
             
             // Read raw count only
             hf_u32_t raw_value;
             result = adc_manager.ReadChannelCount(channel_name, raw_value);
             if (result == hf_adc_err_t::ADC_SUCCESS) {
-                ConsolePort::Printf("  Raw Count: %u\n", raw_value);
+                Logger::GetInstance().Info("AdcManagerExample", "  Raw Count: %u", raw_value);
             } else {
-                ConsolePort::Printf("  Error reading raw count: %d\n", static_cast<int>(result));
+                Logger::GetInstance().Error("AdcManagerExample", "  Error reading raw count: %d", static_cast<int>(result));
             }
             
             // Read both voltage and raw count
@@ -99,12 +99,12 @@ void DemonstrateBasicReading() {
             float voltage2;
             result = adc_manager.ReadChannel(channel_name, raw_value2, voltage2);
             if (result == hf_adc_err_t::ADC_SUCCESS) {
-                ConsolePort::Printf("  Combined Read - Voltage: %.3fV, Raw: %u\n", voltage2, raw_value2);
+                Logger::GetInstance().Info("AdcManagerExample", "  Combined Read - Voltage: %.3fV, Raw: %u", voltage2, raw_value2);
             } else {
-                ConsolePort::Printf("  Error reading combined: %d\n", static_cast<int>(result));
+                Logger::GetInstance().Error("AdcManagerExample", "  Error reading combined: %d", static_cast<int>(result));
             }
         } else {
-            ConsolePort::Printf("Channel %.*s not found\n", 
+            Logger::GetInstance().Error("AdcManagerExample", "Channel %.*s not found", 
                                static_cast<int>(channel_name.length()), channel_name.data());
         }
     }
@@ -114,72 +114,72 @@ void DemonstrateBasicReading() {
  * @brief Demonstrate TMC9660-specific channel reading.
  */
 void DemonstrateTmc9660Channels() {
-    ConsolePort::Printf("\n=== TMC9660 ADC Channel Reading ===\n");
+    Logger::GetInstance().Info("AdcManagerExample", "=== TMC9660 ADC Channel Reading ===");
     
     auto& adc_manager = GetAdcManager();
     
     // Test AIN channels (external analog inputs)
-    ConsolePort::Printf("\n--- AIN Channels (External Analog Inputs) ---\n");
+    Logger::GetInstance().Info("AdcManagerExample", "--- AIN Channels (External Analog Inputs) ---");
     for (int i = 0; i <= 3; ++i) {
         std::string channel_name = "TMC9660_AIN" + std::to_string(i);
         if (adc_manager.Contains(channel_name)) {
             float voltage;
             hf_adc_err_t result = adc_manager.ReadChannelV(channel_name, voltage);
             if (result == hf_adc_err_t::ADC_SUCCESS) {
-                ConsolePort::Printf("AIN%d: %.3fV\n", i, voltage);
+                Logger::GetInstance().Info("AdcManagerExample", "AIN%d: %.3fV", i, voltage);
             } else {
-                ConsolePort::Printf("AIN%d: Error %d\n", i, static_cast<int>(result));
+                Logger::GetInstance().Error("AdcManagerExample", "AIN%d: Error %d", i, static_cast<int>(result));
             }
         }
     }
     
     // Test current sense channels
-    ConsolePort::Printf("\n--- Current Sense Channels ---\n");
+    Logger::GetInstance().Info("AdcManagerExample", "--- Current Sense Channels ---");
     for (int i = 0; i <= 3; ++i) {
         std::string channel_name = "TMC9660_CURRENT_I" + std::to_string(i);
         if (adc_manager.Contains(channel_name)) {
             float voltage;
             hf_adc_err_t result = adc_manager.ReadChannelV(channel_name, voltage);
             if (result == hf_adc_err_t::ADC_SUCCESS) {
-                ConsolePort::Printf("Current I%d: %.3fV\n", i, voltage);
+                Logger::GetInstance().Info("AdcManagerExample", "Current I%d: %.3fV", i, voltage);
             } else {
-                ConsolePort::Printf("Current I%d: Error %d\n", i, static_cast<int>(result));
+                Logger::GetInstance().Error("AdcManagerExample", "Current I%d: Error %d", i, static_cast<int>(result));
             }
         }
     }
     
     // Test voltage monitoring channels
-    ConsolePort::Printf("\n--- Voltage Monitoring Channels ---\n");
+    Logger::GetInstance().Info("AdcManagerExample", "--- Voltage Monitoring Channels ---");
     std::vector<std::string> voltage_channels = {"TMC9660_SUPPLY_VOLTAGE", "TMC9660_DRIVER_VOLTAGE"};
     for (const auto& channel_name : voltage_channels) {
         if (adc_manager.Contains(channel_name)) {
             float voltage;
             hf_adc_err_t result = adc_manager.ReadChannelV(channel_name, voltage);
             if (result == hf_adc_err_t::ADC_SUCCESS) {
-                ConsolePort::Printf("%s: %.3fV\n", channel_name.c_str(), voltage);
+                Logger::GetInstance().Info("AdcManagerExample", "%s: %.3fV", channel_name.c_str(), voltage);
             } else {
-                ConsolePort::Printf("%s: Error %d\n", channel_name.c_str(), static_cast<int>(result));
+                Logger::GetInstance().Error("AdcManagerExample", "%s: Error %d", channel_name.c_str(), static_cast<int>(result));
             }
         }
     }
     
     // Test temperature channels
-    ConsolePort::Printf("\n--- Temperature Channels ---\n");
+    Logger::GetInstance().Info("AdcManagerExample", "--- Temperature Channels ---");
     std::vector<std::string> temp_channels = {"TMC9660_CHIP_TEMPERATURE", "TMC9660_EXTERNAL_TEMPERATURE"};
     for (const auto& channel_name : temp_channels) {
         if (adc_manager.Contains(channel_name)) {
             float voltage;
             hf_adc_err_t result = adc_manager.ReadChannelV(channel_name, voltage);
             if (result == hf_adc_err_t::ADC_SUCCESS) {
-                ConsolePort::Printf("%s: %.1f°C\n", channel_name.c_str(), voltage); // voltage contains temperature
+                Logger::GetInstance().Info("AdcManagerExample", "%s: %.1f°C", channel_name.c_str(), voltage); // voltage contains temperature
             } else {
-                ConsolePort::Printf("%s: Error %d\n", channel_name.c_str(), static_cast<int>(result));
+                Logger::GetInstance().Error("AdcManagerExample", "%s: Error %d", channel_name.c_str(), static_cast<int>(result));
             }
         }
     }
     
     // Test motor data channels
-    ConsolePort::Printf("\n--- Motor Data Channels ---\n");
+    Logger::GetInstance().Info("AdcManagerExample", "--- Motor Data Channels ---");
     std::vector<std::string> motor_channels = {"TMC9660_MOTOR_CURRENT", "TMC9660_MOTOR_VELOCITY", "TMC9660_MOTOR_POSITION"};
     for (const auto& channel_name : motor_channels) {
         if (adc_manager.Contains(channel_name)) {
@@ -187,12 +187,12 @@ void DemonstrateTmc9660Channels() {
             hf_adc_err_t result = adc_manager.ReadChannelV(channel_name, voltage);
             if (result == hf_adc_err_t::ADC_SUCCESS) {
                 if (channel_name == "TMC9660_MOTOR_CURRENT") {
-                    ConsolePort::Printf("%s: %.3fA\n", channel_name.c_str(), voltage);
+                    Logger::GetInstance().Info("AdcManagerExample", "%s: %.3fA", channel_name.c_str(), voltage);
                 } else {
-                    ConsolePort::Printf("%s: %.0f\n", channel_name.c_str(), voltage);
+                    Logger::GetInstance().Info("AdcManagerExample", "%s: %.0f", channel_name.c_str(), voltage);
                 }
             } else {
-                ConsolePort::Printf("%s: Error %d\n", channel_name.c_str(), static_cast<int>(result));
+                Logger::GetInstance().Error("AdcManagerExample", "%s: Error %d", channel_name.c_str(), static_cast<int>(result));
             }
         }
     }
@@ -202,7 +202,7 @@ void DemonstrateTmc9660Channels() {
  * @brief Demonstrate batch reading operations.
  */
 void DemonstrateBatchReading() {
-    ConsolePort::Printf("\n=== Batch Reading Operations ===\n");
+    Logger::GetInstance().Info("AdcManagerExample", "=== Batch Reading Operations ===");
     
     auto& adc_manager = GetAdcManager();
     
@@ -226,14 +226,14 @@ void DemonstrateBatchReading() {
     );
     
     if (result == hf_adc_err_t::ADC_SUCCESS) {
-        ConsolePort::Printf("Batch read successful:\n");
+        Logger::GetInstance().Info("AdcManagerExample", "Batch read successful:");
         for (size_t i = 0; i < batch_channels.size(); ++i) {
-            ConsolePort::Printf("  %.*s: Raw=%u, Voltage=%.3fV\n",
+            Logger::GetInstance().Info("AdcManagerExample", "  %.*s: Raw=%u, Voltage=%.3fV",
                                static_cast<int>(batch_channels[i].length()), batch_channels[i].data(),
                                raw_values[i], voltages[i]);
         }
     } else {
-        ConsolePort::Printf("Batch read failed: %d\n", static_cast<int>(result));
+        Logger::GetInstance().Error("AdcManagerExample", "Batch read failed: %d", static_cast<int>(result));
     }
 }
 
@@ -241,7 +241,7 @@ void DemonstrateBatchReading() {
  * @brief Demonstrate statistics and diagnostics.
  */
 void DemonstrateStatisticsAndDiagnostics() {
-    ConsolePort::Printf("\n=== Statistics and Diagnostics ===\n");
+    Logger::GetInstance().Info("AdcManagerExample", "=== Statistics and Diagnostics ===");
     
     auto& adc_manager = GetAdcManager();
     
@@ -249,23 +249,23 @@ void DemonstrateStatisticsAndDiagnostics() {
     AdcSystemStatistics system_stats;
     hf_adc_err_t result = adc_manager.GetSystemStatistics(system_stats);
     if (result == hf_adc_err_t::ADC_SUCCESS) {
-        ConsolePort::Printf("System Statistics:\n");
-        ConsolePort::Printf("  Total Operations: %u\n", system_stats.total_operations);
-        ConsolePort::Printf("  Successful Operations: %u\n", system_stats.successful_operations);
-        ConsolePort::Printf("  Failed Operations: %u\n", system_stats.failed_operations);
-        ConsolePort::Printf("  Communication Errors: %u\n", system_stats.communication_errors);
-        ConsolePort::Printf("  Hardware Errors: %u\n", system_stats.hardware_errors);
+        Logger::GetInstance().Info("AdcManagerExample", "System Statistics:");
+        Logger::GetInstance().Info("AdcManagerExample", "  Total Operations: %u", system_stats.total_operations);
+        Logger::GetInstance().Info("AdcManagerExample", "  Successful Operations: %u", system_stats.successful_operations);
+        Logger::GetInstance().Info("AdcManagerExample", "  Failed Operations: %u", system_stats.failed_operations);
+        Logger::GetInstance().Info("AdcManagerExample", "  Communication Errors: %u", system_stats.communication_errors);
+        Logger::GetInstance().Info("AdcManagerExample", "  Hardware Errors: %u", system_stats.hardware_errors);
     }
     
     // Get system health
     AdcSystemHealth system_health;
     result = adc_manager.GetSystemHealth(system_health);
     if (result == hf_adc_err_t::ADC_SUCCESS) {
-        ConsolePort::Printf("System Health:\n");
-        ConsolePort::Printf("  Overall Health: %s\n", system_health.overall_healthy ? "Healthy" : "Unhealthy");
-        ConsolePort::Printf("  Active Channels: %u\n", system_health.active_channels);
-        ConsolePort::Printf("  Error Rate: %.2f%%\n", system_health.error_rate_percent);
-        ConsolePort::Printf("  Uptime: %llu seconds\n", system_health.uptime_seconds);
+        Logger::GetInstance().Info("AdcManagerExample", "System Health:");
+        Logger::GetInstance().Info("AdcManagerExample", "  Overall Health: %s", system_health.overall_healthy ? "Healthy" : "Unhealthy");
+        Logger::GetInstance().Info("AdcManagerExample", "  Active Channels: %u", system_health.active_channels);
+        Logger::GetInstance().Info("AdcManagerExample", "  Error Rate: %.2f%%", system_health.error_rate_percent);
+        Logger::GetInstance().Info("AdcManagerExample", "  Uptime: %llu seconds", system_health.uptime_seconds);
     }
     
     // Get channel-specific statistics
@@ -274,11 +274,11 @@ void DemonstrateStatisticsAndDiagnostics() {
         BaseAdc::AdcStatistics channel_stats;
         result = adc_manager.GetStatistics(test_channel, channel_stats);
         if (result == hf_adc_err_t::ADC_SUCCESS) {
-            ConsolePort::Printf("\nChannel Statistics for %s:\n", test_channel.c_str());
-            ConsolePort::Printf("  Total Conversions: %u\n", channel_stats.totalConversions);
-            ConsolePort::Printf("  Successful Conversions: %u\n", channel_stats.successfulConversions);
-            ConsolePort::Printf("  Failed Conversions: %u\n", channel_stats.failedConversions);
-            ConsolePort::Printf("  Average Conversion Time: %u us\n", channel_stats.averageConversionTimeUs);
+            Logger::GetInstance().Info("AdcManagerExample", "Channel Statistics for %s:", test_channel.c_str());
+            Logger::GetInstance().Info("AdcManagerExample", "  Total Conversions: %u", channel_stats.totalConversions);
+            Logger::GetInstance().Info("AdcManagerExample", "  Successful Conversions: %u", channel_stats.successfulConversions);
+            Logger::GetInstance().Info("AdcManagerExample", "  Failed Conversions: %u", channel_stats.failedConversions);
+            Logger::GetInstance().Info("AdcManagerExample", "  Average Conversion Time: %u us", channel_stats.averageConversionTimeUs);
         }
     }
 }
@@ -287,7 +287,7 @@ void DemonstrateStatisticsAndDiagnostics() {
  * @brief Demonstrate error handling and recovery.
  */
 void DemonstrateErrorHandling() {
-    ConsolePort::Printf("\n=== Error Handling and Recovery ===\n");
+    Logger::GetInstance().Info("AdcManagerExample", "=== Error Handling and Recovery ===");
     
     auto& adc_manager = GetAdcManager();
     
@@ -295,19 +295,19 @@ void DemonstrateErrorHandling() {
     std::string non_existent_channel = "NON_EXISTENT_CHANNEL";
     float voltage;
     hf_adc_err_t result = adc_manager.ReadChannelV(non_existent_channel, voltage);
-    ConsolePort::Printf("Reading from non-existent channel: %d\n", static_cast<int>(result));
+    Logger::GetInstance().Error("AdcManagerExample", "Reading from non-existent channel: %d", static_cast<int>(result));
     
     // Try to read from a valid channel with invalid parameters
     std::string valid_channel = "TMC9660_AIN3";
     if (adc_manager.Contains(valid_channel)) {
         result = adc_manager.ReadChannelV(valid_channel, voltage, 0, 1000); // Invalid sample count
-        ConsolePort::Printf("Reading with invalid parameters: %d\n", static_cast<int>(result));
+        Logger::GetInstance().Error("AdcManagerExample", "Reading with invalid parameters: %d", static_cast<int>(result));
     }
     
     // Demonstrate recovery by reading from a valid channel
     if (adc_manager.Contains(valid_channel)) {
         result = adc_manager.ReadChannelV(valid_channel, voltage);
-        ConsolePort::Printf("Recovery read from valid channel: %d (voltage=%.3fV)\n", 
+        Logger::GetInstance().Info("AdcManagerExample", "Recovery read from valid channel: %d (voltage=%.3fV)", 
                            static_cast<int>(result), voltage);
     }
 }
@@ -316,7 +316,7 @@ void DemonstrateErrorHandling() {
  * @brief Main example function.
  */
 void RunAdcManagerExample() {
-    ConsolePort::Printf("=== AdcManager Example - Enhanced TMC9660 Support ===\n");
+    Logger::GetInstance().Info("AdcManagerExample", "=== AdcManager Example - Enhanced TMC9660 Support ===");
     
     // Demonstrate all features
     DemonstrateBasicReading();
@@ -325,7 +325,7 @@ void RunAdcManagerExample() {
     DemonstrateStatisticsAndDiagnostics();
     DemonstrateErrorHandling();
     
-    ConsolePort::Printf("\n=== Example Complete ===\n");
+    Logger::GetInstance().Info("AdcManagerExample", "=== Example Complete ===");
 }
 
 //==============================================================================

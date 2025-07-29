@@ -21,7 +21,7 @@
 //==============================================================================
 
 void DemonstrateBasicLogging() {
-    printf("=== Basic Logging Demo ===\n");
+    Logger::GetInstance().Info("LoggerExample", "=== Basic Logging Demo ===");
     
     Logger& logger = Logger::GetInstance();
     
@@ -32,7 +32,7 @@ void DemonstrateBasicLogging() {
     config.enable_effects = true;
     
     if (!logger.Initialize(config)) {
-        printf("Failed to initialize logger\n");
+        Logger::GetInstance().Error("LoggerExample", "Failed to initialize logger");
         return;
     }
     
@@ -42,11 +42,11 @@ void DemonstrateBasicLogging() {
     logger.Error("DEMO", "This is an error message");
     logger.Debug("DEMO", "This is a debug message");
     
-    printf("Basic logging demo completed\n\n");
+    Logger::GetInstance().Info("LoggerExample", "Basic logging demo completed");
 }
 
 void DemonstrateFormattedLogging() {
-    printf("=== Formatted Logging Demo ===\n");
+    Logger::GetInstance().Info("LoggerExample", "=== Formatted Logging Demo ===");
     
     Logger& logger = Logger::GetInstance();
     
@@ -56,11 +56,11 @@ void DemonstrateFormattedLogging() {
     logger.Error("DEMO", LogColor::BRIGHT_RED, LogStyle::BOLD, "This is bold bright red text");
     logger.Debug("DEMO", LogColor::CYAN, LogStyle::ITALIC, "This is italic cyan text");
     
-    printf("Formatted logging demo completed\n\n");
+    Logger::GetInstance().Info("LoggerExample", "Formatted logging demo completed");
 }
 
 void DemonstrateAsciiArtLogging() {
-    printf("=== ASCII Art Logging Demo ===\n");
+    Logger::GetInstance().Info("LoggerExample", "=== ASCII Art Logging Demo ===");
     
     Logger& logger = Logger::GetInstance();
     AsciiArtGenerator generator;
@@ -87,11 +87,11 @@ void DemonstrateAsciiArtLogging() {
     format.color = LogColor::BRIGHT_CYAN;
     logger.LogAsciiArt("ART", art, format);
     
-    printf("ASCII art logging demo completed\n\n");
+    Logger::GetInstance().Info("LoggerExample", "ASCII art logging demo completed");
 }
 
 void DemonstrateBannerLogging() {
-    printf("=== Banner Logging Demo ===\n");
+    Logger::GetInstance().Info("LoggerExample", "=== Banner Logging Demo ===");
     
     Logger& logger = Logger::GetInstance();
     AsciiArtGenerator generator;
@@ -113,11 +113,11 @@ void DemonstrateBannerLogging() {
     
     logger.LogBanner("BANNER", banner_art, format);
     
-    printf("Banner logging demo completed\n\n");
+    Logger::GetInstance().Info("LoggerExample", "Banner logging demo completed");
 }
 
 void DemonstrateLogLevels() {
-    printf("=== Log Levels Demo ===\n");
+    Logger::GetInstance().Info("LoggerExample", "=== Log Levels Demo ===");
     
     Logger& logger = Logger::GetInstance();
     
@@ -141,11 +141,11 @@ void DemonstrateLogLevels() {
     logger.Info("INFO", "This should appear");
     logger.Debug("INFO", "This should NOT appear (level too high)");
     
-    printf("Log levels demo completed\n\n");
+    Logger::GetInstance().Info("LoggerExample", "Log levels demo completed");
 }
 
 void DemonstrateConvenienceMacros() {
-    printf("=== Convenience Macros Demo ===\n");
+    Logger::GetInstance().Info("LoggerExample", "=== Convenience Macros Demo ===");
     
     // Using convenience macros
     LOG_INFO("MACRO", "This uses the LOG_INFO macro");
@@ -155,7 +155,7 @@ void DemonstrateConvenienceMacros() {
     LOG_INFO_FORMATTED("MACRO", LogColor::BRIGHT_GREEN, LogStyle::BOLD, 
                       "This uses the LOG_INFO_FORMATTED macro");
     
-    printf("Convenience macros demo completed\n\n");
+    Logger::GetInstance().Info("LoggerExample", "Convenience macros demo completed");
 }
 
 void DemonstrateIntegration() {
