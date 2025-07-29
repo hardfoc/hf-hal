@@ -337,6 +337,47 @@ bool ImuManager::CreateExternalBno08xDevice(uint8_t deviceIndex,
     return true;
 }
 
+bool ImuManager::CreateExternalBno08xDevice(uint8_t deviceIndex, 
+                                           BaseSpi& spi_interface,
+                                           const Bno08xConfig& config) {
+    MutexLockGuard lock(manager_mutex_);
+    
+    if (!IsExternalDeviceIndex(deviceIndex)) {
+        Logger::GetInstance().Error("ImuManager", "Invalid device index %u for external device", deviceIndex);
+        return false;
+    }
+    
+    if (device_active_[deviceIndex]) {
+        Logger::GetInstance().Error("ImuManager", "Device slot %u already occupied", deviceIndex);
+        return false;
+    }
+    
+    // Create external BNO08x handler with provided SPI interface
+    auto external_handler = std::make_unique<Bno08xHandler>(spi_interface, config);
+    if (!external_handler) {
+        Logger::GetInstance().Error("ImuManager", "Failed to create BNO08x handler for device %u", deviceIndex);
+        return false;
+    }
+    
+    bno08x_handlers_[deviceIndex] = std::move(external_handler);
+    device_active_[deviceIndex] = true;
+    device_initialized_[deviceIndex] = false;
+    
+    Logger::GetInstance().Info("ImuManager", "External BNO08x device %u created successfully (BaseSpi interface)", deviceIndex);
+    
+    // If system is already initialized, initialize this device immediately
+    if (IsInitialized()) {
+        device_initialized_[deviceIndex] = bno08x_handlers_[deviceIndex]->Initialize() == Bno08xError::SUCCESS;
+        if (device_initialized_[deviceIndex]) {
+            Logger::GetInstance().Info("ImuManager", "External BNO08x device %u initialized successfully", deviceIndex);
+        } else {
+            Logger::GetInstance().Error("ImuManager", "Failed to initialize external BNO08x device %u", deviceIndex);
+        }
+    }
+    
+    return true;
+}
+
 bool ImuManager::DeleteExternalDevice(uint8_t deviceIndex) {
     MutexLockGuard lock(manager_mutex_);
     

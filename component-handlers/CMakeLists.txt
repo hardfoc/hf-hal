@@ -33,6 +33,10 @@ set(COMPONENT_SOURCES
     CommChannelsManager.cpp
     CommChannelsManager.h
     
+    # IMU management system
+    ImuManager.cpp
+    ImuManager.h
+    
     # Example and test files
     ModernHalExample.cpp
     Tmc9660Example.cpp
