@@ -29,6 +29,10 @@ set(COMPONENT_SOURCES
     MotorController.cpp
     MotorController.h
     
+    # AS5047U encoder controller system
+    EncoderController.cpp
+    EncoderController.h
+    
     # Communication channels management
     CommChannelsManager.cpp
     CommChannelsManager.h
