@@ -480,6 +480,12 @@ private:
      * @return Base logger instance
      */
     std::unique_ptr<BaseLogger> CreateBaseLogger() noexcept;
+    
+    /**
+     * @brief Dump comprehensive logger statistics to log as INFO level.
+     * Logs internal logger statistics, configuration, and performance metrics.
+     */
+    void DumpStatistics() const noexcept;
 };
 
 //==============================================================================

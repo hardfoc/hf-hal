@@ -301,6 +301,12 @@ public:
      * @return Number of interrupts processed since initialization
      */
     uint32_t GetInterruptCount(uint8_t deviceIndex) const noexcept;
+    
+    /**
+     * @brief Dump comprehensive system statistics to log as INFO level.
+     * Logs all device statistics, interrupt counts, and system health information.
+     */
+    void DumpStatistics() const noexcept;
 
     // Delete copy/move constructors and assignment operators
     ImuManager(const ImuManager&) = delete;

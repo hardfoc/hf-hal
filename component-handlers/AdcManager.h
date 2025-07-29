@@ -435,6 +435,12 @@ public:
     [[nodiscard]] hf_adc_err_t ResetAllChannels() noexcept;
     
     /**
+     * @brief Dump comprehensive system statistics to log as INFO level.
+     * Logs all channel statistics, system health, and operation counters.
+     */
+    void DumpStatistics() const noexcept;
+    
+    /**
      * @brief Perform system self-test.
      * @param result Reference to store test results
      * @return hf_adc_err_t operation result

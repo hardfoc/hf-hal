@@ -890,4 +890,105 @@ int CommChannelsManager::GetNextAvailableDeviceIndex(uint8_t bus_index) const no
     }
     
     return -1;
+}
+
+void CommChannelsManager::DumpStatistics() const noexcept {
+    static constexpr const char* TAG = "CommChannelsManager";
+    
+    Logger::GetInstance().Info(TAG, "=== COMM CHANNELS MANAGER STATISTICS ===");
+    
+    RtosMutex::LockGuard lock(mutex_);
+    
+    // System Health
+    Logger::GetInstance().Info(TAG, "System Health:");
+    Logger::GetInstance().Info(TAG, "  Initialized: %s", initialized_.load() ? "YES" : "NO");
+    
+    // Bus Statistics
+    Logger::GetInstance().Info(TAG, "Bus Configuration:");
+    Logger::GetInstance().Info(TAG, "  SPI Bus: %s", spi_bus_ ? "ACTIVE" : "INACTIVE");
+    Logger::GetInstance().Info(TAG, "  I2C Bus: %s", i2c_bus_ ? "ACTIVE" : "INACTIVE");
+    Logger::GetInstance().Info(TAG, "  UART Buses: %d", static_cast<int>(uart_buses_.size()));
+    Logger::GetInstance().Info(TAG, "  CAN Buses: %d", static_cast<int>(can_buses_.size()));
+    
+    // SPI Device Statistics
+    Logger::GetInstance().Info(TAG, "SPI Device Statistics:");
+    Logger::GetInstance().Info(TAG, "  Built-in SPI Devices: %d", static_cast<int>(spi_device_indices_.size()));
+    Logger::GetInstance().Info(TAG, "  Custom SPI Devices: %d", static_cast<int>(custom_spi_devices_.size()));
+    Logger::GetInstance().Info(TAG, "  External SPI Buses: %d", static_cast<int>(external_spi_buses_.size()));
+    
+    if (!spi_device_indices_.empty()) {
+        Logger::GetInstance().Info(TAG, "  Built-in SPI Device IDs:");
+        for (size_t i = 0; i < spi_device_indices_.size() && i < 8; ++i) {
+            SpiDeviceId device_id = static_cast<SpiDeviceId>(i);
+            const char* device_name = "Unknown";
+            switch (device_id) {
+                case SpiDeviceId::TMC9660_MOTOR_CONTROLLER: device_name = "TMC9660 Motor Controller"; break;
+                case SpiDeviceId::AS5047U_POSITION_ENCODER: device_name = "AS5047U Position Encoder"; break;
+                case SpiDeviceId::EXTERNAL_DEVICE_1: device_name = "External Device 1"; break;
+                case SpiDeviceId::EXTERNAL_DEVICE_2: device_name = "External Device 2"; break;
+                default: device_name = "Unknown Device"; break;
+            }
+            Logger::GetInstance().Info(TAG, "    [%d] %s (Index: %d)", 
+                static_cast<int>(i), device_name, spi_device_indices_[i]);
+        }
+    }
+    
+    // I2C Device Statistics
+    Logger::GetInstance().Info(TAG, "I2C Device Statistics:");
+    Logger::GetInstance().Info(TAG, "  Built-in I2C Devices: %d", static_cast<int>(i2c_device_indices_.size()));
+    Logger::GetInstance().Info(TAG, "  Custom I2C Devices: %d", static_cast<int>(custom_i2c_devices_.size()));
+    Logger::GetInstance().Info(TAG, "  External I2C Buses: %d", static_cast<int>(external_i2c_buses_.size()));
+    
+    if (!i2c_device_indices_.empty()) {
+        Logger::GetInstance().Info(TAG, "  Built-in I2C Device IDs:");
+        for (size_t i = 0; i < i2c_device_indices_.size() && i < 8; ++i) {
+            I2cDeviceId device_id = static_cast<I2cDeviceId>(i);
+            const char* device_name = "Unknown";
+            uint8_t address = (i < i2c_device_addresses_.size()) ? i2c_device_addresses_[i] : 0xFF;
+            
+            switch (device_id) {
+                case I2cDeviceId::BNO08X_IMU: device_name = "BNO08x IMU"; break;
+                case I2cDeviceId::PCAL9555_GPIO_EXPANDER: device_name = "PCAL9555 GPIO Expander"; break;
+                default: device_name = "Unknown Device"; break;
+            }
+            Logger::GetInstance().Info(TAG, "    [%d] %s (Index: %d, Addr: 0x%02X)", 
+                static_cast<int>(i), device_name, i2c_device_indices_[i], address);
+        }
+    }
+    
+    // Device-to-Bus Mapping
+    Logger::GetInstance().Info(TAG, "Device-to-Bus Mapping:");
+    if (!spi_device_to_bus_mapping_.empty()) {
+        Logger::GetInstance().Info(TAG, "  SPI Device-Bus Mappings:");
+        for (const auto& mapping : spi_device_to_bus_mapping_) {
+            Logger::GetInstance().Info(TAG, "    Device %d -> Bus %d", mapping.first, mapping.second);
+        }
+    }
+    
+    if (!i2c_device_to_bus_mapping_.empty()) {
+        Logger::GetInstance().Info(TAG, "  I2C Device-Bus Mappings:");
+        for (const auto& mapping : i2c_device_to_bus_mapping_) {
+            Logger::GetInstance().Info(TAG, "    Device %d -> Bus %d", mapping.first, mapping.second);
+        }
+    }
+    
+    // UART/CAN Statistics
+    Logger::GetInstance().Info(TAG, "UART/CAN Statistics:");
+    Logger::GetInstance().Info(TAG, "  Total UART Count: %d", GetUartCount());
+    Logger::GetInstance().Info(TAG, "  Total CAN Count: %d", GetCanCount());
+    
+    // Overall Statistics
+    int total_devices = static_cast<int>(spi_device_indices_.size() + custom_spi_devices_.size() + 
+                                       i2c_device_indices_.size() + custom_i2c_devices_.size());
+    int total_buses = static_cast<int>(uart_buses_.size() + can_buses_.size() + 
+                                     external_spi_buses_.size() + external_i2c_buses_.size());
+    if (spi_bus_) total_buses++;
+    if (i2c_bus_) total_buses++;
+    
+    Logger::GetInstance().Info(TAG, "Overall Summary:");
+    Logger::GetInstance().Info(TAG, "  Total Devices Managed: %d", total_devices);
+    Logger::GetInstance().Info(TAG, "  Total Buses Managed: %d", total_buses);
+    Logger::GetInstance().Info(TAG, "  System Status: %s", initialized_.load() ? "OPERATIONAL" : "NOT_READY");
+    
+    Logger::GetInstance().Info(TAG, "=== END COMM CHANNELS MANAGER STATISTICS ===");
 } 

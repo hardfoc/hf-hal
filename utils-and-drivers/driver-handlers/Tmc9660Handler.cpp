@@ -3,6 +3,7 @@
 #include <algorithm>
 #include "utils-and-drivers/hf-core-utils/hf-utils-rtos-wrap/include/OsAbstraction.h"
 #include "utils-and-drivers/hf-core-utils/hf-utils-rtos-wrap/include/OsUtility.h"
+#include "utils-and-drivers/driver-handlers/Logger.h"
 
 /**
  * @brief Default TMC9660 bootloader configuration based on TMC9660-3PH-EVAL board settings.
@@ -767,4 +768,105 @@ const char* Tmc9660Handler::Adc::GetChannelTypeString(hf_channel_id_t channel_id
         return "Motor";
     }
     return "Unknown";
+}
+
+void Tmc9660Handler::DumpDiagnostics() const noexcept {
+    static constexpr const char* TAG = "Tmc9660Handler";
+    
+    Logger::GetInstance().Info(TAG, "=== TMC9660 HANDLER DIAGNOSTICS ===");
+    
+    // System Health
+    Logger::GetInstance().Info(TAG, "System Health:");
+    Logger::GetInstance().Info(TAG, "  Initialized: %s", IsInitialized() ? "YES" : "NO");
+    
+    // Communication Interface Status
+    Logger::GetInstance().Info(TAG, "Communication Interface:");
+    Logger::GetInstance().Info(TAG, "  Current Mode: %s", 
+        GetCommMode() == CommMode::SPI ? "SPI" : 
+        GetCommMode() == CommMode::UART ? "UART" : "UNKNOWN");
+    Logger::GetInstance().Info(TAG, "  SPI Available: %s", HasSpiInterface() ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  UART Available: %s", HasUartInterface() ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Device Address: %d", device_address_);
+    
+    // TMC9660 Driver Status
+    Logger::GetInstance().Info(TAG, "TMC9660 Driver:");
+    if (tmc9660_) {
+        Logger::GetInstance().Info(TAG, "  Driver Instance: ACTIVE");
+        // Add more TMC9660-specific diagnostics here if available
+    } else {
+        Logger::GetInstance().Info(TAG, "  Driver Instance: NOT_INITIALIZED");
+    }
+    
+    // ADC Diagnostics
+    Logger::GetInstance().Info(TAG, "ADC Subsystem:");
+    if (adcWrapper_) {
+        Logger::GetInstance().Info(TAG, "  ADC Wrapper: ACTIVE");
+        
+        // Get ADC statistics
+        hf_adc_statistics_t adc_stats;
+        hf_adc_diagnostics_t adc_diagnostics;
+        
+        if (adcWrapper_->GetStatistics(adc_stats) == hf_adc_err_t::ADC_SUCCESS) {
+            Logger::GetInstance().Info(TAG, "  ADC Statistics:");
+            Logger::GetInstance().Info(TAG, "    Total Operations: %d", adc_stats.total_operations);
+            Logger::GetInstance().Info(TAG, "    Successful Operations: %d", adc_stats.successful_operations);
+            Logger::GetInstance().Info(TAG, "    Failed Operations: %d", adc_stats.failed_operations);
+            Logger::GetInstance().Info(TAG, "    Average Read Time: %d us", adc_stats.average_read_time_us);
+            Logger::GetInstance().Info(TAG, "    Last Read Time: %d us", adc_stats.last_read_time_us);
+            
+            if (adc_stats.total_operations > 0) {
+                float success_rate = (float)adc_stats.successful_operations / adc_stats.total_operations * 100.0f;
+                Logger::GetInstance().Info(TAG, "    Success Rate: %.2f%%", success_rate);
+            }
+        }
+        
+        if (adcWrapper_->GetDiagnostics(adc_diagnostics) == hf_adc_err_t::ADC_SUCCESS) {
+            Logger::GetInstance().Info(TAG, "  ADC Diagnostics:");
+            Logger::GetInstance().Info(TAG, "    Communication Errors: %d", adc_diagnostics.communication_errors);
+            Logger::GetInstance().Info(TAG, "    Hardware Errors: %d", adc_diagnostics.hardware_errors);
+            Logger::GetInstance().Info(TAG, "    Last Error: %s", adc_err_to_string(adc_diagnostics.last_error));
+            Logger::GetInstance().Info(TAG, "    System Healthy: %s", adc_diagnostics.system_healthy ? "YES" : "NO");
+        }
+    } else {
+        Logger::GetInstance().Info(TAG, "  ADC Wrapper: NOT_INITIALIZED");
+    }
+    
+    // GPIO Diagnostics
+    Logger::GetInstance().Info(TAG, "GPIO Subsystem:");
+    int active_gpio_count = 0;
+    for (size_t i = 0; i < gpioWrappers_.size(); ++i) {
+        if (gpioWrappers_[i]) {
+            active_gpio_count++;
+            Logger::GetInstance().Info(TAG, "  GPIO%d: ACTIVE", static_cast<int>(i + 17)); // GPIO17, GPIO18
+        }
+    }
+    Logger::GetInstance().Info(TAG, "  Active GPIO Count: %d/%d", active_gpio_count, static_cast<int>(gpioWrappers_.size()));
+    
+    // Bootloader Configuration
+    Logger::GetInstance().Info(TAG, "Bootloader Configuration:");
+    if (bootCfg_) {
+        Logger::GetInstance().Info(TAG, "  Boot Mode: %s", 
+            bootCfg_->boot.boot_mode == tmc9660::bootcfg::BootMode::Parameter ? "Parameter" :
+            bootCfg_->boot.boot_mode == tmc9660::bootcfg::BootMode::Standalone ? "Standalone" : "Unknown");
+        Logger::GetInstance().Info(TAG, "  VEXT1: %s", 
+            bootCfg_->ldo.vext1 == tmc9660::bootcfg::LDOVoltage::V5_0 ? "5.0V" :
+            bootCfg_->ldo.vext1 == tmc9660::bootcfg::LDOVoltage::V3_3 ? "3.3V" : "Other");
+        Logger::GetInstance().Info(TAG, "  VEXT2: %s", 
+            bootCfg_->ldo.vext2 == tmc9660::bootcfg::LDOVoltage::V5_0 ? "5.0V" :
+            bootCfg_->ldo.vext2 == tmc9660::bootcfg::LDOVoltage::V3_3 ? "3.3V" : "Other");
+    } else {
+        Logger::GetInstance().Info(TAG, "  Configuration: NOT_AVAILABLE");
+    }
+    
+    // Memory Usage
+    Logger::GetInstance().Info(TAG, "Memory Usage:");
+    size_t estimated_memory = sizeof(*this);
+    if (tmc9660_) estimated_memory += sizeof(TMC9660);
+    if (adcWrapper_) estimated_memory += sizeof(Adc);
+    for (const auto& gpio : gpioWrappers_) {
+        if (gpio) estimated_memory += sizeof(Gpio);
+    }
+    Logger::GetInstance().Info(TAG, "  Estimated Total: %d bytes", static_cast<int>(estimated_memory));
+    
+    Logger::GetInstance().Info(TAG, "=== END TMC9660 HANDLER DIAGNOSTICS ===");
 } 

@@ -454,6 +454,12 @@ public:
     void LogCurrentState() const noexcept;
     
     /**
+     * @brief Dump comprehensive system statistics to log as INFO level.
+     * Logs all diagnostics, statistics, and system health information.
+     */
+    void DumpStatistics() const noexcept;
+    
+    /**
      * @brief Get current LED GPIO pin information.
      * @return GPIO pin number currently being used
      */

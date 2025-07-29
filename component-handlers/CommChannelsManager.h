@@ -277,6 +277,12 @@ public:
      * @note Use only for advanced ESP32-specific operations
      */
     bool GetMcuSpiBus(uint8_t bus_index, EspSpiBus*& bus) noexcept;
+    
+    /**
+     * @brief Dump comprehensive system statistics to log as INFO level.
+     * Logs all bus statistics, device counts, and system health information.
+     */
+    void DumpStatistics() const noexcept;
 
 private:
     CommChannelsManager();

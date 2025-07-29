@@ -518,6 +518,53 @@ void LedManager::LogCurrentState() const noexcept {
     Logger::GetInstance().Info(TAG, "  GPIO Pin: %d", current_led_gpio_);
 }
 
+void LedManager::DumpStatistics() const noexcept {
+    Logger::GetInstance().Info(TAG, "=== LED MANAGER STATISTICS ===");
+    
+    // Get comprehensive diagnostics
+    LedSystemDiagnostics diagnostics;
+    if (GetSystemDiagnostics(diagnostics) == LedError::SUCCESS) {
+        Logger::GetInstance().Info(TAG, "System Health:");
+        Logger::GetInstance().Info(TAG, "  Overall Health: %s", diagnostics.system_healthy ? "HEALTHY" : "DEGRADED");
+        Logger::GetInstance().Info(TAG, "  Initialized: %s", diagnostics.led_initialized ? "YES" : "NO");
+        Logger::GetInstance().Info(TAG, "  System Uptime: %llu ms (%.2f hours)", 
+                                   diagnostics.system_uptime_ms, 
+                                   diagnostics.system_uptime_ms / 3600000.0);
+        
+        Logger::GetInstance().Info(TAG, "Current Status:");
+        Logger::GetInstance().Info(TAG, "  Animation Active: %s", diagnostics.animation_active ? "YES" : "NO");
+        Logger::GetInstance().Info(TAG, "  Current Animation: %s", LedAnimationToString(diagnostics.current_animation));
+        Logger::GetInstance().Info(TAG, "  Current Color: 0x%06X", diagnostics.current_color);
+        Logger::GetInstance().Info(TAG, "  Current Brightness: %d/255 (%d%%)", 
+                                   diagnostics.current_brightness,
+                                   (diagnostics.current_brightness * 100) / 255);
+        
+        Logger::GetInstance().Info(TAG, "Operation Statistics:");
+        Logger::GetInstance().Info(TAG, "  Total Operations: %d", diagnostics.total_operations);
+        Logger::GetInstance().Info(TAG, "  Successful Operations: %d", diagnostics.successful_operations);
+        Logger::GetInstance().Info(TAG, "  Failed Operations: %d", diagnostics.failed_operations);
+        
+        if (diagnostics.total_operations > 0) {
+            float success_rate = (float)diagnostics.successful_operations / diagnostics.total_operations * 100.0f;
+            Logger::GetInstance().Info(TAG, "  Success Rate: %.2f%%", success_rate);
+        }
+        
+        Logger::GetInstance().Info(TAG, "Animation Statistics:");
+        Logger::GetInstance().Info(TAG, "  Animation Cycles: %d", diagnostics.animation_cycles);
+        Logger::GetInstance().Info(TAG, "  Last Error: %s", LedErrorToString(diagnostics.last_error));
+        
+        Logger::GetInstance().Info(TAG, "Hardware Configuration:");
+        Logger::GetInstance().Info(TAG, "  GPIO Pin: %d", current_led_gpio_);
+        Logger::GetInstance().Info(TAG, "  LED Count: %d", NUM_LEDS);
+        Logger::GetInstance().Info(TAG, "  RMT Channel: %d", DEFAULT_RMT_CHANNEL);
+        Logger::GetInstance().Info(TAG, "  Max Brightness: %d/255", max_brightness_);
+    } else {
+        Logger::GetInstance().Error(TAG, "Failed to retrieve system diagnostics for statistics dump");
+    }
+    
+    Logger::GetInstance().Info(TAG, "=== END LED MANAGER STATISTICS ===");
+}
+
 //==============================================================================
 // PRIVATE METHODS
 //==============================================================================

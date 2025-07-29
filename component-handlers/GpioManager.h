@@ -437,6 +437,21 @@ public:
      */
     [[nodiscard]] hf_gpio_err_t ResetStatistics(std::string_view name) noexcept;
     
+    /**
+     * @brief Dump comprehensive system statistics to log as INFO level.
+     * Logs all pin statistics, system health, and operation counters.
+     */
+    void DumpStatistics() const noexcept;
+
+private:
+    /**
+     * @brief Get count of active pins (helper for statistics).
+     * @return Number of pins with valid GPIO instances
+     */
+    int GetActivePinCount() const noexcept;
+
+public:
+    
     //==========================================================================
     // BATCH OPERATIONS
     //==========================================================================

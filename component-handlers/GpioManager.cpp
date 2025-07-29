@@ -907,4 +907,98 @@ hf_gpio_err_t GpioManager::ValidatePinName(std::string_view name) noexcept {
     }
     
     return hf_gpio_err_t::GPIO_SUCCESS;
+}
+
+void GpioManager::DumpStatistics() const noexcept {
+    static constexpr const char* TAG = "GpioManager";
+    
+    Logger::GetInstance().Info(TAG, "=== GPIO MANAGER STATISTICS ===");
+    
+    RtosMutex::LockGuard lock(mutex_);
+    
+    // System Health
+    Logger::GetInstance().Info(TAG, "System Health:");
+    Logger::GetInstance().Info(TAG, "  Initialized: %s", is_initialized_.load() ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Total Pins Registered: %d", static_cast<int>(gpio_pins_.size()));
+    Logger::GetInstance().Info(TAG, "  Active Pins: %d", GetActivePinCount());
+    
+    // Operation Statistics
+    uint32_t total_ops = total_operations_.load();
+    uint32_t success_ops = successful_operations_.load();
+    uint32_t failed_ops = failed_operations_.load();
+    
+    Logger::GetInstance().Info(TAG, "Operation Statistics:");
+    Logger::GetInstance().Info(TAG, "  Total Operations: %d", total_ops);
+    Logger::GetInstance().Info(TAG, "  Successful Operations: %d", success_ops);
+    Logger::GetInstance().Info(TAG, "  Failed Operations: %d", failed_ops);
+    
+    if (total_ops > 0) {
+        float success_rate = (float)success_ops / total_ops * 100.0f;
+        Logger::GetInstance().Info(TAG, "  Success Rate: %.2f%%", success_rate);
+    }
+    
+    // Error Statistics
+    Logger::GetInstance().Info(TAG, "Error Statistics:");
+    Logger::GetInstance().Info(TAG, "  Communication Errors: %d", communication_errors_.load());
+    Logger::GetInstance().Info(TAG, "  Hardware Errors: %d", hardware_errors_.load());
+    Logger::GetInstance().Info(TAG, "  Last Error: %s", gpio_err_to_string(last_error_.load()));
+    
+    // Pin Category Breakdown
+    int core_pins = 0, comm_pins = 0, gpio_pins = 0;
+    for (const auto& pair : gpio_pins_) {
+        switch (pair.second.category) {
+            case PinCategory::CORE: core_pins++; break;
+            case PinCategory::COMM: comm_pins++; break;
+            case PinCategory::GPIO: gpio_pins++; break;
+        }
+    }
+    
+    Logger::GetInstance().Info(TAG, "Pin Categories:");
+    Logger::GetInstance().Info(TAG, "  CORE Pins: %d", core_pins);
+    Logger::GetInstance().Info(TAG, "  COMM Pins: %d", comm_pins);
+    Logger::GetInstance().Info(TAG, "  GPIO Pins: %d", gpio_pins);
+    
+    // Top 5 Most Used Pins (by operation count)
+    Logger::GetInstance().Info(TAG, "Pin Statistics Summary:");
+    std::vector<std::pair<std::string, BaseGpio::PinStatistics>> pin_stats;
+    
+    for (const auto& pair : gpio_pins_) {
+        BaseGpio::PinStatistics stats;
+        if (pair.second.gpio && pair.second.gpio->GetStatistics(stats) == hf_gpio_err_t::GPIO_SUCCESS) {
+            pin_stats.emplace_back(pair.first, stats);
+        }
+    }
+    
+    // Sort by total operations
+    std::sort(pin_stats.begin(), pin_stats.end(), 
+        [](const auto& a, const auto& b) {
+            return (a.second.total_operations) > (b.second.total_operations);
+        });
+    
+    int pins_to_show = std::min(5, static_cast<int>(pin_stats.size()));
+    if (pins_to_show > 0) {
+        Logger::GetInstance().Info(TAG, "  Top %d Most Active Pins:", pins_to_show);
+        for (int i = 0; i < pins_to_show; ++i) {
+            const auto& pin = pin_stats[i];
+            Logger::GetInstance().Info(TAG, "    %s: %d ops (success: %d, failed: %d)", 
+                pin.first.c_str(), 
+                pin.second.total_operations,
+                pin.second.successful_operations,
+                pin.second.failed_operations);
+        }
+    } else {
+        Logger::GetInstance().Info(TAG, "  No pin statistics available");
+    }
+    
+    Logger::GetInstance().Info(TAG, "=== END GPIO MANAGER STATISTICS ===");
+}
+
+int GpioManager::GetActivePinCount() const noexcept {
+    int count = 0;
+    for (const auto& pair : gpio_pins_) {
+        if (pair.second.gpio) {
+            count++;
+        }
+    }
+    return count;
 } 

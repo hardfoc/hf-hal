@@ -831,4 +831,79 @@ void ImuManager::GpioInterruptHandler(BaseGpio* gpio, hf_gpio_interrupt_trigger_
     if (imu_manager->interrupt_callback_) {
         imu_manager->interrupt_callback_();
     }
+}
+
+void ImuManager::DumpStatistics() const noexcept {
+    static constexpr const char* TAG = "ImuManager";
+    
+    Logger::GetInstance().Info(TAG, "=== IMU MANAGER STATISTICS ===");
+    
+    RtosMutex::LockGuard lock(manager_mutex_);
+    
+    // System Health
+    Logger::GetInstance().Info(TAG, "System Health:");
+    Logger::GetInstance().Info(TAG, "  Initialized: %s", initialized_ ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Onboard Device Created: %s", onboard_device_created_ ? "YES" : "NO");
+    
+    // Device Statistics
+    int active_devices = 0;
+    int initialized_devices = 0;
+    
+    Logger::GetInstance().Info(TAG, "Device Status Summary:");
+    for (uint8_t i = 0; i < MAX_DEVICES; ++i) {
+        if (bno08x_handlers_[i] != nullptr) {
+            bool is_active = device_active_[i];
+            bool is_initialized = device_initialized_[i];
+            uint32_t interrupt_count = GetInterruptCount(i);
+            
+            const char* device_type = (i == 0) ? "Onboard" : "External";
+            Logger::GetInstance().Info(TAG, "  Device %d (%s): %s, %s, Interrupts: %d", 
+                i, device_type,
+                is_active ? "ACTIVE" : "INACTIVE",
+                is_initialized ? "INITIALIZED" : "NOT_INITIALIZED",
+                interrupt_count);
+            
+            if (is_active) active_devices++;
+            if (is_initialized) initialized_devices++;
+        } else {
+            Logger::GetInstance().Info(TAG, "  Device %d: NOT_CREATED", i);
+        }
+    }
+    
+    // Overall Statistics
+    Logger::GetInstance().Info(TAG, "Overall Statistics:");
+    Logger::GetInstance().Info(TAG, "  Total Devices: %d", active_devices);
+    Logger::GetInstance().Info(TAG, "  Initialized Devices: %d", initialized_devices);
+    Logger::GetInstance().Info(TAG, "  Active Devices: %d", active_devices);
+    
+    // Interrupt Statistics
+    uint32_t total_interrupts = 0;
+    for (uint8_t i = 0; i < MAX_DEVICES; ++i) {
+        total_interrupts += GetInterruptCount(i);
+    }
+    Logger::GetInstance().Info(TAG, "  Total Interrupts Processed: %d", total_interrupts);
+    
+    // Interrupt Configuration
+    Logger::GetInstance().Info(TAG, "Interrupt Configuration:");
+    Logger::GetInstance().Info(TAG, "  Interrupt Semaphore: %s", interrupt_semaphore_ ? "CONFIGURED" : "NOT_CONFIGURED");
+    Logger::GetInstance().Info(TAG, "  Interrupt Callback: %s", interrupt_callback_ ? "SET" : "NOT_SET");
+    
+    // Memory Usage
+    Logger::GetInstance().Info(TAG, "Memory Usage:");
+    size_t handler_memory = 0;
+    for (uint8_t i = 0; i < MAX_DEVICES; ++i) {
+        if (bno08x_handlers_[i] != nullptr) {
+            handler_memory += sizeof(Bno08xHandler);
+        }
+    }
+    Logger::GetInstance().Info(TAG, "  Handler Memory: %d bytes", static_cast<int>(handler_memory));
+    Logger::GetInstance().Info(TAG, "  Max Possible Devices: %d", MAX_DEVICES);
+    
+    // Hardware Configuration
+    Logger::GetInstance().Info(TAG, "Hardware Configuration:");
+    Logger::GetInstance().Info(TAG, "  Communication: I2C/SPI via CommChannelsManager");
+    Logger::GetInstance().Info(TAG, "  Interrupt Pin: Via GpioManager");
+    Logger::GetInstance().Info(TAG, "  Platform Mapping: Enabled");
+    
+    Logger::GetInstance().Info(TAG, "=== END IMU MANAGER STATISTICS ===");
 } 
