@@ -55,29 +55,37 @@ bool GpioManager::EnsureInitialized() noexcept {
 }
 
 bool GpioManager::Shutdown() noexcept {
-    RtosMutex::LockGuard lock(mutex_);
-    
+    // Quick check without lock first
     if (!is_initialized_.load(std::memory_order_acquire)) {
         return true;
     }
     
-    // Clear all registered GPIOs
+    // Acquire main mutex only for state change
+    {
+        RtosMutex::LockGuard lock(mutex_);
+        
+        if (!is_initialized_.load(std::memory_order_acquire)) {
+            return true;
+        }
+        
+        // Mark as not initialized early to prevent new operations
+        is_initialized_.store(false, std::memory_order_release);
+    }
+    
+    // Clear resources with separate lock (no need for main mutex anymore)
     {
         RtosMutex::LockGuard registry_lock(registry_mutex_);
         gpio_registry_.clear();
     }
     
-    // Reset statistics
-    total_operations_.store(0, std::memory_order_release);
-    successful_operations_.store(0, std::memory_order_release);
-    failed_operations_.store(0, std::memory_order_release);
-    communication_errors_.store(0, std::memory_order_release);
-    hardware_errors_.store(0, std::memory_order_release);
+    // Reset statistics (atomic operations, no locks needed)
+    total_operations_.store(0, std::memory_order_relaxed);
+    successful_operations_.store(0, std::memory_order_relaxed);
+    failed_operations_.store(0, std::memory_order_relaxed);
+    communication_errors_.store(0, std::memory_order_relaxed);
+    hardware_errors_.store(0, std::memory_order_relaxed);
+    last_error_.store(hf_gpio_err_t::GPIO_SUCCESS, std::memory_order_relaxed);
     
-    // Reset last error
-    last_error_.store(hf_gpio_err_t::GPIO_SUCCESS, std::memory_order_release);
-    
-    is_initialized_.store(false, std::memory_order_release);
     return true;
 }
 
@@ -86,37 +94,26 @@ bool GpioManager::IsInitialized() const noexcept {
 }
 
 hf_gpio_err_t GpioManager::GetSystemDiagnostics(GpioSystemDiagnostics& diagnostics) const noexcept {
-    RtosMutex::LockGuard lock(mutex_);
-    
+    // Quick check without lock
     if (!is_initialized_.load(std::memory_order_acquire)) {
         return hf_gpio_err_t::GPIO_ERR_NOT_INITIALIZED;
     }
     
-    // Get registry statistics
-    {
-        RtosMutex::LockGuard registry_lock(registry_mutex_);
-        diagnostics.total_pins_registered = static_cast<uint32_t>(gpio_registry_.size());
-        
-        // Count pins by chip type
-        std::fill(std::begin(diagnostics.pins_by_chip), std::end(diagnostics.pins_by_chip), 0);
-        std::fill(std::begin(diagnostics.pins_by_category), std::end(diagnostics.pins_by_category), 0);
-        
-        for (const auto& [name, gpio] : gpio_registry_) {
-            // Note: We'd need to track chip types in the registry for accurate counting
-            // For now, we'll use a simplified approach
-            diagnostics.pins_by_chip[0]++; // ESP32_INTERNAL
-        }
-    }
+    // Fill diagnostics with atomic values (completely lock-free)
+    uint32_t total_ops = total_operations_.load(std::memory_order_relaxed);
+    uint32_t failed_ops = failed_operations_.load(std::memory_order_relaxed);
+    uint32_t comm_errors = communication_errors_.load(std::memory_order_relaxed);
+    uint32_t hw_errors = hardware_errors_.load(std::memory_order_relaxed);
     
-    // Get operation statistics
-    diagnostics.total_operations = total_operations_.load(std::memory_order_acquire);
-    diagnostics.successful_operations = successful_operations_.load(std::memory_order_acquire);
-    diagnostics.failed_operations = failed_operations_.load(std::memory_order_acquire);
-    diagnostics.communication_errors = communication_errors_.load(std::memory_order_acquire);
-    diagnostics.hardware_errors = hardware_errors_.load(std::memory_order_acquire);
+    diagnostics.total_operations = total_ops;
+    diagnostics.successful_operations = successful_operations_.load(std::memory_order_relaxed);
+    diagnostics.failed_operations = failed_ops;
+    diagnostics.communication_errors = comm_errors;
+    diagnostics.hardware_errors = hw_errors;
+    diagnostics.last_error = last_error_.load(std::memory_order_relaxed);
     
     // Calculate uptime
-    uint64_t start_time = system_start_time_.load(std::memory_order_acquire);
+    uint64_t start_time = system_start_time_.load(std::memory_order_relaxed);
     if (start_time > 0) {
         // In a real implementation, you'd get current time and calculate difference
         diagnostics.system_uptime_ms = 0; // Placeholder
@@ -124,13 +121,25 @@ hf_gpio_err_t GpioManager::GetSystemDiagnostics(GpioSystemDiagnostics& diagnosti
         diagnostics.system_uptime_ms = 0;
     }
     
-    // Get last error
-    diagnostics.last_error = last_error_.load(std::memory_order_acquire);
+    // Single scoped lock for registry access only
+    {
+        RtosMutex::LockGuard registry_lock(registry_mutex_);
+        diagnostics.total_pins_registered = static_cast<uint32_t>(gpio_registry_.size());
+        
+        // Initialize arrays
+        std::fill(std::begin(diagnostics.pins_by_chip), std::end(diagnostics.pins_by_chip), 0);
+        std::fill(std::begin(diagnostics.pins_by_category), std::end(diagnostics.pins_by_category), 0);
+        
+        // Count pins by chip type (simplified counting)
+        for (const auto& [name, gpio] : gpio_registry_) {
+            if (gpio) {
+                diagnostics.pins_by_chip[0]++; // ESP32_INTERNAL (simplified)
+            }
+        }
+    }
     
     // Determine overall system health
-    diagnostics.system_healthy = (diagnostics.failed_operations == 0) && 
-                                 (diagnostics.communication_errors == 0) && 
-                                 (diagnostics.hardware_errors == 0);
+    diagnostics.system_healthy = (failed_ops == 0) && (comm_errors == 0) && (hw_errors == 0);
     
     return hf_gpio_err_t::GPIO_SUCCESS;
 }
@@ -163,16 +172,19 @@ hf_gpio_err_t GpioManager::RegisterGpio(std::string_view name, std::shared_ptr<B
 }
 
 std::shared_ptr<BaseGpio> GpioManager::Get(std::string_view name) noexcept {
-    RtosMutex::LockGuard registry_lock(registry_mutex_);
+    std::shared_ptr<BaseGpio> result;
     
-    auto it = gpio_registry_.find(name);
-    if (it != gpio_registry_.end()) {
-        UpdateStatistics(true);
-        return it->second;
+    {
+        RtosMutex::LockGuard registry_lock(registry_mutex_);
+        auto it = gpio_registry_.find(name);
+        if (it != gpio_registry_.end()) {
+            result = it->second;
+        }
     }
     
-    UpdateStatistics(false);
-    return nullptr;
+    // Update statistics outside the lock (atomic operations)
+    UpdateStatistics(result != nullptr);
+    return result;
 }
 
 bool GpioManager::Contains(std::string_view name) const noexcept {
@@ -202,14 +214,26 @@ void GpioManager::LogAllRegisteredGpios() const noexcept {
 //==============================================================================
 
 hf_gpio_err_t GpioManager::Set(std::string_view name, bool value) noexcept {
-    auto gpio = Get(name);
+    // Get GPIO with minimal lock duration
+    std::shared_ptr<BaseGpio> gpio;
+    {
+        RtosMutex::LockGuard registry_lock(registry_mutex_);
+        auto it = gpio_registry_.find(name);
+        if (it != gpio_registry_.end()) {
+            gpio = it->second;
+        }
+    }
+    
     if (!gpio) {
         UpdateLastError(hf_gpio_err_t::GPIO_ERR_PIN_NOT_FOUND);
         UpdateStatistics(false);
         return hf_gpio_err_t::GPIO_ERR_PIN_NOT_FOUND;
     }
     
+    // Perform operation without locks
     hf_gpio_err_t result = value ? gpio->SetActive() : gpio->SetInactive();
+    
+    // Update statistics (atomic operations, no locks needed)
     UpdateLastError(result);
     UpdateStatistics(result == hf_gpio_err_t::GPIO_SUCCESS);
     return result;
@@ -831,7 +855,19 @@ void GpioManager::UpdateStatistics(bool success) noexcept {
 }
 
 void GpioManager::UpdateLastError(hf_gpio_err_t error_code) noexcept {
-    last_error_.store(error_code, std::memory_order_release);
+    last_error_.store(error_code, std::memory_order_relaxed);
+    
+    // Update specific error counters (atomic operations, no locks needed)
+    switch (error_code) {
+        case hf_gpio_err_t::GPIO_ERR_COMMUNICATION_FAILURE:
+            communication_errors_.fetch_add(1, std::memory_order_relaxed);
+            break;
+        case hf_gpio_err_t::GPIO_ERR_HARDWARE_FAULT:
+            hardware_errors_.fetch_add(1, std::memory_order_relaxed);
+            break;
+        default:
+            break;
+    }
 }
 
 hf_gpio_err_t GpioManager::ValidatePinName(std::string_view name) noexcept {

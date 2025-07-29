@@ -197,9 +197,10 @@ struct AdcSystemDiagnostics {
  * BaseAdc functions through string-based channel identification.
  * 
  * Thread Safety:
- * - All public methods are thread-safe
- * - Uses internal mutex for protection
- * - Atomic operations where appropriate
+ * - All public methods are thread-safe with optimized lock scoping
+ * - Multi-level mutex hierarchy for fine-grained protection
+ * - Lock-free atomic operations for high-frequency statistics
+ * - Minimal lock duration to reduce contention
  * 
  * Error Handling:
  * - Core operations return hf_adc_err_t for detailed error codes

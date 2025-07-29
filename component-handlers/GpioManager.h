@@ -175,9 +175,10 @@ struct GpioSystemDiagnostics {
  * BaseGpio functions through string-based pin identification.
  * 
  * Thread Safety:
- * - All public methods are thread-safe
- * - Uses internal mutex for protection
- * - Atomic operations where appropriate
+ * - All public methods are thread-safe with optimized lock scoping
+ * - Multi-level mutex hierarchy for fine-grained protection
+ * - Lock-free atomic operations for high-frequency statistics
+ * - Minimal lock duration to reduce contention
  * 
  * Error Handling:
  * - Core operations return simple bool values for embedded system efficiency
