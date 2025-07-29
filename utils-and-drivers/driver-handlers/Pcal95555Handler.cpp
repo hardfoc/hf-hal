@@ -130,7 +130,7 @@ hf_gpio_err_t Pcal95555Handler::Initialize() noexcept {
         auto result = ConfigureHardwareInterrupt();
         if (result != hf_gpio_err_t::GPIO_SUCCESS) {
             // Log warning but don't fail initialization - can still work in polling mode
-            // ESP_LOGW("Pcal95555Handler", "Failed to configure hardware interrupt, using polling mode");
+            //Logger::GetInstance().Warn("Pcal95555Handler", "Failed to configure hardware interrupt, using polling mode");
         }
     }
     

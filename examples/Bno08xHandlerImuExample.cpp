@@ -19,9 +19,8 @@
 #include "utils-and-drivers/driver-handlers/Logger.h"
 #include <memory>
 
-// ESP-IDF for tasks and logging
+// ESP-IDF for tasks
 extern "C" {
-#include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 }

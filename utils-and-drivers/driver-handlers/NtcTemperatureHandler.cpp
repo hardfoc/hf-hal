@@ -14,8 +14,8 @@
 #include "NtcTemperatureHandler.h"
 #include "utils-and-drivers/hf-core-drivers/external/hf-ntc-thermistor-driver/include/NtcThermistor.h"
 #include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/base/BaseAdc.h"
-#include <esp_timer.h>
-#include <esp_log.h>
+#include "utils-and-drivers/driver-handlers/Logger.h"
+#include "utils-and-drivers/hf-core-utils/hf-utils-rtos-wrap/include/OsAbstraction.h"
 
 static const char* TAG = "NtcTempHandler";
 
@@ -89,19 +89,19 @@ bool NtcTemperatureHandler::Initialize() noexcept {
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (initialized_) {
-        ESP_LOGW(TAG, "Already initialized");
+        Logger::GetInstance().Warn(TAG, "Already initialized");
         return true;
     }
     
     if (adc_interface_ == nullptr) {
-        ESP_LOGE(TAG, "ADC interface is null");
+        Logger::GetInstance().Error(TAG, "ADC interface is null");
         SetLastError(TEMP_ERR_NULL_POINTER);
         return false;
     }
     
     // Ensure ADC interface is initialized
     if (!adc_interface_->EnsureInitialized()) {
-        ESP_LOGE(TAG, "Failed to initialize ADC interface");
+        Logger::GetInstance().Error(TAG, "Failed to initialize ADC interface");
         SetLastError(TEMP_ERR_RESOURCE_UNAVAILABLE);
         return false;
     }
@@ -110,14 +110,14 @@ bool NtcTemperatureHandler::Initialize() noexcept {
     try {
         ntc_thermistor_ = std::make_unique<NtcThermistor>(config_.ntc_type, adc_interface_);
     } catch (const std::exception& e) {
-        ESP_LOGE(TAG, "Failed to create NTC thermistor: %s", e.what());
+        Logger::GetInstance().Error(TAG, "Failed to create NTC thermistor: %s", e.what());
         SetLastError(TEMP_ERR_OUT_OF_MEMORY);
         return false;
     }
     
     // Initialize NTC thermistor
     if (!ntc_thermistor_->Initialize()) {
-        ESP_LOGE(TAG, "Failed to initialize NTC thermistor");
+        Logger::GetInstance().Error(TAG, "Failed to initialize NTC thermistor");
         SetLastError(TEMP_ERR_FAILURE);
         return false;
     }
@@ -155,7 +155,7 @@ bool NtcTemperatureHandler::Initialize() noexcept {
     initialized_ = true;
     current_state_ = HF_TEMP_STATE_INITIALIZED;
     
-    ESP_LOGI(TAG, "NTC temperature handler initialized successfully");
+    Logger::GetInstance().Info(TAG, "NTC temperature handler initialized successfully");
     return true;
 }
 
@@ -192,7 +192,7 @@ bool NtcTemperatureHandler::Deinitialize() noexcept {
     initialized_ = false;
     current_state_ = HF_TEMP_STATE_UNINITIALIZED;
     
-    ESP_LOGI(TAG, "NTC temperature handler deinitialized");
+    Logger::GetInstance().Info(TAG, "NTC temperature handler deinitialized");
     return true;
 }
 
@@ -201,11 +201,11 @@ hf_temp_err_t NtcTemperatureHandler::ReadTemperatureCelsiusImpl(float* temperatu
         return TEMP_ERR_NOT_INITIALIZED;
     }
     
-    const auto start_time = esp_timer_get_time();
+    const auto start_time = os_time_get();
     
     ntc_err_t result = ntc_thermistor_->ReadTemperatureCelsius(temperature_celsius);
     
-    const auto end_time = esp_timer_get_time();
+    const auto end_time = os_time_get();
     const auto operation_time = static_cast<hf_u32_t>(end_time - start_time);
     
     if (result == NTC_SUCCESS) {
@@ -279,7 +279,7 @@ hf_temp_err_t NtcTemperatureHandler::SetThresholds(float low_threshold_celsius, 
     config_.low_threshold_celsius = low_threshold_celsius;
     config_.high_threshold_celsius = high_threshold_celsius;
     
-    ESP_LOGI(TAG, "Thresholds set: low=%.2f°C, high=%.2f°C", low_threshold_celsius, high_threshold_celsius);
+    Logger::GetInstance().Info(TAG, "Thresholds set: low=%.2f°C, high=%.2f°C", low_threshold_celsius, high_threshold_celsius);
     return TEMP_SUCCESS;
 }
 
@@ -309,7 +309,7 @@ hf_temp_err_t NtcTemperatureHandler::EnableThresholdMonitoring(hf_temp_threshold
     threshold_user_data_ = user_data;
     diagnostics_.threshold_monitoring_enabled = (callback != nullptr);
     
-    ESP_LOGI(TAG, "Threshold monitoring %s", callback ? "enabled" : "disabled");
+    Logger::GetInstance().Info(TAG, "Threshold monitoring %s", callback ? "enabled" : "disabled");
     return TEMP_SUCCESS;
 }
 
@@ -320,7 +320,7 @@ hf_temp_err_t NtcTemperatureHandler::DisableThresholdMonitoring() noexcept {
     threshold_user_data_ = nullptr;
     diagnostics_.threshold_monitoring_enabled = false;
     
-    ESP_LOGI(TAG, "Threshold monitoring disabled");
+    Logger::GetInstance().Info(TAG, "Threshold monitoring disabled");
     return TEMP_SUCCESS;
 }
 
@@ -357,7 +357,7 @@ hf_temp_err_t NtcTemperatureHandler::StartContinuousMonitoring(hf_u32_t sample_r
     
     esp_err_t esp_result = esp_timer_create(&timer_args, &monitoring_timer_);
     if (esp_result != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to create monitoring timer: %s", esp_err_to_name(esp_result));
+        Logger::GetInstance().Error(TAG, "Failed to create monitoring timer: %s", esp_err_to_name(esp_result));
         return TEMP_ERR_RESOURCE_UNAVAILABLE;
     }
     
@@ -367,7 +367,7 @@ hf_temp_err_t NtcTemperatureHandler::StartContinuousMonitoring(hf_u32_t sample_r
     // Start timer
     esp_result = esp_timer_start_periodic(monitoring_timer_, interval_us);
     if (esp_result != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start monitoring timer: %s", esp_err_to_name(esp_result));
+        Logger::GetInstance().Error(TAG, "Failed to start monitoring timer: %s", esp_err_to_name(esp_result));
         esp_timer_delete(monitoring_timer_);
         monitoring_timer_ = nullptr;
         return TEMP_ERR_FAILURE;
@@ -378,7 +378,7 @@ hf_temp_err_t NtcTemperatureHandler::StartContinuousMonitoring(hf_u32_t sample_r
     monitoring_active_ = true;
     diagnostics_.continuous_monitoring_active = true;
     
-    ESP_LOGI(TAG, "Continuous monitoring started at %u Hz", sample_rate_hz);
+    Logger::GetInstance().Info(TAG, "Continuous monitoring started at %u Hz", sample_rate_hz);
     return TEMP_SUCCESS;
 }
 
@@ -401,7 +401,7 @@ hf_temp_err_t NtcTemperatureHandler::StopContinuousMonitoring() noexcept {
     monitoring_active_ = false;
     diagnostics_.continuous_monitoring_active = false;
     
-    ESP_LOGI(TAG, "Continuous monitoring stopped");
+    Logger::GetInstance().Info(TAG, "Continuous monitoring stopped");
     return TEMP_SUCCESS;
 }
 
@@ -433,7 +433,7 @@ hf_temp_err_t NtcTemperatureHandler::Calibrate(float reference_temperature_celsi
     diagnostics_.calibration_valid = true;
     statistics_.calibration_count++;
     
-    ESP_LOGI(TAG, "Calibration completed: offset=%.2f°C", calibration_offset_);
+    Logger::GetInstance().Info(TAG, "Calibration completed: offset=%.2f°C", calibration_offset_);
     return TEMP_SUCCESS;
 }
 
@@ -448,7 +448,7 @@ hf_temp_err_t NtcTemperatureHandler::SetCalibrationOffset(float offset_celsius) 
     ntc_thermistor_->SetCalibrationOffset(offset_celsius);
     diagnostics_.calibration_valid = true;
     
-    ESP_LOGI(TAG, "Calibration offset set: %.2f°C", offset_celsius);
+    Logger::GetInstance().Info(TAG, "Calibration offset set: %.2f°C", offset_celsius);
     return TEMP_SUCCESS;
 }
 
@@ -476,7 +476,7 @@ hf_temp_err_t NtcTemperatureHandler::ResetCalibration() noexcept {
     ntc_thermistor_->SetCalibrationOffset(0.0f);
     diagnostics_.calibration_valid = false;
     
-    ESP_LOGI(TAG, "Calibration reset");
+    Logger::GetInstance().Info(TAG, "Calibration reset");
     return TEMP_SUCCESS;
 }
 
@@ -500,7 +500,7 @@ hf_temp_err_t NtcTemperatureHandler::ResetStatistics() noexcept {
     statistics_.max_temperature_celsius = -FLT_MAX;
     statistics_.min_operation_time_us = UINT32_MAX;
     
-    ESP_LOGI(TAG, "Statistics reset");
+    Logger::GetInstance().Info(TAG, "Statistics reset");
     return TEMP_SUCCESS;
 }
 
@@ -512,7 +512,7 @@ hf_temp_err_t NtcTemperatureHandler::ResetDiagnostics() noexcept {
     diagnostics_.consecutive_errors = 0;
     diagnostics_.sensor_healthy = true;
     
-    ESP_LOGI(TAG, "Diagnostics reset");
+    Logger::GetInstance().Info(TAG, "Diagnostics reset");
     return TEMP_SUCCESS;
 }
 
@@ -562,7 +562,7 @@ ntc_err_t NtcTemperatureHandler::GetNtcDiagnostics(ntc_diagnostics_t* diagnostic
 
 void NtcTemperatureHandler::SetLastError(hf_temp_err_t error) noexcept {
     diagnostics_.last_error_code = error;
-    diagnostics_.last_error_timestamp = static_cast<hf_u32_t>(esp_timer_get_time() / 1000); // Convert to ms
+            diagnostics_.last_error_timestamp = static_cast<hf_u32_t>(os_time_get() / 1000); // Convert to ms
     diagnostics_.consecutive_errors++;
     
     if (diagnostics_.consecutive_errors > 5) {

@@ -14,7 +14,7 @@
 #include "TemperatureManager.h"
 #include "AdcManager.h"
 #include "MotorController.h"
-#include "Logger.h"
+#include "utils-and-drivers/driver-handlers/Logger.h"
 #include "utils-and-drivers/hf-core-utils/hf-utils-rtos-wrap/include/OsAbstraction.h"
 
 static const char* TAG = "TempManager";
@@ -504,22 +504,22 @@ hf_temp_err_t TemperatureManager::RegisterTmc9660TemperatureSensor(std::string_v
 }
 
 hf_temp_err_t TemperatureManager::RegisterOnboardTemperatureSensors() noexcept {
-    ESP_LOGI(TAG, "=== Registering Onboard Temperature Sensors ===");
+    Logger::GetInstance().Info(TAG, "=== Registering Onboard Temperature Sensors ===");
     
     hf_temp_err_t overall_result = TEMP_SUCCESS;
     
     // 1. Register ESP32 internal temperature sensor
-    ESP_LOGI(TAG, "Registering ESP32 internal temperature sensor...");
+    Logger::GetInstance().Info(TAG, "Registering ESP32 internal temperature sensor...");
     hf_temp_err_t esp32_result = RegisterEspTemperatureSensor("esp32_internal");
     if (esp32_result == TEMP_SUCCESS) {
-        ESP_LOGI(TAG, "ESP32 internal temperature sensor registered successfully");
+        Logger::GetInstance().Info(TAG, "ESP32 internal temperature sensor registered successfully");
     } else {
-        ESP_LOGW(TAG, "Failed to register ESP32 internal temperature sensor: %s", GetTempErrorString(esp32_result));
+        Logger::GetInstance().Warn(TAG, "Failed to register ESP32 internal temperature sensor: %s", GetTempErrorString(esp32_result));
         overall_result = esp32_result; // Track the first error
     }
     
     // 2. Register TMC9660 internal temperature sensor (if available)
-    ESP_LOGI(TAG, "Registering TMC9660 internal temperature sensor...");
+    Logger::GetInstance().Info(TAG, "Registering TMC9660 internal temperature sensor...");
     
     // Get MotorController instance and check if onboard TMC9660 is available
     MotorController& motor_controller = MotorController::GetInstance();
@@ -528,28 +528,28 @@ hf_temp_err_t TemperatureManager::RegisterOnboardTemperatureSensors() noexcept {
         if (onboard_tmc9660 && onboard_tmc9660->IsDriverReady()) {
             hf_temp_err_t tmc9660_result = RegisterTmc9660TemperatureSensor("tmc9660_internal", *onboard_tmc9660);
             if (tmc9660_result == TEMP_SUCCESS) {
-                ESP_LOGI(TAG, "TMC9660 internal temperature sensor registered successfully");
+                Logger::GetInstance().Info(TAG, "TMC9660 internal temperature sensor registered successfully");
             } else {
-                ESP_LOGW(TAG, "Failed to register TMC9660 internal temperature sensor: %s", GetTempErrorString(tmc9660_result));
+                Logger::GetInstance().Warn(TAG, "Failed to register TMC9660 internal temperature sensor: %s", GetTempErrorString(tmc9660_result));
                 if (overall_result == TEMP_SUCCESS) {
                     overall_result = tmc9660_result; // Track the first error
                 }
             }
         } else {
-            ESP_LOGW(TAG, "TMC9660 onboard device not available or not ready - skipping TMC9660 temperature sensor registration");
+            Logger::GetInstance().Warn(TAG, "TMC9660 onboard device not available or not ready - skipping TMC9660 temperature sensor registration");
         }
     } else {
-        ESP_LOGW(TAG, "MotorController not initialized - skipping TMC9660 temperature sensor registration");
+        Logger::GetInstance().Warn(TAG, "MotorController not initialized - skipping TMC9660 temperature sensor registration");
     }
     
     // Log summary
     if (overall_result == TEMP_SUCCESS) {
-        ESP_LOGI(TAG, "All available onboard temperature sensors registered successfully");
+        Logger::GetInstance().Info(TAG, "All available onboard temperature sensors registered successfully");
     } else {
-        ESP_LOGW(TAG, "Some onboard temperature sensors failed to register");
+        Logger::GetInstance().Warn(TAG, "Some onboard temperature sensors failed to register");
     }
     
-    ESP_LOGI(TAG, "=== Onboard Temperature Sensor Registration Complete ===");
+    Logger::GetInstance().Info(TAG, "=== Onboard Temperature Sensor Registration Complete ===");
     return overall_result;
 }
 
@@ -671,9 +671,9 @@ hf_temp_err_t TemperatureManager::ReadTemperatureFahrenheit(std::string_view sen
         return TEMP_ERR_SENSOR_NOT_AVAILABLE;
     }
     
-    const auto start_time = esp_timer_get_time();
+    const auto start_time = os_time_get();
     hf_temp_err_t result = it->sensor->ReadTemperatureFahrenheit(temperature_fahrenheit);
-    const auto end_time = esp_timer_get_time();
+    const auto end_time = os_time_get();
     
     // Update statistics
     UpdateSensorStatistics(&(*it), result == TEMP_SUCCESS);
@@ -702,9 +702,9 @@ hf_temp_err_t TemperatureManager::ReadTemperatureKelvin(std::string_view sensor_
         return TEMP_ERR_SENSOR_NOT_AVAILABLE;
     }
     
-    const auto start_time = esp_timer_get_time();
+    const auto start_time = os_time_get();
     hf_temp_err_t result = it->sensor->ReadTemperatureKelvin(temperature_kelvin);
-    const auto end_time = esp_timer_get_time();
+    const auto end_time = os_time_get();
     
     // Update statistics
     UpdateSensorStatistics(&(*it), result == TEMP_SUCCESS);
@@ -733,9 +733,9 @@ hf_temp_err_t TemperatureManager::ReadTemperature(std::string_view sensor_name, 
         return TEMP_ERR_SENSOR_NOT_AVAILABLE;
     }
     
-    const auto start_time = esp_timer_get_time();
+    const auto start_time = os_time_get();
     hf_temp_err_t result = it->sensor->ReadTemperature(reading);
-    const auto end_time = esp_timer_get_time();
+    const auto end_time = os_time_get();
     
     // Update statistics
     UpdateSensorStatistics(&(*it), result == TEMP_SUCCESS);
@@ -764,9 +764,9 @@ hf_temp_err_t TemperatureManager::ReadTemperatureUnit(std::string_view sensor_na
         return TEMP_ERR_SENSOR_NOT_AVAILABLE;
     }
     
-    const auto start_time = esp_timer_get_time();
+    const auto start_time = os_time_get();
     hf_temp_err_t result = it->sensor->ReadTemperatureUnit(temperature, unit);
-    const auto end_time = esp_timer_get_time();
+    const auto end_time = os_time_get();
     
     // Update statistics
     UpdateSensorStatistics(&(*it), result == TEMP_SUCCESS);
@@ -815,9 +815,9 @@ hf_temp_err_t TemperatureManager::ReadTemperatureCelsiusByIndex(uint32_t index, 
         return TEMP_ERR_SENSOR_NOT_AVAILABLE;
     }
     
-    const auto start_time = esp_timer_get_time();
+    const auto start_time = os_time_get();
     hf_temp_err_t result = sensor_info.sensor->ReadTemperatureCelsius(temperature_celsius);
-    const auto end_time = esp_timer_get_time();
+    const auto end_time = os_time_get();
     
     // Update statistics
     UpdateSensorStatistics(&sensor_info, result == TEMP_SUCCESS);
@@ -846,9 +846,9 @@ hf_temp_err_t TemperatureManager::ReadTemperatureFahrenheitByIndex(uint32_t inde
         return TEMP_ERR_SENSOR_NOT_AVAILABLE;
     }
     
-    const auto start_time = esp_timer_get_time();
+    const auto start_time = os_time_get();
     hf_temp_err_t result = sensor_info.sensor->ReadTemperatureFahrenheit(temperature_fahrenheit);
-    const auto end_time = esp_timer_get_time();
+    const auto end_time = os_time_get();
     
     // Update statistics
     UpdateSensorStatistics(&sensor_info, result == TEMP_SUCCESS);
@@ -877,9 +877,9 @@ hf_temp_err_t TemperatureManager::ReadTemperatureKelvinByIndex(uint32_t index, f
         return TEMP_ERR_SENSOR_NOT_AVAILABLE;
     }
     
-    const auto start_time = esp_timer_get_time();
+    const auto start_time = os_time_get();
     hf_temp_err_t result = sensor_info.sensor->ReadTemperatureKelvin(temperature_kelvin);
-    const auto end_time = esp_timer_get_time();
+    const auto end_time = os_time_get();
     
     // Update statistics
     UpdateSensorStatistics(&sensor_info, result == TEMP_SUCCESS);
@@ -908,9 +908,9 @@ hf_temp_err_t TemperatureManager::ReadTemperatureByIndex(uint32_t index, hf_temp
         return TEMP_ERR_SENSOR_NOT_AVAILABLE;
     }
     
-    const auto start_time = esp_timer_get_time();
+    const auto start_time = os_time_get();
     hf_temp_err_t result = sensor_info.sensor->ReadTemperature(reading);
-    const auto end_time = esp_timer_get_time();
+    const auto end_time = os_time_get();
     
     // Update statistics
     UpdateSensorStatistics(&sensor_info, result == TEMP_SUCCESS);
@@ -978,5 +978,5 @@ void TemperatureManager::UpdateSensorStatistics(TempSensorInfo* sensor_info, boo
     
     // Update system uptime
     system_diagnostics_.system_uptime_ms = 
-        static_cast<uint64_t>(esp_timer_get_time() / 1000) - system_start_time_ms_.load();
+        static_cast<uint64_t>(os_time_get() / 1000) - system_start_time_ms_.load();
 } 

@@ -12,8 +12,8 @@
 #include "utils-and-drivers/hf-core-drivers/external/hf-ws2812-rmt-driver/include/ws2812_cpp.hpp"
 #include "utils-and-drivers/hf-core-drivers/external/hf-ws2812-rmt-driver/include/ws2812_effects.hpp"
 #include "utils-and-drivers/driver-handlers/Logger.h"
-#include "utils/RtosMutex.h"
-#include "utils/OsAbstraction.h"
+#include "utils-and-drivers/hf-core-utils/hf-utils-rtos-wrap/include/RtosMutex.h"
+#include "utils-and-drivers/hf-core-utils/hf-utils-rtos-wrap/include/OsAbstraction.h"
 
 #include <cstring>
 #include <cmath>
