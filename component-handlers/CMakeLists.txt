@@ -23,6 +23,10 @@ set(COMPONENT_SOURCES
     AdcManager.cpp
     AdcManager.h
     
+    # Temperature management system
+    TemperatureManager.cpp
+    TemperatureManager.h
+    
     # TMC9660 motor controller system
     Tmc9660Handler.cpp
     Tmc9660Handler.h

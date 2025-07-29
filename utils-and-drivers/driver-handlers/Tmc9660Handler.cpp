@@ -240,6 +240,7 @@ bool Tmc9660Handler::Initialize() {
         gpioWrappers_[0] = std::make_unique<Gpio>(*this, 17);
         gpioWrappers_[1] = std::make_unique<Gpio>(*this, 18);
         adcWrapper_ = std::make_unique<Adc>(*this);
+        temperatureWrapper_ = std::make_unique<Temperature>(*this);
     }
     
     return tmc9660_->bootloaderInit(bootCfg_) == TMC9660::BootloaderInitResult::Success;
@@ -279,6 +280,10 @@ Tmc9660Handler::Gpio& Tmc9660Handler::gpio(uint8_t gpioNumber) {
 
 Tmc9660Handler::Adc& Tmc9660Handler::adc() {
     return *adcWrapper_;
+}
+
+Tmc9660Handler::Temperature& Tmc9660Handler::temperature() {
+    return *temperatureWrapper_;
 }
 
 // ==================== Gpio Wrapper Implementation ====================
@@ -858,15 +863,263 @@ void Tmc9660Handler::DumpDiagnostics() const noexcept {
         Logger::GetInstance().Info(TAG, "  Configuration: NOT_AVAILABLE");
     }
     
+    // Temperature Diagnostics
+    Logger::GetInstance().Info(TAG, "Temperature Subsystem:");
+    if (temperatureWrapper_) {
+        Logger::GetInstance().Info(TAG, "  Temperature Wrapper: ACTIVE");
+        
+        // Get temperature statistics
+        hf_temp_statistics_t temp_stats;
+        hf_temp_diagnostics_t temp_diagnostics;
+        
+        if (temperatureWrapper_->GetStatistics(temp_stats) == hf_temp_err_t::TEMP_SUCCESS) {
+            Logger::GetInstance().Info(TAG, "  Temperature Statistics:");
+            Logger::GetInstance().Info(TAG, "    Total Operations: %d", temp_stats.total_operations);
+            Logger::GetInstance().Info(TAG, "    Successful Operations: %d", temp_stats.successful_operations);
+            Logger::GetInstance().Info(TAG, "    Failed Operations: %d", temp_stats.failed_operations);
+            Logger::GetInstance().Info(TAG, "    Temperature Readings: %d", temp_stats.temperature_readings);
+            Logger::GetInstance().Info(TAG, "    Average Operation Time: %d us", temp_stats.average_operation_time_us);
+            Logger::GetInstance().Info(TAG, "    Min Temperature: %.2f°C", temp_stats.min_temperature_celsius);
+            Logger::GetInstance().Info(TAG, "    Max Temperature: %.2f°C", temp_stats.max_temperature_celsius);
+            Logger::GetInstance().Info(TAG, "    Average Temperature: %.2f°C", temp_stats.avg_temperature_celsius);
+            
+            if (temp_stats.total_operations > 0) {
+                float success_rate = (float)temp_stats.successful_operations / temp_stats.total_operations * 100.0f;
+                Logger::GetInstance().Info(TAG, "    Success Rate: %.2f%%", success_rate);
+            }
+        }
+        
+        if (temperatureWrapper_->GetDiagnostics(temp_diagnostics) == hf_temp_err_t::TEMP_SUCCESS) {
+            Logger::GetInstance().Info(TAG, "  Temperature Diagnostics:");
+            Logger::GetInstance().Info(TAG, "    Sensor Healthy: %s", temp_diagnostics.sensor_healthy ? "YES" : "NO");
+            Logger::GetInstance().Info(TAG, "    Sensor Available: %s", temp_diagnostics.sensor_available ? "YES" : "NO");
+            Logger::GetInstance().Info(TAG, "    Last Error: %s", GetTempErrorString(temp_diagnostics.last_error_code));
+            Logger::GetInstance().Info(TAG, "    Consecutive Errors: %d", temp_diagnostics.consecutive_errors);
+            Logger::GetInstance().Info(TAG, "    Current Raw Temperature: %d", temp_diagnostics.current_temperature_raw);
+        }
+        
+        // Get current temperature reading
+        float current_temp = 0.0f;
+        if (temperatureWrapper_->ReadTemperatureCelsius(&current_temp) == hf_temp_err_t::TEMP_SUCCESS) {
+            Logger::GetInstance().Info(TAG, "  Current Temperature: %.2f°C", current_temp);
+        } else {
+            Logger::GetInstance().Info(TAG, "  Current Temperature: READ_ERROR");
+        }
+    } else {
+        Logger::GetInstance().Info(TAG, "  Temperature Wrapper: NOT_INITIALIZED");
+    }
+    
     // Memory Usage
     Logger::GetInstance().Info(TAG, "Memory Usage:");
     size_t estimated_memory = sizeof(*this);
     if (tmc9660_) estimated_memory += sizeof(TMC9660);
     if (adcWrapper_) estimated_memory += sizeof(Adc);
+    if (temperatureWrapper_) estimated_memory += sizeof(Temperature);
     for (const auto& gpio : gpioWrappers_) {
         if (gpio) estimated_memory += sizeof(Gpio);
     }
     Logger::GetInstance().Info(TAG, "  Estimated Total: %d bytes", static_cast<int>(estimated_memory));
     
     Logger::GetInstance().Info(TAG, "=== END TMC9660 HANDLER DIAGNOSTICS ===");
+} 
+
+//==============================================================//
+// TEMPERATURE WRAPPER IMPLEMENTATION
+//==============================================================//
+
+Tmc9660Handler::Temperature::Temperature(Tmc9660Handler& parent) 
+    : parent_(parent), last_error_(hf_temp_err_t::TEMP_SUCCESS) {
+    // Initialize statistics and diagnostics
+    statistics_ = hf_temp_statistics_t{};
+    diagnostics_ = hf_temp_diagnostics_t{};
+}
+
+bool Tmc9660Handler::Temperature::Initialize() noexcept {
+    static constexpr const char* TAG = "Tmc9660Handler::Temperature";
+    
+    if (IsInitialized()) {
+        Logger::GetInstance().Warning(TAG, "Temperature sensor already initialized");
+        return true;
+    }
+    
+    // Check if parent TMC9660 is ready
+    if (!parent_.IsDriverReady()) {
+        Logger::GetInstance().Error(TAG, "Parent TMC9660 driver not ready");
+        UpdateDiagnostics(hf_temp_err_t::TEMP_ERR_NOT_INITIALIZED);
+        return false;
+    }
+    
+    Logger::GetInstance().Info(TAG, "Temperature sensor initialized successfully");
+    return true;
+}
+
+bool Tmc9660Handler::Temperature::Deinitialize() noexcept {
+    static constexpr const char* TAG = "Tmc9660Handler::Temperature";
+    
+    if (!IsInitialized()) {
+        Logger::GetInstance().Warning(TAG, "Temperature sensor not initialized");
+        return true;
+    }
+    
+    Logger::GetInstance().Info(TAG, "Temperature sensor deinitialized");
+    return true;
+}
+
+hf_temp_err_t Tmc9660Handler::Temperature::ReadTemperatureCelsiusImpl(float* temperature_celsius) noexcept {
+    static constexpr const char* TAG = "Tmc9660Handler::Temperature";
+    
+    if (temperature_celsius == nullptr) {
+        UpdateDiagnostics(hf_temp_err_t::TEMP_ERR_NULL_POINTER);
+        return hf_temp_err_t::TEMP_ERR_NULL_POINTER;
+    }
+    
+    RtosMutex::LockGuard lock(mutex_);
+    uint64_t start_time_us = GetCurrentTimeUs();
+    
+    // Check if parent TMC9660 is ready
+    if (!parent_.IsDriverReady()) {
+        Logger::GetInstance().Error(TAG, "Parent TMC9660 driver not ready");
+        UpdateDiagnostics(hf_temp_err_t::TEMP_ERR_NOT_INITIALIZED);
+        return hf_temp_err_t::TEMP_ERR_NOT_INITIALIZED;
+    }
+    
+    // Read temperature from TMC9660 using the telemetry interface
+    float temp_c = parent_.tmc9660_->telemetry.getChipTemperature();
+    
+    // Check for error condition (TMC9660 returns -273.0f on error)
+    if (temp_c < -270.0f) {
+        Logger::GetInstance().Error(TAG, "Failed to read chip temperature from TMC9660");
+        UpdateDiagnostics(hf_temp_err_t::TEMP_ERR_READ_FAILED);
+        return hf_temp_err_t::TEMP_ERR_READ_FAILED;
+    }
+    
+    // Validate temperature range (reasonable range for chip temperature)
+    if (temp_c < -40.0f || temp_c > 150.0f) {
+        Logger::GetInstance().Warning(TAG, "Temperature reading out of expected range: %.2f°C", temp_c);
+        UpdateDiagnostics(hf_temp_err_t::TEMP_ERR_OUT_OF_RANGE);
+        return hf_temp_err_t::TEMP_ERR_OUT_OF_RANGE;
+    }
+    
+    *temperature_celsius = temp_c;
+    
+    // Update statistics and diagnostics
+    UpdateStatistics(hf_temp_err_t::TEMP_SUCCESS, start_time_us);
+    UpdateDiagnostics(hf_temp_err_t::TEMP_SUCCESS);
+    
+    Logger::GetInstance().Debug(TAG, "Temperature read successfully: %.2f°C", temp_c);
+    return hf_temp_err_t::TEMP_SUCCESS;
+}
+
+hf_temp_err_t Tmc9660Handler::Temperature::GetSensorInfo(hf_temp_sensor_info_t* info) const noexcept {
+    static constexpr const char* TAG = "Tmc9660Handler::Temperature";
+    
+    if (info == nullptr) {
+        return hf_temp_err_t::TEMP_ERR_NULL_POINTER;
+    }
+    
+    // Fill in TMC9660 internal temperature sensor information
+    info->sensor_type = HF_TEMP_SENSOR_TYPE_INTERNAL;
+    info->min_temp_celsius = -40.0f;  // Typical chip temperature range
+    info->max_temp_celsius = 150.0f;  // Typical chip temperature range
+    info->resolution_celsius = 0.1f;  // Approximate resolution
+    info->accuracy_celsius = 2.0f;    // Typical accuracy for chip temperature sensors
+    info->response_time_ms = 100;     // Typical response time
+    info->capabilities = HF_TEMP_CAP_HIGH_PRECISION | HF_TEMP_CAP_FAST_RESPONSE;
+    info->manufacturer = "Trinamic";
+    info->model = "TMC9660";
+    info->version = "Internal Chip Temperature Sensor";
+    
+    return hf_temp_err_t::TEMP_SUCCESS;
+}
+
+hf_u32_t Tmc9660Handler::Temperature::GetCapabilities() const noexcept {
+    return HF_TEMP_CAP_HIGH_PRECISION | HF_TEMP_CAP_FAST_RESPONSE;
+}
+
+hf_temp_err_t Tmc9660Handler::Temperature::UpdateStatistics(hf_temp_err_t result, uint64_t start_time_us) noexcept {
+    uint64_t end_time_us = GetCurrentTimeUs();
+    uint32_t operation_time_us = static_cast<uint32_t>(end_time_us - start_time_us);
+    
+    statistics_.total_operations++;
+    
+    if (result == hf_temp_err_t::TEMP_SUCCESS) {
+        statistics_.successful_operations++;
+        statistics_.temperature_readings++;
+        
+        // Update min/max temperature tracking
+        float current_temp = 0.0f;
+        if (ReadTemperatureCelsius(&current_temp) == hf_temp_err_t::TEMP_SUCCESS) {
+            if (statistics_.total_operations == 1) {
+                statistics_.min_temperature_celsius = current_temp;
+                statistics_.max_temperature_celsius = current_temp;
+            } else {
+                if (current_temp < statistics_.min_temperature_celsius) {
+                    statistics_.min_temperature_celsius = current_temp;
+                }
+                if (current_temp > statistics_.max_temperature_celsius) {
+                    statistics_.max_temperature_celsius = current_temp;
+                }
+            }
+            
+            // Update average temperature (simple moving average)
+            if (statistics_.temperature_readings == 1) {
+                statistics_.avg_temperature_celsius = current_temp;
+            } else {
+                statistics_.avg_temperature_celsius = 
+                    (statistics_.avg_temperature_celsius * (statistics_.temperature_readings - 1) + current_temp) / 
+                    statistics_.temperature_readings;
+            }
+        }
+    } else {
+        statistics_.failed_operations++;
+    }
+    
+    // Update timing statistics
+    if (statistics_.total_operations == 1) {
+        statistics_.min_operation_time_us = operation_time_us;
+        statistics_.max_operation_time_us = operation_time_us;
+        statistics_.average_operation_time_us = operation_time_us;
+    } else {
+        if (operation_time_us < statistics_.min_operation_time_us) {
+            statistics_.min_operation_time_us = operation_time_us;
+        }
+        if (operation_time_us > statistics_.max_operation_time_us) {
+            statistics_.max_operation_time_us = operation_time_us;
+        }
+        
+        // Update average operation time
+        statistics_.average_operation_time_us = 
+            (statistics_.average_operation_time_us * (statistics_.total_operations - 1) + operation_time_us) / 
+            statistics_.total_operations;
+    }
+    
+    return result;
+}
+
+uint64_t Tmc9660Handler::Temperature::GetCurrentTimeUs() const noexcept {
+    return OsAbstraction::GetTimeUs();
+}
+
+void Tmc9660Handler::Temperature::UpdateDiagnostics(hf_temp_err_t error) noexcept {
+    diagnostics_.last_error_code = error;
+    diagnostics_.last_error_timestamp = static_cast<hf_u32_t>(GetCurrentTimeUs() / 1000); // Convert to ms
+    
+    if (error != hf_temp_err_t::TEMP_SUCCESS) {
+        diagnostics_.consecutive_errors++;
+        diagnostics_.sensor_healthy = false;
+    } else {
+        diagnostics_.consecutive_errors = 0;
+        diagnostics_.sensor_healthy = true;
+    }
+    
+    // Update sensor availability based on parent TMC9660 status
+    diagnostics_.sensor_available = parent_.IsDriverReady();
+    
+    // Update current raw temperature reading
+    float current_temp = 0.0f;
+    if (ReadTemperatureCelsius(&current_temp) == hf_temp_err_t::TEMP_SUCCESS) {
+        diagnostics_.current_temperature_raw = static_cast<hf_u32_t>(current_temp * 100); // Store as 0.01°C units
+    }
+    
+    last_error_.store(error);
 } 

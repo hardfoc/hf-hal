@@ -8,6 +8,7 @@
 #include "utils-and-drivers/hf-core-drivers/external/hf-tmc9660-driver/inc/TMC9660CommInterface.hpp"
 #include "base/BaseGpio.h"
 #include "base/BaseAdc.h"
+#include "base/BaseTemperature.h"
 #include "base/BaseSpi.h"
 #include "base/BaseUart.h"
 
@@ -298,6 +299,38 @@ public:
     };
 
     /**
+     * @brief Temperature wrapper for TMC9660 internal temperature sensor.
+     *        Implements BaseTemperature interface.
+     * 
+     * @details This class provides access to the TMC9660's internal chip temperature sensor
+     * through the unified BaseTemperature interface. The TMC9660 has an internal temperature
+     * sensor that can be read via the CHIP_TEMPERATURE parameter.
+     */
+    class Temperature : public BaseTemperature {
+    public:
+        Temperature(Tmc9660Handler& parent);
+        ~Temperature() override = default;
+        
+        // Pure virtual methods from BaseTemperature
+        bool Initialize() noexcept override;
+        bool Deinitialize() noexcept override;
+        hf_temp_err_t ReadTemperatureCelsiusImpl(float* temperature_celsius) noexcept override;
+        hf_temp_err_t GetSensorInfo(hf_temp_sensor_info_t* info) const noexcept override;
+        hf_u32_t GetCapabilities() const noexcept override;
+
+    private:
+        Tmc9660Handler& parent_;
+        mutable RtosMutex mutex_;
+        mutable hf_temp_statistics_t statistics_;
+        mutable hf_temp_diagnostics_t diagnostics_;
+        std::atomic<hf_temp_err_t> last_error_;
+        
+        hf_temp_err_t UpdateStatistics(hf_temp_err_t result, uint64_t start_time_us) noexcept;
+        uint64_t GetCurrentTimeUs() const noexcept;
+        void UpdateDiagnostics(hf_temp_err_t error) noexcept;
+    };
+
+    /**
      * @brief Get a reference to the GPIO wrapper for a given internal GPIO channel.
      * @param gpioNumber The TMC9660 internal GPIO number (e.g., 17, 18)
      * @return Reference to the GPIO wrapper
@@ -308,6 +341,11 @@ public:
      * @brief Get a reference to the ADC wrapper.
      */
     Adc& adc();
+
+    /**
+     * @brief Get a reference to the Temperature wrapper.
+     */
+    Temperature& temperature();
 
     /**
      * @brief Get the current communication mode being used.
@@ -361,6 +399,7 @@ private:
     // GPIO and ADC wrappers (created lazily in Initialize())
     std::array<std::unique_ptr<Gpio>, 2> gpioWrappers_; // e.g., for GPIO17, GPIO18
     std::unique_ptr<Adc> adcWrapper_;
+    std::unique_ptr<Temperature> temperatureWrapper_;
     
     // Configuration
     const tmc9660::BootloaderConfig* bootCfg_;
