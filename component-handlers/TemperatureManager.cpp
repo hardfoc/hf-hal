@@ -13,9 +13,9 @@
 
 #include "TemperatureManager.h"
 #include "AdcManager.h"
+#include "MotorController.h"
 #include "Logger.h"
-#include <esp_timer.h>
-#include <esp_log.h>
+#include "utils-and-drivers/hf-core-utils/hf-utils-rtos-wrap/include/OsAbstraction.h"
 
 static const char* TAG = "TempManager";
 
@@ -83,7 +83,7 @@ hf_temp_err_t TemperatureManager::Shutdown() noexcept {
 
 hf_temp_err_t TemperatureManager::Initialize() noexcept {
     if (initialized_.load()) {
-        ESP_LOGW(TAG, "Already initialized");
+        Logger::GetInstance().Warn(TAG, "Already initialized");
         return TEMP_SUCCESS;
     }
     
@@ -92,8 +92,8 @@ hf_temp_err_t TemperatureManager::Initialize() noexcept {
     sensor_map_.clear();
     next_sensor_id_ = 0;
     
-    // Set system start time
-    system_start_time_ms_.store(esp_timer_get_time() / 1000);
+    // Set system start time using OsAbstraction
+    system_start_time_ms_.store(os_time_get());
     
     // Initialize system diagnostics
     system_diagnostics_ = {};
@@ -104,7 +104,11 @@ hf_temp_err_t TemperatureManager::Initialize() noexcept {
     
     initialized_.store(true);
     
-    ESP_LOGI(TAG, "Temperature manager initialized successfully");
+    Logger::GetInstance().Info(TAG, "Temperature manager initialized successfully");
+    
+    // Automatically register onboard temperature sensors
+    RegisterOnboardTemperatureSensors();
+    
     return TEMP_SUCCESS;
 }
 
@@ -127,7 +131,7 @@ hf_temp_err_t TemperatureManager::Deinitialize() noexcept {
     
     initialized_.store(false);
     
-    ESP_LOGI(TAG, "Temperature manager deinitialized");
+    Logger::GetInstance().Info(TAG, "Temperature manager deinitialized");
     return TEMP_SUCCESS;
 }
 
@@ -141,27 +145,27 @@ Tmc9660TemperatureWrapper::Tmc9660TemperatureWrapper(Tmc9660Handler& tmc9660_han
 
 bool Tmc9660TemperatureWrapper::Initialize() noexcept {
     if (IsInitialized()) {
-        ESP_LOGW(TAG, "TMC9660 temperature wrapper already initialized");
+        Logger::GetInstance().Warn(TAG, "TMC9660 temperature wrapper already initialized");
         return true;
     }
     
     // Check if TMC9660 handler is ready
     if (!tmc9660_handler_.IsDriverReady()) {
-        ESP_LOGE(TAG, "TMC9660 handler not ready");
+        Logger::GetInstance().Error(TAG, "TMC9660 handler not ready");
         return false;
     }
     
     // Initialize the TMC9660 temperature wrapper
     Tmc9660Handler::Temperature& temp_wrapper = tmc9660_handler_.temperature();
     if (!temp_wrapper.EnsureInitialized()) {
-        ESP_LOGE(TAG, "Failed to initialize TMC9660 temperature wrapper");
+        Logger::GetInstance().Error(TAG, "Failed to initialize TMC9660 temperature wrapper");
         return false;
     }
     
     initialized_ = true;
     current_state_ = HF_TEMP_STATE_INITIALIZED;
     
-    ESP_LOGI(TAG, "TMC9660 temperature wrapper initialized successfully");
+    Logger::GetInstance().Info(TAG, "TMC9660 temperature wrapper initialized successfully");
     return true;
 }
 
@@ -173,8 +177,88 @@ bool Tmc9660TemperatureWrapper::Deinitialize() noexcept {
     initialized_ = false;
     current_state_ = HF_TEMP_STATE_UNINITIALIZED;
     
-    ESP_LOGI(TAG, "TMC9660 temperature wrapper deinitialized");
+    Logger::GetInstance().Info(TAG, "TMC9660 temperature wrapper deinitialized");
     return true;
+}
+
+//==============================================================================
+// ONBOARD TEMPERATURE SENSOR REGISTRATION
+//==============================================================================
+
+void TemperatureManager::RegisterOnboardTemperatureSensors() noexcept {
+    Logger::GetInstance().Info(TAG, "Registering onboard temperature sensors...");
+    
+    // 1. Register ESP32 internal temperature sensor
+    if (RegisterEspTemperatureSensor("esp32_internal") == TEMP_SUCCESS) {
+        Logger::GetInstance().Info(TAG, "ESP32 internal temperature sensor registered successfully");
+    } else {
+        Logger::GetInstance().Warn(TAG, "Failed to register ESP32 internal temperature sensor");
+    }
+    
+    // 2. Register TMC9660 AIN3 thermistor temperature sensor (if available)
+    RegisterTmc9660ThermistorSensor();
+    
+    // 3. Register TMC9660 internal chip temperature sensor (if available)
+    RegisterTmc9660InternalSensor();
+    
+    Logger::GetInstance().Info(TAG, "Onboard temperature sensor registration completed");
+}
+
+void TemperatureManager::RegisterTmc9660ThermistorSensor() noexcept {
+    // Check if AdcManager is available and initialized
+    AdcManager& adc_manager = AdcManager::GetInstance();
+    if (!adc_manager.EnsureInitialized()) {
+        Logger::GetInstance().Warn(TAG, "ADC manager not available, skipping TMC9660 thermistor sensor");
+        return;
+    }
+    
+    // Check if TMC9660_AIN3 channel is available (this is the temperature sensor channel)
+    if (!adc_manager.IsChannelAvailable("ADC_TMC9660_AIN3")) {
+        Logger::GetInstance().Warn(TAG, "TMC9660 AIN3 channel not available, skipping thermistor sensor");
+        return;
+    }
+    
+    // Configure NTC thermistor for TMC9660 AIN3
+    ntc_temp_handler_config_t ntc_config = NTC_TEMP_HANDLER_CONFIG_DEFAULT_NTCG163JFT103FT1S();
+    ntc_config.enable_threshold_monitoring = true;
+    ntc_config.low_threshold_celsius = 0.0f;
+    ntc_config.high_threshold_celsius = 85.0f;  // Conservative threshold for motor controller
+    
+    // Register the NTC thermistor sensor
+    if (RegisterNtcTemperatureSensor("tmc9660_thermistor", "ADC_TMC9660_AIN3", ntc_config) == TEMP_SUCCESS) {
+        Logger::GetInstance().Info(TAG, "TMC9660 AIN3 thermistor temperature sensor registered successfully");
+    } else {
+        Logger::GetInstance().Warn(TAG, "Failed to register TMC9660 AIN3 thermistor temperature sensor");
+    }
+}
+
+void TemperatureManager::RegisterTmc9660InternalSensor() noexcept {
+    // Check if MotorController is available and initialized
+    MotorController& motor_controller = MotorController::GetInstance();
+    if (!motor_controller.EnsureInitialized()) {
+        Logger::GetInstance().Warn(TAG, "Motor controller not available, skipping TMC9660 internal sensor");
+        return;
+    }
+    
+    // Get the onboard TMC9660 handler
+    Tmc9660Handler* onboard_handler = motor_controller.handler(MotorController::ONBOARD_TMC9660_INDEX);
+    if (!onboard_handler) {
+        Logger::GetInstance().Warn(TAG, "Onboard TMC9660 handler not available, skipping internal sensor");
+        return;
+    }
+    
+    // Check if the handler is ready
+    if (!onboard_handler->IsDriverReady()) {
+        Logger::GetInstance().Warn(TAG, "Onboard TMC9660 handler not ready, skipping internal sensor");
+        return;
+    }
+    
+    // Register the TMC9660 internal temperature sensor
+    if (RegisterTmc9660TemperatureSensor("tmc9660_chip", *onboard_handler) == TEMP_SUCCESS) {
+        Logger::GetInstance().Info(TAG, "TMC9660 internal chip temperature sensor registered successfully");
+    } else {
+        Logger::GetInstance().Warn(TAG, "Failed to register TMC9660 internal chip temperature sensor");
+    }
 }
 
 hf_temp_err_t Tmc9660TemperatureWrapper::ReadTemperatureCelsiusImpl(float* temperature_celsius) noexcept {
@@ -238,27 +322,27 @@ hf_temp_err_t TemperatureManager::RegisterEspTemperatureSensor(std::string_view 
     
     // Check if sensor already exists
     if (FindSensor(name) != sensors_.end()) {
-        ESP_LOGW(TAG, "Sensor '%s' already registered", std::string(name).c_str());
+        Logger::GetInstance().Warn(TAG, "Sensor '%s' already registered", std::string(name).c_str());
         return TEMP_ERR_ALREADY_INITIALIZED;
     }
     
     // Create ESP32 temperature sensor
     auto esp_sensor = std::make_unique<EspTemperature>(config);
     if (!esp_sensor) {
-        ESP_LOGE(TAG, "Failed to create ESP32 temperature sensor");
+        Logger::GetInstance().Error(TAG, "Failed to create ESP32 temperature sensor");
         return TEMP_ERR_OUT_OF_MEMORY;
     }
     
     // Initialize the sensor
     if (!esp_sensor->EnsureInitialized()) {
-        ESP_LOGE(TAG, "Failed to initialize ESP32 temperature sensor");
+        Logger::GetInstance().Error(TAG, "Failed to initialize ESP32 temperature sensor");
         return TEMP_ERR_FAILURE;
     }
     
     // Get sensor information for configuration
     hf_temp_sensor_info_t sensor_info = {};
     if (esp_sensor->GetSensorInfo(&sensor_info) != TEMP_SUCCESS) {
-        ESP_LOGW(TAG, "Failed to get ESP32 sensor info, using defaults");
+        Logger::GetInstance().Warn(TAG, "Failed to get ESP32 sensor info, using defaults");
         sensor_info.min_temp_celsius = -40.0f;
         sensor_info.max_temp_celsius = 125.0f;
         sensor_info.resolution_celsius = 0.25f;
@@ -278,7 +362,7 @@ hf_temp_err_t TemperatureManager::RegisterEspTemperatureSensor(std::string_view 
     system_diagnostics_.total_sensors_registered++;
     system_diagnostics_.sensors_by_type[HF_TEMP_SENSOR_TYPE_INTERNAL]++;
     
-    ESP_LOGI(TAG, "ESP32 temperature sensor '%s' registered successfully", std::string(name).c_str());
+    Logger::GetInstance().Info(TAG, "ESP32 temperature sensor '%s' registered successfully", std::string(name).c_str());
     return TEMP_SUCCESS;
 }
 
@@ -297,41 +381,41 @@ hf_temp_err_t TemperatureManager::RegisterNtcTemperatureSensor(std::string_view 
     
     // Check if sensor already exists
     if (FindSensor(name) != sensors_.end()) {
-        ESP_LOGW(TAG, "Sensor '%s' already registered", std::string(name).c_str());
+        Logger::GetInstance().Warn(TAG, "Sensor '%s' already registered", std::string(name).c_str());
         return TEMP_ERR_ALREADY_INITIALIZED;
     }
     
     // Get ADC interface from AdcManager
     AdcManager& adc_manager = AdcManager::GetInstance();
     if (adc_manager.EnsureInitialized() != hf_adc_err_t::ADC_SUCCESS) {
-        ESP_LOGE(TAG, "Failed to initialize ADC manager");
+        Logger::GetInstance().Error(TAG, "Failed to initialize ADC manager");
         return TEMP_ERR_RESOURCE_UNAVAILABLE;
     }
     
     // Get ADC channel by name
     BaseAdc* adc_interface = adc_manager.GetAdcInterface(adc_channel_name);
     if (!adc_interface) {
-        ESP_LOGE(TAG, "ADC channel '%s' not found", std::string(adc_channel_name).c_str());
+        Logger::GetInstance().Error(TAG, "ADC channel '%s' not found", std::string(adc_channel_name).c_str());
         return TEMP_ERR_RESOURCE_UNAVAILABLE;
     }
     
     // Create NTC temperature sensor handler
     auto ntc_sensor = std::make_unique<NtcTemperatureHandler>(adc_interface, config);
     if (!ntc_sensor) {
-        ESP_LOGE(TAG, "Failed to create NTC temperature sensor handler");
+        Logger::GetInstance().Error(TAG, "Failed to create NTC temperature sensor handler");
         return TEMP_ERR_OUT_OF_MEMORY;
     }
     
     // Initialize the sensor
     if (!ntc_sensor->EnsureInitialized()) {
-        ESP_LOGE(TAG, "Failed to initialize NTC temperature sensor");
+        Logger::GetInstance().Error(TAG, "Failed to initialize NTC temperature sensor");
         return TEMP_ERR_FAILURE;
     }
     
     // Get sensor information for configuration
     hf_temp_sensor_info_t sensor_info = {};
     if (ntc_sensor->GetSensorInfo(&sensor_info) != TEMP_SUCCESS) {
-        ESP_LOGW(TAG, "Failed to get NTC sensor info, using defaults");
+        Logger::GetInstance().Warn(TAG, "Failed to get NTC sensor info, using defaults");
         sensor_info.min_temp_celsius = -40.0f;
         sensor_info.max_temp_celsius = 125.0f;
         sensor_info.resolution_celsius = 0.1f;
@@ -351,7 +435,7 @@ hf_temp_err_t TemperatureManager::RegisterNtcTemperatureSensor(std::string_view 
     system_diagnostics_.total_sensors_registered++;
     system_diagnostics_.sensors_by_type[HF_TEMP_SENSOR_TYPE_THERMISTOR]++;
     
-    ESP_LOGI(TAG, "NTC temperature sensor '%s' registered successfully", std::string(name).c_str());
+    Logger::GetInstance().Info(TAG, "NTC temperature sensor '%s' registered successfully", std::string(name).c_str());
     return TEMP_SUCCESS;
 }
 
@@ -369,13 +453,13 @@ hf_temp_err_t TemperatureManager::RegisterTmc9660TemperatureSensor(std::string_v
     
     // Check if sensor already exists
     if (FindSensor(name) != sensors_.end()) {
-        ESP_LOGW(TAG, "Sensor '%s' already registered", std::string(name).c_str());
+        Logger::GetInstance().Warn(TAG, "Sensor '%s' already registered", std::string(name).c_str());
         return TEMP_ERR_ALREADY_INITIALIZED;
     }
     
     // Check if TMC9660 handler is initialized
     if (!tmc9660_handler.IsDriverReady()) {
-        ESP_LOGE(TAG, "TMC9660 handler not ready");
+        Logger::GetInstance().Error(TAG, "TMC9660 handler not ready");
         return TEMP_ERR_RESOURCE_UNAVAILABLE;
     }
     
@@ -384,14 +468,14 @@ hf_temp_err_t TemperatureManager::RegisterTmc9660TemperatureSensor(std::string_v
     
     // Check if temperature wrapper is available
     if (!tmc9660_temp.IsInitialized()) {
-        ESP_LOGE(TAG, "TMC9660 temperature wrapper not initialized");
+        Logger::GetInstance().Error(TAG, "TMC9660 temperature wrapper not initialized");
         return TEMP_ERR_RESOURCE_UNAVAILABLE;
     }
     
     // Get sensor information for configuration
     hf_temp_sensor_info_t sensor_info = {};
     if (tmc9660_temp.GetSensorInfo(&sensor_info) != TEMP_SUCCESS) {
-        ESP_LOGW(TAG, "Failed to get TMC9660 sensor info, using defaults");
+        Logger::GetInstance().Warn(TAG, "Failed to get TMC9660 sensor info, using defaults");
         sensor_info.min_temp_celsius = -40.0f;
         sensor_info.max_temp_celsius = 150.0f;
         sensor_info.resolution_celsius = 0.1f;
@@ -415,8 +499,58 @@ hf_temp_err_t TemperatureManager::RegisterTmc9660TemperatureSensor(std::string_v
     system_diagnostics_.total_sensors_registered++;
     system_diagnostics_.sensors_by_type[HF_TEMP_SENSOR_TYPE_INTERNAL]++;
     
-    ESP_LOGI(TAG, "TMC9660 temperature sensor '%s' registered successfully", std::string(name).c_str());
+    Logger::GetInstance().Info(TAG, "TMC9660 temperature sensor '%s' registered successfully", std::string(name).c_str());
     return TEMP_SUCCESS;
+}
+
+hf_temp_err_t TemperatureManager::RegisterOnboardTemperatureSensors() noexcept {
+    ESP_LOGI(TAG, "=== Registering Onboard Temperature Sensors ===");
+    
+    hf_temp_err_t overall_result = TEMP_SUCCESS;
+    
+    // 1. Register ESP32 internal temperature sensor
+    ESP_LOGI(TAG, "Registering ESP32 internal temperature sensor...");
+    hf_temp_err_t esp32_result = RegisterEspTemperatureSensor("esp32_internal");
+    if (esp32_result == TEMP_SUCCESS) {
+        ESP_LOGI(TAG, "ESP32 internal temperature sensor registered successfully");
+    } else {
+        ESP_LOGW(TAG, "Failed to register ESP32 internal temperature sensor: %s", GetTempErrorString(esp32_result));
+        overall_result = esp32_result; // Track the first error
+    }
+    
+    // 2. Register TMC9660 internal temperature sensor (if available)
+    ESP_LOGI(TAG, "Registering TMC9660 internal temperature sensor...");
+    
+    // Get MotorController instance and check if onboard TMC9660 is available
+    MotorController& motor_controller = MotorController::GetInstance();
+    if (motor_controller.EnsureInitialized()) {
+        Tmc9660Handler* onboard_tmc9660 = motor_controller.handler(MotorController::ONBOARD_TMC9660_INDEX);
+        if (onboard_tmc9660 && onboard_tmc9660->IsDriverReady()) {
+            hf_temp_err_t tmc9660_result = RegisterTmc9660TemperatureSensor("tmc9660_internal", *onboard_tmc9660);
+            if (tmc9660_result == TEMP_SUCCESS) {
+                ESP_LOGI(TAG, "TMC9660 internal temperature sensor registered successfully");
+            } else {
+                ESP_LOGW(TAG, "Failed to register TMC9660 internal temperature sensor: %s", GetTempErrorString(tmc9660_result));
+                if (overall_result == TEMP_SUCCESS) {
+                    overall_result = tmc9660_result; // Track the first error
+                }
+            }
+        } else {
+            ESP_LOGW(TAG, "TMC9660 onboard device not available or not ready - skipping TMC9660 temperature sensor registration");
+        }
+    } else {
+        ESP_LOGW(TAG, "MotorController not initialized - skipping TMC9660 temperature sensor registration");
+    }
+    
+    // Log summary
+    if (overall_result == TEMP_SUCCESS) {
+        ESP_LOGI(TAG, "All available onboard temperature sensors registered successfully");
+    } else {
+        ESP_LOGW(TAG, "Some onboard temperature sensors failed to register");
+    }
+    
+    ESP_LOGI(TAG, "=== Onboard Temperature Sensor Registration Complete ===");
+    return overall_result;
 }
 
 hf_temp_err_t TemperatureManager::UnregisterSensor(std::string_view name) noexcept {
@@ -428,7 +562,7 @@ hf_temp_err_t TemperatureManager::UnregisterSensor(std::string_view name) noexce
     
     auto it = FindSensor(name);
     if (it == sensors_.end()) {
-        ESP_LOGW(TAG, "Sensor '%s' not found", std::string(name).c_str());
+        Logger::GetInstance().Warn(TAG, "Sensor '%s' not found", std::string(name).c_str());
         return TEMP_ERR_SENSOR_NOT_AVAILABLE;
     }
     
@@ -451,7 +585,7 @@ hf_temp_err_t TemperatureManager::UnregisterSensor(std::string_view name) noexce
         sensor_map_[sensors_[i].name] = static_cast<uint32_t>(i);
     }
     
-    ESP_LOGI(TAG, "Sensor '%s' unregistered successfully", std::string(name).c_str());
+    Logger::GetInstance().Info(TAG, "Sensor '%s' unregistered successfully", std::string(name).c_str());
     return TEMP_SUCCESS;
 }
 
@@ -506,16 +640,16 @@ hf_temp_err_t TemperatureManager::ReadTemperatureCelsius(std::string_view sensor
         return TEMP_ERR_SENSOR_NOT_AVAILABLE;
     }
     
-    const auto start_time = esp_timer_get_time();
+    const auto start_time = os_time_get();
     hf_temp_err_t result = it->sensor->ReadTemperatureCelsius(temperature_celsius);
-    const auto end_time = esp_timer_get_time();
+    const auto end_time = os_time_get();
     
     // Update statistics
     UpdateSensorStatistics(&(*it), result == TEMP_SUCCESS);
     
     if (result == TEMP_SUCCESS) {
         it->last_reading_celsius = *temperature_celsius;
-        it->last_access_time = static_cast<uint64_t>(end_time / 1000); // Convert to ms
+        it->last_access_time = end_time; // Already in ms with OsAbstraction
     }
     
     return result;

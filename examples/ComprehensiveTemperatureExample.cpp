@@ -20,8 +20,7 @@
 #include "component-handlers/AdcManager.h"
 #include "utils-and-drivers/driver-handlers/Logger.h"
 #include "utils-and-drivers/driver-handlers/Tmc9660Handler.h"
-#include <esp_log.h>
-#include <esp_timer.h>
+#include "utils-and-drivers/hf-core-utils/hf-utils-rtos-wrap/include/OsAbstraction.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/queue.h>
@@ -67,7 +66,7 @@ void temperature_threshold_callback(BaseTemperature* sensor, float temperature_c
     const char* sensor_name = static_cast<const char*>(user_data);
     const char* threshold_name = (threshold_type == 0) ? "LOW" : "HIGH";
     
-    ESP_LOGW(TAG, "Temperature threshold exceeded: %s = %.2f°C (%s)", 
+    Logger::GetInstance().Warn(TAG, "Temperature threshold exceeded: %s = %.2f°C (%s)", 
              sensor_name, temperature_celsius, threshold_name);
     
     // In a real application, you might:
@@ -81,7 +80,7 @@ void temperature_reading_callback(BaseTemperature* sensor, const hf_temp_reading
                                  void* user_data) {
     if (reading && reading->is_valid) {
         const char* sensor_name = static_cast<const char*>(user_data);
-        ESP_LOGI(TAG, "Continuous reading: %s = %.2f°C (accuracy: %.2f°C)", 
+        Logger::GetInstance().Info(TAG, "Continuous reading: %s = %.2f°C (accuracy: %.2f°C)", 
                  sensor_name, reading->temperature_celsius, reading->accuracy_celsius);
     }
 }
@@ -91,34 +90,42 @@ void temperature_reading_callback(BaseTemperature* sensor, const hf_temp_reading
 //==============================================================================
 
 void initialize_temperature_system() {
-    ESP_LOGI(TAG, "=== Initializing Temperature Monitoring System ===");
+    Logger::GetInstance().Info(TAG, "=== Initializing Temperature Monitoring System ===");
     
     TemperatureManager& temp_manager = TemperatureManager::GetInstance();
     AdcManager& adc_manager = AdcManager::GetInstance();
+    MotorController& motor_controller = MotorController::GetInstance();
     
     // Initialize managers
     if (temp_manager.EnsureInitialized() != TEMP_SUCCESS) {
-        ESP_LOGE(TAG, "Failed to initialize temperature manager");
+        Logger::GetInstance().Error(TAG, "Failed to initialize temperature manager");
         return;
     }
     
     if (adc_manager.EnsureInitialized() != hf_adc_err_t::ADC_SUCCESS) {
-        ESP_LOGE(TAG, "Failed to initialize ADC manager");
+        Logger::GetInstance().Error(TAG, "Failed to initialize ADC manager");
         return;
     }
     
-    ESP_LOGI(TAG, "Temperature and ADC managers initialized successfully");
+    if (motor_controller.EnsureInitialized()) {
+        Logger::GetInstance().Info(TAG, "Motor controller initialized successfully");
+    } else {
+        Logger::GetInstance().Warn(TAG, "Motor controller initialization failed (TMC9660 sensors may not be available)");
+    }
+    
+    Logger::GetInstance().Info(TAG, "Temperature monitoring system initialized successfully");
+    Logger::GetInstance().Info(TAG, "Note: Onboard temperature sensors are automatically registered during initialization");
 }
 
-void register_esp32_temperature_sensor() {
-    ESP_LOGI(TAG, "--- Registering ESP32 Internal Temperature Sensor ---");
+void check_esp32_temperature_sensor() {
+    Logger::GetInstance().Info(TAG, "--- Checking ESP32 Internal Temperature Sensor ---");
     
     TemperatureManager& temp_manager = TemperatureManager::GetInstance();
     
-    // Register ESP32 internal temperature sensor
-    if (temp_manager.RegisterEspTemperatureSensor("esp32_internal") == TEMP_SUCCESS) {
+    // Check if ESP32 internal temperature sensor is available (should be auto-registered)
+    if (temp_manager.IsSensorRegistered("esp32_internal")) {
         g_temp_state.esp32_available = true;
-        ESP_LOGI(TAG, "ESP32 internal temperature sensor registered successfully");
+        Logger::GetInstance().Info(TAG, "ESP32 internal temperature sensor is available (auto-registered)");
         
         // Set up threshold monitoring for ESP32
         temp_manager.SetThresholds("esp32_internal", 0.0f, WARNING_TEMP_CELSIUS);
@@ -130,13 +137,13 @@ void register_esp32_temperature_sensor() {
                                              temperature_reading_callback, 
                                              const_cast<char*>("ESP32"));
     } else {
-        ESP_LOGE(TAG, "Failed to register ESP32 internal temperature sensor");
+        Logger::GetInstance().Warn(TAG, "ESP32 internal temperature sensor not available");
         g_temp_state.esp32_available = false;
     }
 }
 
 void register_ntc_temperature_sensor() {
-    ESP_LOGI(TAG, "--- Registering NTC Thermistor Temperature Sensor ---");
+    Logger::GetInstance().Info(TAG, "--- Registering NTC Thermistor Temperature Sensor ---");
     
     TemperatureManager& temp_manager = TemperatureManager::GetInstance();
     
@@ -149,7 +156,7 @@ void register_ntc_temperature_sensor() {
     // Register NTC temperature sensor (assuming ADC channel "ntc_thermistor" exists)
     if (temp_manager.RegisterNtcTemperatureSensor("ntc_sensor", "ntc_thermistor", ntc_config) == TEMP_SUCCESS) {
         g_temp_state.ntc_available = true;
-        ESP_LOGI(TAG, "NTC temperature sensor registered successfully");
+        Logger::GetInstance().Info(TAG, "NTC temperature sensor registered successfully");
         
         // Set up threshold monitoring for NTC
         temp_manager.SetThresholds("ntc_sensor", 0.0f, WARNING_TEMP_CELSIUS);
@@ -161,41 +168,34 @@ void register_ntc_temperature_sensor() {
                                              temperature_reading_callback, 
                                              const_cast<char*>("NTC"));
     } else {
-        ESP_LOGE(TAG, "Failed to register NTC temperature sensor");
+        Logger::GetInstance().Error(TAG, "Failed to register NTC temperature sensor");
         g_temp_state.ntc_available = false;
     }
 }
 
-void register_tmc9660_temperature_sensor() {
-    ESP_LOGI(TAG, "--- Registering TMC9660 Internal Temperature Sensor ---");
+void check_tmc9660_temperature_sensor() {
+    Logger::GetInstance().Info(TAG, "--- Checking TMC9660 Internal Temperature Sensor ---");
     
     TemperatureManager& temp_manager = TemperatureManager::GetInstance();
     
-    // Note: In a real application, you would get the TMC9660Handler instance from your system
-    // For this example, we'll show the pattern but comment out the actual registration
-    
-    // TMC9660Handler& tmc9660_handler = GetTmc9660HandlerInstance(); // Get from your system
-    
-    // if (temp_manager.RegisterTmc9660TemperatureSensor("tmc9660_chip", tmc9660_handler) == TEMP_SUCCESS) {
-    //     g_temp_state.tmc9660_available = true;
-    //     ESP_LOGI(TAG, "TMC9660 temperature sensor registered successfully");
-    //     
-    //     // Set up threshold monitoring for TMC9660
-    //     temp_manager.SetThresholds("tmc9660_chip", 0.0f, WARNING_TEMP_CELSIUS);
-    //     temp_manager.EnableThresholdMonitoring("tmc9660_chip", temperature_threshold_callback, 
-    //                                          const_cast<char*>("TMC9660"));
-    //     
-    //     // Start continuous monitoring
-    //     temp_manager.StartContinuousMonitoring("tmc9660_chip", TEMP_SAMPLE_RATE_HZ, 
-    //                                          temperature_reading_callback, 
-    //                                          const_cast<char*>("TMC9660"));
-    // } else {
-    //     ESP_LOGE(TAG, "Failed to register TMC9660 temperature sensor");
-    //     g_temp_state.tmc9660_available = false;
-    // }
-    
-    ESP_LOGI(TAG, "TMC9660 temperature sensor registration pattern demonstrated (commented out for example)");
-    g_temp_state.tmc9660_available = false;
+    // Check if TMC9660 internal temperature sensor is available (should be auto-registered)
+    if (temp_manager.IsSensorRegistered("tmc9660_internal")) {
+        g_temp_state.tmc9660_available = true;
+        Logger::GetInstance().Info(TAG, "TMC9660 internal temperature sensor is available (auto-registered)");
+        
+        // Set up threshold monitoring for TMC9660
+        temp_manager.SetThresholds("tmc9660_internal", 0.0f, WARNING_TEMP_CELSIUS);
+        temp_manager.EnableThresholdMonitoring("tmc9660_internal", temperature_threshold_callback, 
+                                             const_cast<char*>("TMC9660"));
+        
+        // Start continuous monitoring
+        temp_manager.StartContinuousMonitoring("tmc9660_internal", TEMP_SAMPLE_RATE_HZ, 
+                                             temperature_reading_callback, 
+                                             const_cast<char*>("TMC9660"));
+    } else {
+        Logger::GetInstance().Warn(TAG, "TMC9660 internal temperature sensor not available (MotorController may not be initialized)");
+        g_temp_state.tmc9660_available = false;
+    }
 }
 
 void read_all_temperatures() {
@@ -204,36 +204,36 @@ void read_all_temperatures() {
     // Read ESP32 temperature
     if (g_temp_state.esp32_available) {
         if (temp_manager.ReadTemperatureCelsius("esp32_internal", &g_temp_state.esp32_temp) == TEMP_SUCCESS) {
-            ESP_LOGI(TAG, "ESP32 Temperature: %.2f°C", g_temp_state.esp32_temp);
+            Logger::GetInstance().Info(TAG, "ESP32 Temperature: %.2f°C", g_temp_state.esp32_temp);
         } else {
-            ESP_LOGW(TAG, "Failed to read ESP32 temperature");
+            Logger::GetInstance().Warn(TAG, "Failed to read ESP32 temperature");
         }
     }
     
-    // Read NTC temperature
+    // Read NTC temperature (TMC9660 AIN3 thermistor)
     if (g_temp_state.ntc_available) {
-        if (temp_manager.ReadTemperatureCelsius("ntc_sensor", &g_temp_state.ntc_temp) == TEMP_SUCCESS) {
-            ESP_LOGI(TAG, "NTC Temperature: %.2f°C", g_temp_state.ntc_temp);
+        if (temp_manager.ReadTemperatureCelsius("tmc9660_thermistor", &g_temp_state.ntc_temp) == TEMP_SUCCESS) {
+            Logger::GetInstance().Info(TAG, "TMC9660 AIN3 Thermistor Temperature: %.2f°C", g_temp_state.ntc_temp);
         } else {
-            ESP_LOGW(TAG, "Failed to read NTC temperature");
+            Logger::GetInstance().Warn(TAG, "Failed to read TMC9660 AIN3 thermistor temperature");
         }
     }
     
-    // Read TMC9660 temperature
+    // Read TMC9660 internal chip temperature
     if (g_temp_state.tmc9660_available) {
         if (temp_manager.ReadTemperatureCelsius("tmc9660_chip", &g_temp_state.tmc9660_temp) == TEMP_SUCCESS) {
-            ESP_LOGI(TAG, "TMC9660 Temperature: %.2f°C", g_temp_state.tmc9660_temp);
+            Logger::GetInstance().Info(TAG, "TMC9660 Internal Chip Temperature: %.2f°C", g_temp_state.tmc9660_temp);
         } else {
-            ESP_LOGW(TAG, "Failed to read TMC9660 temperature");
+            Logger::GetInstance().Warn(TAG, "Failed to read TMC9660 internal chip temperature");
         }
     }
     
     g_temp_state.sample_count++;
-    g_temp_state.last_sample_time = esp_timer_get_time();
+    g_temp_state.last_sample_time = os_time_get();
 }
 
 void perform_batch_temperature_reading() {
-    ESP_LOGI(TAG, "--- Performing Batch Temperature Reading ---");
+    Logger::GetInstance().Info(TAG, "--- Performing Batch Temperature Reading ---");
     
     TemperatureManager& temp_manager = TemperatureManager::GetInstance();
     
@@ -243,31 +243,31 @@ void perform_batch_temperature_reading() {
         sensor_names.push_back("esp32_internal");
     }
     if (g_temp_state.ntc_available) {
-        sensor_names.push_back("ntc_sensor");
+        sensor_names.push_back("tmc9660_thermistor");
     }
     if (g_temp_state.tmc9660_available) {
         sensor_names.push_back("tmc9660_chip");
     }
     
     if (sensor_names.empty()) {
-        ESP_LOGW(TAG, "No temperature sensors available for batch reading");
+        Logger::GetInstance().Warn(TAG, "No temperature sensors available for batch reading");
         return;
     }
     
     // Perform batch reading
     std::vector<float> temperatures_celsius;
     if (temp_manager.ReadMultipleTemperaturesCelsius(sensor_names, temperatures_celsius) == TEMP_SUCCESS) {
-        ESP_LOGI(TAG, "Batch temperature readings:");
+        Logger::GetInstance().Info(TAG, "Batch temperature readings:");
         for (size_t i = 0; i < sensor_names.size(); ++i) {
-            ESP_LOGI(TAG, "  %s: %.2f°C", std::string(sensor_names[i]).c_str(), temperatures_celsius[i]);
+            Logger::GetInstance().Info(TAG, "  %s: %.2f°C", std::string(sensor_names[i]).c_str(), temperatures_celsius[i]);
         }
     } else {
-        ESP_LOGE(TAG, "Batch temperature reading failed");
+        Logger::GetInstance().Error(TAG, "Batch temperature reading failed");
     }
 }
 
 void check_temperature_safety() {
-    ESP_LOGI(TAG, "--- Temperature Safety Check ---");
+    Logger::GetInstance().Info(TAG, "--- Temperature Safety Check ---");
     
     bool critical_temp_detected = false;
     bool warning_temp_detected = false;
@@ -275,77 +275,77 @@ void check_temperature_safety() {
     // Check ESP32 temperature
     if (g_temp_state.esp32_available) {
         if (g_temp_state.esp32_temp >= CRITICAL_TEMP_CELSIUS) {
-            ESP_LOGE(TAG, "CRITICAL: ESP32 temperature = %.2f°C", g_temp_state.esp32_temp);
+            Logger::GetInstance().Error(TAG, "CRITICAL: ESP32 temperature = %.2f°C", g_temp_state.esp32_temp);
             critical_temp_detected = true;
         } else if (g_temp_state.esp32_temp >= WARNING_TEMP_CELSIUS) {
-            ESP_LOGW(TAG, "WARNING: ESP32 temperature = %.2f°C", g_temp_state.esp32_temp);
+            Logger::GetInstance().Warn(TAG, "WARNING: ESP32 temperature = %.2f°C", g_temp_state.esp32_temp);
             warning_temp_detected = true;
         }
     }
     
-    // Check NTC temperature
+    // Check TMC9660 AIN3 thermistor temperature
     if (g_temp_state.ntc_available) {
         if (g_temp_state.ntc_temp >= CRITICAL_TEMP_CELSIUS) {
-            ESP_LOGE(TAG, "CRITICAL: NTC temperature = %.2f°C", g_temp_state.ntc_temp);
+            Logger::GetInstance().Error(TAG, "CRITICAL: TMC9660 AIN3 thermistor temperature = %.2f°C", g_temp_state.ntc_temp);
             critical_temp_detected = true;
         } else if (g_temp_state.ntc_temp >= WARNING_TEMP_CELSIUS) {
-            ESP_LOGW(TAG, "WARNING: NTC temperature = %.2f°C", g_temp_state.ntc_temp);
+            Logger::GetInstance().Warn(TAG, "WARNING: TMC9660 AIN3 thermistor temperature = %.2f°C", g_temp_state.ntc_temp);
             warning_temp_detected = true;
         }
     }
     
-    // Check TMC9660 temperature
+    // Check TMC9660 internal chip temperature
     if (g_temp_state.tmc9660_available) {
         if (g_temp_state.tmc9660_temp >= CRITICAL_TEMP_CELSIUS) {
-            ESP_LOGE(TAG, "CRITICAL: TMC9660 temperature = %.2f°C", g_temp_state.tmc9660_temp);
+            Logger::GetInstance().Error(TAG, "CRITICAL: TMC9660 internal chip temperature = %.2f°C", g_temp_state.tmc9660_temp);
             critical_temp_detected = true;
         } else if (g_temp_state.tmc9660_temp >= WARNING_TEMP_CELSIUS) {
-            ESP_LOGW(TAG, "WARNING: TMC9660 temperature = %.2f°C", g_temp_state.tmc9660_temp);
+            Logger::GetInstance().Warn(TAG, "WARNING: TMC9660 internal chip temperature = %.2f°C", g_temp_state.tmc9660_temp);
             warning_temp_detected = true;
         }
     }
     
     // Take action based on temperature conditions
     if (critical_temp_detected) {
-        ESP_LOGE(TAG, "CRITICAL TEMPERATURE DETECTED - EMERGENCY SHUTDOWN RECOMMENDED");
+        Logger::GetInstance().Error(TAG, "CRITICAL TEMPERATURE DETECTED - EMERGENCY SHUTDOWN RECOMMENDED");
         // In a real application, you would:
         // - Trigger emergency shutdown
         // - Activate emergency cooling
         // - Send emergency alerts
         // - Log critical event
     } else if (warning_temp_detected) {
-        ESP_LOGW(TAG, "WARNING TEMPERATURE DETECTED - MONITOR CLOSELY");
+        Logger::GetInstance().Warn(TAG, "WARNING TEMPERATURE DETECTED - MONITOR CLOSELY");
         // In a real application, you would:
         // - Increase cooling
         // - Reduce load
         // - Send warning alerts
         // - Log warning event
     } else {
-        ESP_LOGI(TAG, "All temperatures within normal range");
+        Logger::GetInstance().Info(TAG, "All temperatures within normal range");
     }
 }
 
 void display_system_statistics() {
-    ESP_LOGI(TAG, "--- System Temperature Statistics ---");
+    Logger::GetInstance().Info(TAG, "--- System Temperature Statistics ---");
     
     TemperatureManager& temp_manager = TemperatureManager::GetInstance();
     
     // Get system diagnostics
     TempSystemDiagnostics system_diagnostics = {};
     if (temp_manager.GetSystemDiagnostics(system_diagnostics) == TEMP_SUCCESS) {
-        ESP_LOGI(TAG, "System Diagnostics:");
-        ESP_LOGI(TAG, "  Total Sensors: %u", system_diagnostics.total_sensors_registered);
-        ESP_LOGI(TAG, "  Total Operations: %u", system_diagnostics.total_operations);
-        ESP_LOGI(TAG, "  Successful Operations: %u", system_diagnostics.successful_operations);
-        ESP_LOGI(TAG, "  Failed Operations: %u", system_diagnostics.failed_operations);
-        ESP_LOGI(TAG, "  System Min Temp: %.2f°C", system_diagnostics.system_min_temp_celsius);
-        ESP_LOGI(TAG, "  System Max Temp: %.2f°C", system_diagnostics.system_max_temp_celsius);
-        ESP_LOGI(TAG, "  System Avg Temp: %.2f°C", system_diagnostics.system_avg_temp_celsius);
-        ESP_LOGI(TAG, "  System Uptime: %llu ms", system_diagnostics.system_uptime_ms);
+        Logger::GetInstance().Info(TAG, "System Diagnostics:");
+        Logger::GetInstance().Info(TAG, "  Total Sensors: %u", system_diagnostics.total_sensors_registered);
+        Logger::GetInstance().Info(TAG, "  Total Operations: %u", system_diagnostics.total_operations);
+        Logger::GetInstance().Info(TAG, "  Successful Operations: %u", system_diagnostics.successful_operations);
+        Logger::GetInstance().Info(TAG, "  Failed Operations: %u", system_diagnostics.failed_operations);
+        Logger::GetInstance().Info(TAG, "  System Min Temp: %.2f°C", system_diagnostics.system_min_temp_celsius);
+        Logger::GetInstance().Info(TAG, "  System Max Temp: %.2f°C", system_diagnostics.system_max_temp_celsius);
+        Logger::GetInstance().Info(TAG, "  System Avg Temp: %.2f°C", system_diagnostics.system_avg_temp_celsius);
+        Logger::GetInstance().Info(TAG, "  System Uptime: %llu ms", system_diagnostics.system_uptime_ms);
         
         if (system_diagnostics.total_operations > 0) {
             float success_rate = (float)system_diagnostics.successful_operations / system_diagnostics.total_operations * 100.0f;
-            ESP_LOGI(TAG, "  Success Rate: %.2f%%", success_rate);
+            Logger::GetInstance().Info(TAG, "  Success Rate: %.2f%%", success_rate);
         }
     }
     
@@ -353,36 +353,36 @@ void display_system_statistics() {
     if (g_temp_state.esp32_available) {
         hf_temp_statistics_t esp32_stats = {};
         if (temp_manager.GetSensorStatistics("esp32_internal", esp32_stats) == TEMP_SUCCESS) {
-            ESP_LOGI(TAG, "ESP32 Sensor Statistics:");
-            ESP_LOGI(TAG, "  Total Operations: %u", esp32_stats.total_operations);
-            ESP_LOGI(TAG, "  Temperature Readings: %u", esp32_stats.temperature_readings);
-            ESP_LOGI(TAG, "  Min Temperature: %.2f°C", esp32_stats.min_temperature_celsius);
-            ESP_LOGI(TAG, "  Max Temperature: %.2f°C", esp32_stats.max_temperature_celsius);
-            ESP_LOGI(TAG, "  Avg Temperature: %.2f°C", esp32_stats.avg_temperature_celsius);
+            Logger::GetInstance().Info(TAG, "ESP32 Sensor Statistics:");
+            Logger::GetInstance().Info(TAG, "  Total Operations: %u", esp32_stats.total_operations);
+            Logger::GetInstance().Info(TAG, "  Temperature Readings: %u", esp32_stats.temperature_readings);
+            Logger::GetInstance().Info(TAG, "  Min Temperature: %.2f°C", esp32_stats.min_temperature_celsius);
+            Logger::GetInstance().Info(TAG, "  Max Temperature: %.2f°C", esp32_stats.max_temperature_celsius);
+            Logger::GetInstance().Info(TAG, "  Avg Temperature: %.2f°C", esp32_stats.avg_temperature_celsius);
         }
     }
     
     if (g_temp_state.ntc_available) {
         hf_temp_statistics_t ntc_stats = {};
-        if (temp_manager.GetSensorStatistics("ntc_sensor", ntc_stats) == TEMP_SUCCESS) {
-            ESP_LOGI(TAG, "NTC Sensor Statistics:");
-            ESP_LOGI(TAG, "  Total Operations: %u", ntc_stats.total_operations);
-            ESP_LOGI(TAG, "  Temperature Readings: %u", ntc_stats.temperature_readings);
-            ESP_LOGI(TAG, "  Min Temperature: %.2f°C", ntc_stats.min_temperature_celsius);
-            ESP_LOGI(TAG, "  Max Temperature: %.2f°C", ntc_stats.max_temperature_celsius);
-            ESP_LOGI(TAG, "  Avg Temperature: %.2f°C", ntc_stats.avg_temperature_celsius);
+        if (temp_manager.GetSensorStatistics("tmc9660_thermistor", ntc_stats) == TEMP_SUCCESS) {
+            Logger::GetInstance().Info(TAG, "TMC9660 AIN3 Thermistor Statistics:");
+            Logger::GetInstance().Info(TAG, "  Total Operations: %u", ntc_stats.total_operations);
+            Logger::GetInstance().Info(TAG, "  Temperature Readings: %u", ntc_stats.temperature_readings);
+            Logger::GetInstance().Info(TAG, "  Min Temperature: %.2f°C", ntc_stats.min_temperature_celsius);
+            Logger::GetInstance().Info(TAG, "  Max Temperature: %.2f°C", ntc_stats.max_temperature_celsius);
+            Logger::GetInstance().Info(TAG, "  Avg Temperature: %.2f°C", ntc_stats.avg_temperature_celsius);
         }
     }
     
     if (g_temp_state.tmc9660_available) {
         hf_temp_statistics_t tmc9660_stats = {};
         if (temp_manager.GetSensorStatistics("tmc9660_chip", tmc9660_stats) == TEMP_SUCCESS) {
-            ESP_LOGI(TAG, "TMC9660 Sensor Statistics:");
-            ESP_LOGI(TAG, "  Total Operations: %u", tmc9660_stats.total_operations);
-            ESP_LOGI(TAG, "  Temperature Readings: %u", tmc9660_stats.temperature_readings);
-            ESP_LOGI(TAG, "  Min Temperature: %.2f°C", tmc9660_stats.min_temperature_celsius);
-            ESP_LOGI(TAG, "  Max Temperature: %.2f°C", tmc9660_stats.max_temperature_celsius);
-            ESP_LOGI(TAG, "  Avg Temperature: %.2f°C", tmc9660_stats.avg_temperature_celsius);
+            Logger::GetInstance().Info(TAG, "TMC9660 Sensor Statistics:");
+            Logger::GetInstance().Info(TAG, "  Total Operations: %u", tmc9660_stats.total_operations);
+            Logger::GetInstance().Info(TAG, "  Temperature Readings: %u", tmc9660_stats.temperature_readings);
+            Logger::GetInstance().Info(TAG, "  Min Temperature: %.2f°C", tmc9660_stats.min_temperature_celsius);
+            Logger::GetInstance().Info(TAG, "  Max Temperature: %.2f°C", tmc9660_stats.max_temperature_celsius);
+            Logger::GetInstance().Info(TAG, "  Avg Temperature: %.2f°C", tmc9660_stats.avg_temperature_celsius);
         }
     }
 }
@@ -392,7 +392,7 @@ void display_system_statistics() {
 //==============================================================================
 
 extern "C" void app_main() {
-    ESP_LOGI(TAG, "Comprehensive Temperature Monitoring System Starting...");
+    Logger::GetInstance().Info(TAG, "Comprehensive Temperature Monitoring System Starting...");
     
     // Initialize logger
     Logger::GetInstance().Initialize();
@@ -400,23 +400,24 @@ extern "C" void app_main() {
     // Initialize temperature system
     initialize_temperature_system();
     
-    // Register all temperature sensors
-    register_esp32_temperature_sensor();
-    register_ntc_temperature_sensor();
-    register_tmc9660_temperature_sensor();
+    // Check which sensors are available (automatically registered during initialization)
+    TemperatureManager& temp_manager = TemperatureManager::GetInstance();
+    g_temp_state.esp32_available = temp_manager.IsSensorRegistered("esp32_internal");
+    g_temp_state.ntc_available = temp_manager.IsSensorRegistered("tmc9660_thermistor");
+    g_temp_state.tmc9660_available = temp_manager.IsSensorRegistered("tmc9660_chip");
     
     // Display sensor availability
-    ESP_LOGI(TAG, "Sensor Availability:");
-    ESP_LOGI(TAG, "  ESP32 Internal: %s", g_temp_state.esp32_available ? "AVAILABLE" : "NOT AVAILABLE");
-    ESP_LOGI(TAG, "  NTC Thermistor: %s", g_temp_state.ntc_available ? "AVAILABLE" : "NOT AVAILABLE");
-    ESP_LOGI(TAG, "  TMC9660 Internal: %s", g_temp_state.tmc9660_available ? "AVAILABLE" : "NOT AVAILABLE");
+    Logger::GetInstance().Info(TAG, "Automatically Registered Sensors:");
+    Logger::GetInstance().Info(TAG, "  ESP32 Internal: %s", g_temp_state.esp32_available ? "AVAILABLE" : "NOT AVAILABLE");
+    Logger::GetInstance().Info(TAG, "  TMC9660 AIN3 Thermistor: %s", g_temp_state.ntc_available ? "AVAILABLE" : "NOT AVAILABLE");
+    Logger::GetInstance().Info(TAG, "  TMC9660 Internal Chip: %s", g_temp_state.tmc9660_available ? "AVAILABLE" : "NOT AVAILABLE");
     
     // Main monitoring loop
     uint32_t loop_count = 0;
     const uint32_t max_loops = 20; // Run for 20 iterations
     
     while (loop_count < max_loops) {
-        ESP_LOGI(TAG, "=== Monitoring Cycle %u/%u ===", loop_count + 1, max_loops);
+        Logger::GetInstance().Info(TAG, "=== Monitoring Cycle %u/%u ===", loop_count + 1, max_loops);
         
         // Read all temperatures
         read_all_temperatures();
@@ -439,6 +440,6 @@ extern "C" void app_main() {
         loop_count++;
     }
     
-    ESP_LOGI(TAG, "Comprehensive Temperature Monitoring System Completed!");
-    ESP_LOGI(TAG, "Total samples taken: %u", g_temp_state.sample_count);
+    Logger::GetInstance().Info(TAG, "Comprehensive Temperature Monitoring System Completed!");
+    Logger::GetInstance().Info(TAG, "Total samples taken: %u", g_temp_state.sample_count);
 } 

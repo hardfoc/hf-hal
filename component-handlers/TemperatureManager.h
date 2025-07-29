@@ -45,6 +45,10 @@
 #include "utils-and-drivers/driver-handlers/NtcTemperatureHandler.h"
 #include "utils-and-drivers/driver-handlers/Tmc9660Handler.h"
 #include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/base/BaseAdc.h"
+#include "component-handlers/AdcManager.h"
+#include "component-handlers/MotorController.h"
+#include "utils-and-drivers/driver-handlers/Logger.h"
+#include "utils-and-drivers/hf-core-utils/hf-utils-rtos-wrap/include/OsAbstraction.h"
 
 #include <array>
 #include <memory>
@@ -313,6 +317,35 @@ public:
      */
     [[nodiscard]] hf_temp_err_t RegisterTmc9660TemperatureSensor(std::string_view name, 
                                                                  Tmc9660Handler& tmc9660_handler) noexcept;
+
+private:
+    /**
+     * @brief Automatically register known onboard temperature sensors.
+     * @details This function is called during initialization to register:
+     * - ESP32 internal temperature sensor
+     * - TMC9660 AIN3 thermistor temperature sensor (if available)
+     * - TMC9660 internal chip temperature sensor (if available)
+     */
+    void RegisterOnboardTemperatureSensors() noexcept;
+    
+    /**
+     * @brief Register TMC9660 AIN3 thermistor temperature sensor.
+     * @details Registers the NTC thermistor connected to TMC9660 AIN3 channel.
+     */
+    void RegisterTmc9660ThermistorSensor() noexcept;
+    
+    /**
+     * @brief Register TMC9660 internal chip temperature sensor.
+     * @details Registers the internal temperature sensor of the TMC9660 chip.
+     */
+    void RegisterTmc9660InternalSensor() noexcept;
+    
+    /**
+     * @brief Automatically register onboard temperature sensors (ESP32 internal and TMC9660 internal).
+     * @return hf_temp_err_t::TEMP_SUCCESS if registration successful, error code otherwise
+     * @note This is called automatically during Initialize() to ensure onboard sensors are always available
+     */
+    [[nodiscard]] hf_temp_err_t RegisterOnboardTemperatureSensors() noexcept;
     
     /**
      * @brief Unregister a temperature sensor.
