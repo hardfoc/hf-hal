@@ -1,6 +1,7 @@
 #include "MotorController.h"
 #include "CommChannelsManager.h"
 #include "utils-and-drivers/hf-core-drivers/internal/hf-internal-interface-wrap/inc/utils/RtosMutex.h"
+#include "utils-and-drivers/driver-handlers/Logger.h"
 #include <algorithm>
 #include <string>
 
@@ -307,4 +308,106 @@ std::vector<bool> MotorController::GetInitializationStatus() const {
     }
     
     return status;
-} 
+}
+
+void MotorController::DumpStatistics() const noexcept {
+    static constexpr const char* TAG = "MotorController";
+    
+    Logger::GetInstance().Info(TAG, "=== MOTOR CONTROLLER STATISTICS ===");
+    
+    MutexLockGuard lock(deviceMutex_);
+    
+    // System Health
+    Logger::GetInstance().Info(TAG, "System Health:");
+    Logger::GetInstance().Info(TAG, "  Initialized: %s", initialized_ ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Onboard Device Created: %s", onboardDeviceCreated_ ? "YES" : "NO");
+    
+    // Device Statistics
+    int active_devices = 0;
+    int initialized_devices = 0;
+    
+    Logger::GetInstance().Info(TAG, "Device Status Summary:");
+    for (uint8_t i = 0; i < MAX_TMC9660_DEVICES; ++i) {
+        if (deviceActive_[i] && tmcHandlers_[i] != nullptr) {
+            bool is_initialized = deviceInitialized_[i];
+            const char* device_type;
+            
+            switch (i) {
+                case ONBOARD_TMC9660_INDEX:
+                    device_type = "Onboard TMC9660";
+                    break;
+                case EXTERNAL_DEVICE_1_INDEX:
+                    device_type = "External Device 1";
+                    break;
+                case EXTERNAL_DEVICE_2_INDEX:
+                    device_type = "External Device 2";
+                    break;
+                default:
+                    device_type = "Unknown Device";
+                    break;
+            }
+            
+            Logger::GetInstance().Info(TAG, "  Device %d (%s): ACTIVE, %s", 
+                i, device_type,
+                is_initialized ? "INITIALIZED" : "NOT_INITIALIZED");
+            
+            active_devices++;
+            if (is_initialized) initialized_devices++;
+            
+            // Get driver statistics if available
+            auto driver = driver(i);
+            if (driver) {
+                Logger::GetInstance().Info(TAG, "    Driver: CONNECTED");
+                
+                // Get basic TMC9660 information if available
+                // Note: Add more detailed statistics here based on TMC9660 capabilities
+            } else {
+                Logger::GetInstance().Info(TAG, "    Driver: NOT_AVAILABLE");
+            }
+        } else if (i == ONBOARD_TMC9660_INDEX) {
+            Logger::GetInstance().Info(TAG, "  Device %d (Onboard TMC9660): NOT_ACTIVE", i);
+        } else if (i == EXTERNAL_DEVICE_1_INDEX || i == EXTERNAL_DEVICE_2_INDEX) {
+            Logger::GetInstance().Info(TAG, "  Device %d (External Device %d): NOT_CREATED", 
+                i, i == EXTERNAL_DEVICE_1_INDEX ? 1 : 2);
+        }
+    }
+    
+    // Overall Statistics
+    Logger::GetInstance().Info(TAG, "Overall Statistics:");
+    Logger::GetInstance().Info(TAG, "  Active Devices: %d", active_devices);
+    Logger::GetInstance().Info(TAG, "  Initialized Devices: %d", initialized_devices);
+    Logger::GetInstance().Info(TAG, "  Max Possible Devices: %d", MAX_TMC9660_DEVICES);
+    
+    // Device Index Information
+    auto active_indices = GetActiveDeviceIndices();
+    if (!active_indices.empty()) {
+        Logger::GetInstance().Info(TAG, "  Active Device Indices: ");
+        for (size_t i = 0; i < active_indices.size(); ++i) {
+            Logger::GetInstance().Info(TAG, "    [%d]", active_indices[i]);
+        }
+    }
+    
+    // Memory Usage
+    Logger::GetInstance().Info(TAG, "Memory Usage:");
+    size_t handler_memory = 0;
+    for (uint8_t i = 0; i < MAX_TMC9660_DEVICES; ++i) {
+        if (tmcHandlers_[i] != nullptr) {
+            handler_memory += sizeof(Tmc9660Handler);
+        }
+    }
+    Logger::GetInstance().Info(TAG, "  Handler Memory: %d bytes", static_cast<int>(handler_memory));
+    
+    // Hardware Configuration
+    Logger::GetInstance().Info(TAG, "Hardware Configuration:");
+    Logger::GetInstance().Info(TAG, "  Communication: SPI via CommChannelsManager");
+    Logger::GetInstance().Info(TAG, "  Onboard CS: TMC9660_MOTOR_CONTROLLER");
+    Logger::GetInstance().Info(TAG, "  External CS 1: EXTERNAL_DEVICE_1");
+    Logger::GetInstance().Info(TAG, "  External CS 2: EXTERNAL_DEVICE_2");
+    
+    // System Status
+    bool system_healthy = initialized_ && (active_devices > 0) && (initialized_devices == active_devices);
+    Logger::GetInstance().Info(TAG, "System Status: %s", 
+        system_healthy ? "HEALTHY" : "DEGRADED");
+    
+    Logger::GetInstance().Info(TAG, "=== END MOTOR CONTROLLER STATISTICS ===");
+}

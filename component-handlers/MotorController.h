@@ -129,6 +129,12 @@ public:
      * @return Vector of initialization status for each active device
      */
     std::vector<bool> GetInitializationStatus() const;
+    
+    /**
+     * @brief Dump comprehensive system statistics to log as INFO level.
+     * Logs all device statistics, handler status, and system health information.
+     */
+    void DumpStatistics() const noexcept;
 
 private:
     MotorController();

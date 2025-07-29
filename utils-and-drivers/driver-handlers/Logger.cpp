@@ -579,4 +579,90 @@ std::unique_ptr<BaseLogger> Logger::CreateBaseLogger() noexcept {
 #else
     return nullptr; // Fallback for other platforms
 #endif
+}
+
+void Logger::DumpStatistics() const noexcept {
+    static constexpr const char* TAG = "Logger";
+    
+    // Use direct output since we're logging the logger itself
+    if (!base_logger_) {
+        printf("[%s] ERROR: Logger not initialized, cannot dump statistics\n", TAG);
+        return;
+    }
+    
+    printf("[%s] INFO: === LOGGER STATISTICS ===\n", TAG);
+    
+    // System Health
+    printf("[%s] INFO: System Health:\n", TAG);
+    printf("[%s] INFO:   Initialized: %s\n", TAG, initialized_ ? "YES" : "NO");
+    printf("[%s] INFO:   Base Logger: %s\n", TAG, base_logger_ ? "ACTIVE" : "INACTIVE");
+    
+    // Configuration
+    printf("[%s] INFO: Configuration:\n", TAG);
+    printf("[%s] INFO:   Default Log Level: %s\n", TAG, 
+        config_.level == LogLevel::ERROR ? "ERROR" :
+        config_.level == LogLevel::WARN ? "WARN" :
+        config_.level == LogLevel::INFO ? "INFO" :
+        config_.level == LogLevel::DEBUG ? "DEBUG" :
+        config_.level == LogLevel::VERBOSE ? "VERBOSE" : "UNKNOWN");
+    
+    printf("[%s] INFO:   Colors Enabled: %s\n", TAG, config_.enable_colors ? "YES" : "NO");
+    printf("[%s] INFO:   Effects Enabled: %s\n", TAG, config_.enable_effects ? "YES" : "NO");
+    printf("[%s] INFO:   ASCII Art Enabled: %s\n", TAG, config_.enable_ascii_art ? "YES" : "NO");
+    printf("[%s] INFO:   Max Width: %d\n", TAG, config_.max_width);
+    printf("[%s] INFO:   Border Character: '%c'\n", TAG, config_.border_char);
+    
+    // Tag-specific levels
+    printf("[%s] INFO: Tag-specific Log Levels:\n", TAG);
+    if (tag_levels_.empty()) {
+        printf("[%s] INFO:   No tag-specific levels configured\n", TAG);
+    } else {
+        printf("[%s] INFO:   %d tag-specific levels configured:\n", TAG, static_cast<int>(tag_levels_.size()));
+        int count = 0;
+        for (const auto& pair : tag_levels_) {
+            if (count >= 10) { // Limit output to prevent spam
+                printf("[%s] INFO:   ... and %d more\n", TAG, static_cast<int>(tag_levels_.size()) - count);
+                break;
+            }
+            const char* level_str = 
+                pair.second == LogLevel::ERROR ? "ERROR" :
+                pair.second == LogLevel::WARN ? "WARN" :
+                pair.second == LogLevel::INFO ? "INFO" :
+                pair.second == LogLevel::DEBUG ? "DEBUG" :
+                pair.second == LogLevel::VERBOSE ? "VERBOSE" : "UNKNOWN";
+            printf("[%s] INFO:     %s: %s\n", TAG, pair.first.c_str(), level_str);
+            count++;
+        }
+    }
+    
+    // Memory Usage
+    printf("[%s] INFO: Memory Usage:\n", TAG);
+    size_t config_memory = sizeof(config_);
+    size_t tag_levels_memory = tag_levels_.size() * (sizeof(std::string) + sizeof(LogLevel));
+    size_t total_memory = sizeof(*this) + tag_levels_memory;
+    
+    printf("[%s] INFO:   Logger Instance: %d bytes\n", TAG, static_cast<int>(sizeof(*this)));
+    printf("[%s] INFO:   Configuration: %d bytes\n", TAG, static_cast<int>(config_memory));
+    printf("[%s] INFO:   Tag Levels Map: %d bytes\n", TAG, static_cast<int>(tag_levels_memory));
+    printf("[%s] INFO:   Total Estimated: %d bytes\n", TAG, static_cast<int>(total_memory));
+    
+    // Platform Information
+    printf("[%s] INFO: Platform Information:\n", TAG);
+#ifdef HF_MCU_FAMILY_ESP32
+    printf("[%s] INFO:   Platform: ESP32\n", TAG);
+    printf("[%s] INFO:   Base Logger Type: EspLogger\n", TAG);
+#else
+    printf("[%s] INFO:   Platform: Other\n", TAG);
+    printf("[%s] INFO:   Base Logger Type: Generic\n", TAG);
+#endif
+    
+    // Feature Support
+    printf("[%s] INFO: Feature Support:\n", TAG);
+    printf("[%s] INFO:   ANSI Colors: %s\n", TAG, "SUPPORTED");
+    printf("[%s] INFO:   Text Styles: %s\n", TAG, "SUPPORTED");
+    printf("[%s] INFO:   ASCII Art: %s\n", TAG, "SUPPORTED");
+    printf("[%s] INFO:   Formatted Output: %s\n", TAG, "SUPPORTED");
+    printf("[%s] INFO:   Thread Safety: %s\n", TAG, "SUPPORTED");
+    
+    printf("[%s] INFO: === END LOGGER STATISTICS ===\n", TAG);
 } 

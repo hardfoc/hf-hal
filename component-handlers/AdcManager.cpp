@@ -1030,3 +1030,78 @@ hf_adc_err_t AdcManager::RegisterPlatformChannels() noexcept {
     
     return overall_result;
 }
+
+void AdcManager::DumpStatistics() const noexcept {
+    static constexpr const char* TAG = "AdcManager";
+    
+    Logger::GetInstance().Info(TAG, "=== ADC MANAGER STATISTICS ===");
+    
+    RtosMutex::LockGuard lock(mutex_);
+    
+    // System Health
+    Logger::GetInstance().Info(TAG, "System Health:");
+    Logger::GetInstance().Info(TAG, "  Initialized: %s", is_initialized_.load() ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Total Channels Registered: %d", static_cast<int>(adc_channels_.size()));
+    
+    // Operation Statistics
+    uint32_t total_ops = total_operations_.load();
+    uint32_t success_ops = successful_operations_.load();
+    uint32_t failed_ops = failed_operations_.load();
+    
+    Logger::GetInstance().Info(TAG, "Operation Statistics:");
+    Logger::GetInstance().Info(TAG, "  Total Operations: %d", total_ops);
+    Logger::GetInstance().Info(TAG, "  Successful Operations: %d", success_ops);
+    Logger::GetInstance().Info(TAG, "  Failed Operations: %d", failed_ops);
+    
+    if (total_ops > 0) {
+        float success_rate = (float)success_ops / total_ops * 100.0f;
+        Logger::GetInstance().Info(TAG, "  Success Rate: %.2f%%", success_rate);
+    }
+    
+    // Error Statistics
+    Logger::GetInstance().Info(TAG, "Error Statistics:");
+    Logger::GetInstance().Info(TAG, "  Communication Errors: %d", communication_errors_.load());
+    Logger::GetInstance().Info(TAG, "  Hardware Errors: %d", hardware_errors_.load());
+    Logger::GetInstance().Info(TAG, "  Last Error: %s", adc_err_to_string(last_error_.load()));
+    
+    // Channel Statistics Summary
+    Logger::GetInstance().Info(TAG, "Channel Statistics Summary:");
+    std::vector<std::pair<std::string, BaseAdc::AdcStatistics>> channel_stats;
+    
+    for (const auto& pair : adc_channels_) {
+        BaseAdc::AdcStatistics stats;
+        if (pair.second.adc && pair.second.adc->GetStatistics(stats) == hf_adc_err_t::ADC_SUCCESS) {
+            channel_stats.emplace_back(pair.first, stats);
+        }
+    }
+    
+    // Sort by total operations
+    std::sort(channel_stats.begin(), channel_stats.end(), 
+        [](const auto& a, const auto& b) {
+            return (a.second.total_operations) > (b.second.total_operations);
+        });
+    
+    int channels_to_show = std::min(5, static_cast<int>(channel_stats.size()));
+    if (channels_to_show > 0) {
+        Logger::GetInstance().Info(TAG, "  Top %d Most Active Channels:", channels_to_show);
+        for (int i = 0; i < channels_to_show; ++i) {
+            const auto& channel = channel_stats[i];
+            Logger::GetInstance().Info(TAG, "    %s: %d ops (success: %d, failed: %d)", 
+                channel.first.c_str(), 
+                channel.second.total_operations,
+                channel.second.successful_operations,
+                channel.second.failed_operations);
+        }
+    } else {
+        Logger::GetInstance().Info(TAG, "  No channel statistics available");
+    }
+    
+    // System Health Summary
+    std::string health_info;
+    if (GetSystemHealth(health_info) == hf_adc_err_t::ADC_SUCCESS) {
+        Logger::GetInstance().Info(TAG, "System Health Summary:");
+        Logger::GetInstance().Info(TAG, "  %s", health_info.c_str());
+    }
+    
+    Logger::GetInstance().Info(TAG, "=== END ADC MANAGER STATISTICS ===");
+}
