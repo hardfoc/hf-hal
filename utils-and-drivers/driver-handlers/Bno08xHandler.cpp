@@ -21,6 +21,7 @@
 #include <cmath>
 #include <algorithm>
 #include "utils/RtosTask.h"
+#include "utils-and-drivers/driver-handlers/Logger.h"
 
 // Include SH2 error codes for proper error handling
 extern "C" {
@@ -879,4 +880,119 @@ std::unique_ptr<Bno08xHandler> CreateBno08xHandlerSpi(
     BaseGpio* int_gpio) noexcept {
     
     return std::make_unique<Bno08xHandler>(spi_interface, config, wake_gpio, reset_gpio, int_gpio);
+}
+
+void Bno08xHandler::DumpDiagnostics() const noexcept {
+    static constexpr const char* TAG = "Bno08xHandler";
+    
+    Logger::GetInstance().Info(TAG, "=== BNO08X HANDLER DIAGNOSTICS ===");
+    
+    RtosMutex::LockGuard lock(handler_mutex_);
+    
+    // System Health
+    Logger::GetInstance().Info(TAG, "System Health:");
+    Logger::GetInstance().Info(TAG, "  Initialized: %s", initialized_ ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Last Error: %s", 
+        last_error_ == Bno08xError::SUCCESS ? "SUCCESS" :
+        last_error_ == Bno08xError::NOT_INITIALIZED ? "NOT_INITIALIZED" :
+        last_error_ == Bno08xError::COMMUNICATION_ERROR ? "COMMUNICATION_ERROR" :
+        last_error_ == Bno08xError::SENSOR_ERROR ? "SENSOR_ERROR" :
+        last_error_ == Bno08xError::INVALID_PARAMETER ? "INVALID_PARAMETER" :
+        last_error_ == Bno08xError::TIMEOUT ? "TIMEOUT" : "UNKNOWN");
+    
+    // Interface Type
+    Logger::GetInstance().Info(TAG, "Communication Interface:");
+    if (i2c_adapter_) {
+        Logger::GetInstance().Info(TAG, "  Type: I2C");
+        Logger::GetInstance().Info(TAG, "  I2C Adapter: ACTIVE");
+    } else if (spi_adapter_) {
+        Logger::GetInstance().Info(TAG, "  Type: SPI");
+        Logger::GetInstance().Info(TAG, "  SPI Adapter: ACTIVE");
+    } else {
+        Logger::GetInstance().Info(TAG, "  Type: NONE");
+    }
+    
+    // GPIO Status
+    Logger::GetInstance().Info(TAG, "GPIO Configuration:");
+    Logger::GetInstance().Info(TAG, "  Reset GPIO: %s", reset_gpio_ ? "CONFIGURED" : "NOT_CONFIGURED");
+    Logger::GetInstance().Info(TAG, "  Interrupt GPIO: %s", int_gpio_ ? "CONFIGURED" : "NOT_CONFIGURED");
+    Logger::GetInstance().Info(TAG, "  Wake GPIO: %s", wake_gpio_ ? "CONFIGURED" : "NOT_CONFIGURED");
+    
+    // Sensor Configuration
+    Logger::GetInstance().Info(TAG, "Sensor Configuration:");
+    Logger::GetInstance().Info(TAG, "  Description: %s", description_);
+    Logger::GetInstance().Info(TAG, "  Sample Rate: %d Hz", config_.sample_rate_hz);
+    Logger::GetInstance().Info(TAG, "  Enable Game Rotation: %s", config_.enable_game_rotation ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Enable Accelerometer: %s", config_.enable_accelerometer ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Enable Gyroscope: %s", config_.enable_gyroscope ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Enable Magnetometer: %s", config_.enable_magnetometer ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Enable Linear Accel: %s", config_.enable_linear_acceleration ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Enable Gravity: %s", config_.enable_gravity ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Enable Rotation Vector: %s", config_.enable_rotation_vector ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Enable Step Counter: %s", config_.enable_step_counter ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Enable Tap Detection: %s", config_.enable_tap_detection ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Enable Shake Detection: %s", config_.enable_shake_detection ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Enable Stability: %s", config_.enable_stability_detection ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Enable Activity: %s", config_.enable_activity_classification ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Auto Calibrate: %s", config_.auto_calibrate ? "YES" : "NO");
+    
+    // Driver Status
+    Logger::GetInstance().Info(TAG, "BNO08x Driver:");
+    if (bno08x_sensor_) {
+        Logger::GetInstance().Info(TAG, "  Driver Instance: ACTIVE");
+        
+        // Try to get sensor information if available
+        // Note: Add more BNO08x-specific diagnostics here based on driver capabilities
+    } else {
+        Logger::GetInstance().Info(TAG, "  Driver Instance: NOT_INITIALIZED");
+    }
+    
+    // Diagnostics Information
+    Logger::GetInstance().Info(TAG, "Sensor Diagnostics:");
+    Logger::GetInstance().Info(TAG, "  Sensor Healthy: %s", diagnostics_.sensor_healthy ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Communication OK: %s", diagnostics_.communication_ok ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Calibration OK: %s", diagnostics_.calibration_ok ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Data Available: %s", diagnostics_.data_available ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Communication Errors: %d", diagnostics_.communication_errors);
+    Logger::GetInstance().Info(TAG, "  Sensor Errors: %d", diagnostics_.sensor_errors);
+    Logger::GetInstance().Info(TAG, "  Total Measurements: %d", diagnostics_.total_measurements);
+    Logger::GetInstance().Info(TAG, "  Last Error Code: 0x%04X", diagnostics_.last_error_code);
+    
+    // Calibration Status
+    Logger::GetInstance().Info(TAG, "Calibration Status:");
+    Logger::GetInstance().Info(TAG, "  Accel Calibrated: %s", calibration_status_.accelerometer_calibrated ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Gyro Calibrated: %s", calibration_status_.gyroscope_calibrated ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Mag Calibrated: %s", calibration_status_.magnetometer_calibrated ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  System Calibrated: %s", calibration_status_.system_calibrated ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Accel Accuracy: %d", calibration_status_.accelerometer_accuracy);
+    Logger::GetInstance().Info(TAG, "  Gyro Accuracy: %d", calibration_status_.gyroscope_accuracy);
+    Logger::GetInstance().Info(TAG, "  Mag Accuracy: %d", calibration_status_.magnetometer_accuracy);
+    Logger::GetInstance().Info(TAG, "  System Accuracy: %d", calibration_status_.system_accuracy);
+    
+    // Performance Metrics
+    if (diagnostics_.total_measurements > 0) {
+        float error_rate = (float)(diagnostics_.communication_errors + diagnostics_.sensor_errors) / 
+                          diagnostics_.total_measurements * 100.0f;
+        Logger::GetInstance().Info(TAG, "Performance Metrics:");
+        Logger::GetInstance().Info(TAG, "  Error Rate: %.2f%%", error_rate);
+        Logger::GetInstance().Info(TAG, "  Success Rate: %.2f%%", 100.0f - error_rate);
+    }
+    
+    // Memory Usage
+    Logger::GetInstance().Info(TAG, "Memory Usage:");
+    size_t estimated_memory = sizeof(*this);
+    if (bno08x_sensor_) estimated_memory += sizeof(BNO085);
+    if (i2c_adapter_) estimated_memory += sizeof(Bno08xI2cAdapter);
+    if (spi_adapter_) estimated_memory += sizeof(Bno08xSpiAdapter);
+    Logger::GetInstance().Info(TAG, "  Estimated Total: %d bytes", static_cast<int>(estimated_memory));
+    
+    // System Status Summary
+    bool system_healthy = initialized_ && 
+                         (last_error_ == Bno08xError::SUCCESS) &&
+                         diagnostics_.sensor_healthy &&
+                         diagnostics_.communication_ok;
+    
+    Logger::GetInstance().Info(TAG, "System Status: %s", system_healthy ? "HEALTHY" : "DEGRADED");
+    
+    Logger::GetInstance().Info(TAG, "=== END BNO08X HANDLER DIAGNOSTICS ===");
 }

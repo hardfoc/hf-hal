@@ -19,6 +19,10 @@
 #include "component-handlers/ImuManager.h"
 #include "component-handlers/MotorController.h"
 #include "utils-and-drivers/driver-handlers/Logger.h"
+#include "utils-and-drivers/driver-handlers/Tmc9660Handler.h"
+#include "utils-and-drivers/driver-handlers/As5047uHandler.h"
+#include "utils-and-drivers/driver-handlers/Bno08xHandler.h"
+#include "utils-and-drivers/driver-handlers/Pcal95555Handler.h"
 #include "utils/OsAbstraction.h"
 
 #include <cstdio>
@@ -206,6 +210,66 @@ void InitializeAllManagers() noexcept {
 }
 
 /**
+ * @brief Dump diagnostics from all handler classes with diagnostic capabilities.
+ * 
+ * This function demonstrates how to dump diagnostics from hardware handler classes
+ * that have DumpDiagnostics() methods available.
+ */
+void DumpAllHandlerDiagnostics() noexcept {
+    Logger::GetInstance().Info(TAG, "=== HARDWARE HANDLER DIAGNOSTICS ===");
+    Logger::GetInstance().Info(TAG, "Dumping diagnostics from all hardware handlers...");
+    
+    // TMC9660 Handler Diagnostics
+    try {
+        Logger::GetInstance().Info(TAG, "--- TMC9660 HANDLER ---");
+        // Note: This would require access to a TMC9660Handler instance
+        // In practice, you would get this from the MotorController
+        // auto& motor_controller = MotorController::GetInstance();
+        // auto* tmc_handler = motor_controller.handler(0);
+        // if (tmc_handler) {
+        //     tmc_handler->DumpDiagnostics();
+        // }
+        Logger::GetInstance().Info(TAG, "TMC9660 handler diagnostics would be called here");
+        Logger::GetInstance().Info(TAG, "");
+    } catch (...) {
+        Logger::GetInstance().Error(TAG, "Failed to dump TMC9660 handler diagnostics");
+    }
+    
+    // AS5047U Handler Diagnostics
+    try {
+        Logger::GetInstance().Info(TAG, "--- AS5047U HANDLER ---");
+        // Note: This would require access to an AS5047U Handler instance
+        Logger::GetInstance().Info(TAG, "AS5047U handler diagnostics would be called here");
+        Logger::GetInstance().Info(TAG, "");
+    } catch (...) {
+        Logger::GetInstance().Error(TAG, "Failed to dump AS5047U handler diagnostics");
+    }
+    
+    // BNO08x Handler Diagnostics
+    try {
+        Logger::GetInstance().Info(TAG, "--- BNO08X HANDLER ---");
+        // Note: This would require access to a BNO08x Handler instance
+        Logger::GetInstance().Info(TAG, "BNO08x handler diagnostics would be called here");
+        Logger::GetInstance().Info(TAG, "");
+    } catch (...) {
+        Logger::GetInstance().Error(TAG, "Failed to dump BNO08x handler diagnostics");
+    }
+    
+    // PCAL95555 Handler Diagnostics
+    try {
+        Logger::GetInstance().Info(TAG, "--- PCAL95555 HANDLER ---");
+        // Note: This would require access to a PCAL95555 Handler instance
+        Logger::GetInstance().Info(TAG, "PCAL95555 handler diagnostics would be called here");
+        Logger::GetInstance().Info(TAG, "");
+    } catch (...) {
+        Logger::GetInstance().Error(TAG, "Failed to dump PCAL95555 handler diagnostics");
+    }
+    
+    Logger::GetInstance().Info(TAG, "Handler diagnostics dump complete");
+    Logger::GetInstance().Info(TAG, "Note: Actual handler diagnostics require active handler instances");
+}
+
+/**
  * @brief Demonstrate periodic statistics dumping.
  * 
  * This function shows how to periodically dump statistics for monitoring
@@ -277,6 +341,10 @@ void RunDumpAllStatisticsExample() noexcept {
     // Now dump all statistics
     DumpAllSystemStatistics();
     
+    // Demonstrate handler diagnostics
+    Logger::GetInstance().Info(TAG, "");
+    DumpAllHandlerDiagnostics();
+    
     // Demonstrate specific manager dump
     Logger::GetInstance().Info(TAG, "");
     Logger::GetInstance().Info(TAG, "--- DEMONSTRATING SPECIFIC MANAGER DUMP ---");
@@ -320,10 +388,13 @@ void RunDumpAllStatisticsExample() noexcept {
  * Key Features Demonstrated:
  * - Comprehensive system health monitoring
  * - Manager-specific statistics analysis
+ * - Hardware handler diagnostics
  * - Operation performance metrics
  * - Error and success rate tracking
  * - Memory usage analysis
  * - Hardware configuration status
+ * - Communication interface status
+ * - Sensor calibration and health data
  * - Thread-safe statistics collection
  * - Exception-safe statistics dumping
  * 

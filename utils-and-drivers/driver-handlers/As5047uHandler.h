@@ -512,6 +512,12 @@ public:
      * @return Last error that occurred
      */
     As5047uError GetLastError() const noexcept;
+    
+    /**
+     * @brief Dump comprehensive diagnostics and statistics to log as INFO level.
+     * Logs AS5047U sensor status, communication health, and measurement statistics.
+     */
+    void DumpDiagnostics() const noexcept;
 
 private:
     //======================================================//

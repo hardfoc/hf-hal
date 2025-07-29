@@ -1,6 +1,7 @@
 #include "Pcal95555Handler.h"
 #include <cstring>
 #include <vector>
+#include "utils-and-drivers/driver-handlers/Logger.h"
 
 // ================= Pcal95555I2cAdapter =================
 bool Pcal95555I2cAdapter::write(uint8_t addr, uint8_t reg, const uint8_t* data, size_t len) {
@@ -834,4 +835,108 @@ hf_bool_t Pcal95555Handler::PowerDown() noexcept {
     MutexLockGuard lock(handler_mutex_);
     if (!pcal95555_driver_) return false;
     return pcal95555_driver_->powerDown();
-} 
+}
+
+void Pcal95555Handler::DumpDiagnostics() const noexcept {
+    static constexpr const char* TAG = "Pcal95555Handler";
+    
+    Logger::GetInstance().Info(TAG, "=== PCAL95555 HANDLER DIAGNOSTICS ===");
+    
+    MutexLockGuard lock(handler_mutex_);
+    
+    // System Health
+    Logger::GetInstance().Info(TAG, "System Health:");
+    Logger::GetInstance().Info(TAG, "  Initialized: %s", initialized_ ? "YES" : "NO");
+    
+    // I2C Interface
+    Logger::GetInstance().Info(TAG, "I2C Interface:");
+    if (i2c_adapter_) {
+        Logger::GetInstance().Info(TAG, "  I2C Adapter: ACTIVE");
+        Logger::GetInstance().Info(TAG, "  Device Address: 0x%02X", i2c_adapter_->GetDeviceAddress());
+    } else {
+        Logger::GetInstance().Info(TAG, "  I2C Adapter: NOT_INITIALIZED");
+    }
+    
+    // Driver Status
+    Logger::GetInstance().Info(TAG, "PCAL95555 Driver:");
+    if (pcal95555_driver_) {
+        Logger::GetInstance().Info(TAG, "  Driver Instance: ACTIVE");
+    } else {
+        Logger::GetInstance().Info(TAG, "  Driver Instance: NOT_INITIALIZED");
+    }
+    
+    // Pin Registry Status
+    Logger::GetInstance().Info(TAG, "Pin Registry:");
+    int active_pins = 0;
+    for (size_t i = 0; i < pin_registry_.size(); ++i) {
+        if (pin_registry_[i] != nullptr) {
+            active_pins++;
+        }
+    }
+    Logger::GetInstance().Info(TAG, "  Active Pin Objects: %d/%d", active_pins, static_cast<int>(pin_registry_.size()));
+    
+    // Interrupt Configuration
+    Logger::GetInstance().Info(TAG, "Interrupt Configuration:");
+    Logger::GetInstance().Info(TAG, "  Hardware Interrupt Pin: %s", interrupt_pin_ ? "CONFIGURED" : "NOT_CONFIGURED");
+    Logger::GetInstance().Info(TAG, "  Interrupt System: %s", interrupt_configured_ ? "ENABLED" : "DISABLED");
+    
+    // Pin Configuration Summary
+    int configured_interrupts = 0;
+    for (size_t i = 0; i < pin_callbacks_.size(); ++i) {
+        if (pin_callbacks_[i] != nullptr) {
+            configured_interrupts++;
+        }
+    }
+    Logger::GetInstance().Info(TAG, "  Pins with Interrupts: %d", configured_interrupts);
+    
+    // Pin Details (show first few active pins)
+    Logger::GetInstance().Info(TAG, "Pin Details (first 8 active pins):");
+    int pins_shown = 0;
+    for (size_t i = 0; i < pin_registry_.size() && pins_shown < 8; ++i) {
+        if (pin_registry_[i] != nullptr) {
+            bool has_interrupt = pin_callbacks_[i] != nullptr;
+            const char* trigger_str = "NONE";
+            if (pin_triggers_[i] == hf_gpio_interrupt_trigger_t::HF_GPIO_INTERRUPT_TRIGGER_RISING_EDGE) {
+                trigger_str = "RISING";
+            } else if (pin_triggers_[i] == hf_gpio_interrupt_trigger_t::HF_GPIO_INTERRUPT_TRIGGER_FALLING_EDGE) {
+                trigger_str = "FALLING";
+            } else if (pin_triggers_[i] == hf_gpio_interrupt_trigger_t::HF_GPIO_INTERRUPT_TRIGGER_BOTH_EDGES) {
+                trigger_str = "BOTH";
+            }
+            
+            Logger::GetInstance().Info(TAG, "    Pin %d: ACTIVE, Interrupt: %s, Trigger: %s", 
+                static_cast<int>(i), has_interrupt ? "YES" : "NO", trigger_str);
+            pins_shown++;
+        }
+    }
+    
+    if (pins_shown == 0) {
+        Logger::GetInstance().Info(TAG, "    No active pins found");
+    }
+    
+    // Memory Usage
+    Logger::GetInstance().Info(TAG, "Memory Usage:");
+    size_t estimated_memory = sizeof(*this);
+    if (pcal95555_driver_) estimated_memory += sizeof(PCAL95555);
+    if (i2c_adapter_) estimated_memory += sizeof(Pcal95555I2cAdapter);
+    
+    // Estimate pin object memory
+    estimated_memory += active_pins * sizeof(Pcal95555GpioPin);
+    
+    Logger::GetInstance().Info(TAG, "  Estimated Total: %d bytes", static_cast<int>(estimated_memory));
+    Logger::GetInstance().Info(TAG, "  Pin Objects: %d x %d bytes", active_pins, static_cast<int>(sizeof(Pcal95555GpioPin)));
+    
+    // Hardware Status
+    Logger::GetInstance().Info(TAG, "Hardware Status:");
+    Logger::GetInstance().Info(TAG, "  Max Pins Supported: %d", static_cast<int>(pin_registry_.size()));
+    Logger::GetInstance().Info(TAG, "  I2C Communication: %s", i2c_adapter_ ? "READY" : "NOT_READY");
+    
+    // System Status Summary
+    bool system_healthy = initialized_ && 
+                         (pcal95555_driver_ != nullptr) &&
+                         (i2c_adapter_ != nullptr);
+    
+    Logger::GetInstance().Info(TAG, "System Status: %s", system_healthy ? "HEALTHY" : "DEGRADED");
+    
+    Logger::GetInstance().Info(TAG, "=== END PCAL95555 HANDLER DIAGNOSTICS ===");
+}

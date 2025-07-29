@@ -25,6 +25,7 @@
 #include <cstring>
 #include <algorithm>
 #include <cmath>
+#include "utils-and-drivers/driver-handlers/Logger.h"
 
 //======================================================//
 // AS5047U SPI ADAPTER IMPLEMENTATION
@@ -747,4 +748,94 @@ bool As5047uHandler::ApplyConfiguration(const As5047uConfig& config) noexcept {
 
 std::unique_ptr<As5047uHandler> CreateAs5047uHandler(BaseSpi& spi_interface, const As5047uConfig& config) noexcept {
     return std::make_unique<As5047uHandler>(spi_interface, config);
+}
+
+void As5047uHandler::DumpDiagnostics() const noexcept {
+    static constexpr const char* TAG = "As5047uHandler";
+    
+    Logger::GetInstance().Info(TAG, "=== AS5047U HANDLER DIAGNOSTICS ===");
+    
+    RtosMutex::LockGuard lock(handler_mutex_);
+    
+    // System Health
+    Logger::GetInstance().Info(TAG, "System Health:");
+    Logger::GetInstance().Info(TAG, "  Initialized: %s", initialized_ ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Last Error: %s", 
+        last_error_ == As5047uError::SUCCESS ? "SUCCESS" :
+        last_error_ == As5047uError::NOT_INITIALIZED ? "NOT_INITIALIZED" :
+        last_error_ == As5047uError::COMMUNICATION_ERROR ? "COMMUNICATION_ERROR" :
+        last_error_ == As5047uError::SENSOR_ERROR ? "SENSOR_ERROR" :
+        last_error_ == As5047uError::INVALID_PARAMETER ? "INVALID_PARAMETER" :
+        last_error_ == As5047uError::TIMEOUT ? "TIMEOUT" : "UNKNOWN");
+    
+    // Sensor Status
+    Logger::GetInstance().Info(TAG, "Sensor Status:");
+    if (as5047u_sensor_) {
+        Logger::GetInstance().Info(TAG, "  Driver Instance: ACTIVE");
+        Logger::GetInstance().Info(TAG, "  Description: %s", description_);
+    } else {
+        Logger::GetInstance().Info(TAG, "  Driver Instance: NOT_INITIALIZED");
+    }
+    
+    // Configuration
+    Logger::GetInstance().Info(TAG, "Configuration:");
+    Logger::GetInstance().Info(TAG, "  Frame Format: %s",
+        config_.frame_format == FrameFormat::FRAME_16BIT ? "16-bit" :
+        config_.frame_format == FrameFormat::FRAME_24BIT ? "24-bit" :
+        config_.frame_format == FrameFormat::FRAME_32BIT ? "32-bit" : "Unknown");
+    Logger::GetInstance().Info(TAG, "  CRC Retries: %d", config_.crc_retries);
+    Logger::GetInstance().Info(TAG, "  DAEC Enabled: %s", config_.enable_daec ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Adaptive Filter: %s", config_.enable_adaptive_filter ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Zero Position: %d", config_.zero_position);
+    Logger::GetInstance().Info(TAG, "  ABI Output: %s", config_.enable_abi_output ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  UVW Output: %s", config_.enable_uvw_output ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  PWM Output: %s", config_.enable_pwm_output ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  ABI Resolution: %d bits", config_.abi_resolution_bits);
+    Logger::GetInstance().Info(TAG, "  UVW Pole Pairs: %d", config_.uvw_pole_pairs);
+    Logger::GetInstance().Info(TAG, "  High Temp Mode: %s", config_.high_temperature_mode ? "YES" : "NO");
+    
+    // Diagnostics Information
+    Logger::GetInstance().Info(TAG, "Sensor Diagnostics:");
+    Logger::GetInstance().Info(TAG, "  Magnetic Field OK: %s", diagnostics_.magnetic_field_ok ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  AGC Warning: %s", diagnostics_.agc_warning ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  CORDIC Overflow: %s", diagnostics_.cordic_overflow ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Offset Compensation OK: %s", diagnostics_.offset_compensation_ok ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Communication OK: %s", diagnostics_.communication_ok ? "YES" : "NO");
+    Logger::GetInstance().Info(TAG, "  Last Error Flags: 0x%04X", diagnostics_.last_error_flags);
+    Logger::GetInstance().Info(TAG, "  Communication Errors: %d", diagnostics_.communication_errors);
+    Logger::GetInstance().Info(TAG, "  Total Measurements: %d", diagnostics_.total_measurements);
+    
+    // SPI Interface Status
+    Logger::GetInstance().Info(TAG, "SPI Interface:");
+    if (spi_adapter_) {
+        Logger::GetInstance().Info(TAG, "  SPI Adapter: ACTIVE");
+    } else {
+        Logger::GetInstance().Info(TAG, "  SPI Adapter: NOT_INITIALIZED");
+    }
+    
+    // Performance Metrics
+    if (diagnostics_.total_measurements > 0) {
+        float error_rate = (float)diagnostics_.communication_errors / diagnostics_.total_measurements * 100.0f;
+        Logger::GetInstance().Info(TAG, "Performance Metrics:");
+        Logger::GetInstance().Info(TAG, "  Error Rate: %.2f%%", error_rate);
+        Logger::GetInstance().Info(TAG, "  Success Rate: %.2f%%", 100.0f - error_rate);
+    }
+    
+    // Memory Usage
+    Logger::GetInstance().Info(TAG, "Memory Usage:");
+    size_t estimated_memory = sizeof(*this);
+    if (as5047u_sensor_) estimated_memory += sizeof(AS5047U);
+    if (spi_adapter_) estimated_memory += sizeof(As5047uSpiAdapter);
+    Logger::GetInstance().Info(TAG, "  Estimated Total: %d bytes", static_cast<int>(estimated_memory));
+    
+    // System Status Summary
+    bool system_healthy = initialized_ && 
+                         (last_error_ == As5047uError::SUCCESS) &&
+                         diagnostics_.magnetic_field_ok &&
+                         diagnostics_.communication_ok &&
+                         !diagnostics_.cordic_overflow;
+    
+    Logger::GetInstance().Info(TAG, "System Status: %s", system_healthy ? "HEALTHY" : "DEGRADED");
+    
+    Logger::GetInstance().Info(TAG, "=== END AS5047U HANDLER DIAGNOSTICS ===");
 }

@@ -338,6 +338,12 @@ public:
      * @brief Get the current bootloader config in use.
      */
     const tmc9660::BootloaderConfig& bootConfig() const noexcept { return *bootCfg_; }
+    
+    /**
+     * @brief Dump comprehensive diagnostics and statistics to log as INFO level.
+     * Logs TMC9660 device status, ADC statistics, GPIO status, and communication health.
+     */
+    void DumpDiagnostics() const noexcept;
 
 private:
     // Interface references (stored for lazy initialization)

@@ -380,6 +380,12 @@ private:
      * Called from hardware interrupt handler.
      */
     void ProcessInterrupts() noexcept;
+    
+    /**
+     * @brief Dump comprehensive diagnostics and statistics to log as INFO level.
+     * Logs PCAL95555 GPIO expander status, pin configurations, and communication health.
+     */
+    void DumpDiagnostics() const noexcept;
 
     /**
      * @brief Architecture Note: Address Handling

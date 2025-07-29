@@ -700,6 +700,13 @@ private:
      * @return True if conversion successful
      */
     bool ConvertSensorEvent(const SensorEvent& event, BNO085Sensor sensor) noexcept;
+
+public:
+    /**
+     * @brief Dump comprehensive diagnostics and statistics to log as INFO level.
+     * Logs BNO08x sensor status, communication health, and measurement statistics.
+     */
+    void DumpDiagnostics() const noexcept;
 };
 
 //======================================================//
