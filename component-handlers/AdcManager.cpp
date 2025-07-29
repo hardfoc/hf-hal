@@ -67,14 +67,16 @@ AdcManager& AdcManager::GetInstance() noexcept {
 }
 
 hf_adc_err_t AdcManager::EnsureInitialized() noexcept {
-    if (is_initialized_.load()) {
+    // Quick check without lock first
+    if (is_initialized_.load(std::memory_order_acquire)) {
         return hf_adc_err_t::ADC_SUCCESS;
     }
     
+    // Only lock if we need to initialize
     std::lock_guard<RtosMutex> lock(mutex_);
     
     // Double-check after acquiring lock
-    if (is_initialized_.load()) {
+    if (is_initialized_.load(std::memory_order_acquire)) {
         return hf_adc_err_t::ADC_SUCCESS;
     }
     
@@ -82,39 +84,42 @@ hf_adc_err_t AdcManager::EnsureInitialized() noexcept {
 }
 
 hf_adc_err_t AdcManager::Shutdown() noexcept {
-    if (!is_initialized_.load()) {
+    // Quick check without lock first
+    if (!is_initialized_.load(std::memory_order_acquire)) {
         return hf_adc_err_t::ADC_SUCCESS;
     }
     
-    std::lock_guard<RtosMutex> lock(mutex_);
-    
-    // Double-check after acquiring lock
-    if (!is_initialized_.load()) {
-        return hf_adc_err_t::ADC_SUCCESS;
+    // Acquire main mutex only for state change
+    {
+        std::lock_guard<RtosMutex> lock(mutex_);
+        
+        // Double-check after acquiring lock
+        if (!is_initialized_.load(std::memory_order_acquire)) {
+            return hf_adc_err_t::ADC_SUCCESS;
+        }
+        
+        // Mark as not initialized early to prevent new operations
+        is_initialized_.store(false, std::memory_order_release);
     }
     
-    // Clear all registered channels
+    // Clear resources with separate locks (no need for main mutex anymore)
     {
         std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
         adc_registry_.clear();
     }
     
-    // Clear ESP32 ADC handlers
     {
         std::lock_guard<RtosMutex> esp32_lock(esp32_adc_mutex_);
         esp32_adc_handlers_.fill(nullptr);
     }
     
-    // Reset statistics
-    total_operations_.store(0);
-    successful_operations_.store(0);
-    failed_operations_.store(0);
-    communication_errors_.store(0);
-    hardware_errors_.store(0);
-    last_error_.store(hf_adc_err_t::ADC_SUCCESS);
-    
-    // Mark as not initialized
-    is_initialized_.store(false);
+    // Reset statistics (atomic operations, no locks needed)
+    total_operations_.store(0, std::memory_order_relaxed);
+    successful_operations_.store(0, std::memory_order_relaxed);
+    failed_operations_.store(0, std::memory_order_relaxed);
+    communication_errors_.store(0, std::memory_order_relaxed);
+    hardware_errors_.store(0, std::memory_order_relaxed);
+    last_error_.store(hf_adc_err_t::ADC_SUCCESS, std::memory_order_relaxed);
     
     return hf_adc_err_t::ADC_SUCCESS;
 }
@@ -124,45 +129,48 @@ bool AdcManager::IsInitialized() const noexcept {
 }
 
 hf_adc_err_t AdcManager::GetSystemDiagnostics(AdcSystemDiagnostics& diagnostics) const noexcept {
-    if (!is_initialized_.load()) {
+    // Quick check without lock
+    if (!is_initialized_.load(std::memory_order_acquire)) {
         return hf_adc_err_t::ADC_ERR_NOT_INITIALIZED;
     }
     
-    // Get current time for uptime calculation (no lock needed for atomics)
+    // Fill diagnostics with atomic values (completely lock-free)
+    uint64_t start_time = system_start_time_.load(std::memory_order_relaxed);
     uint64_t now = GetCurrentTimeMs();
-    uint64_t start_time = system_start_time_.load();
-    uint64_t uptime = now - start_time;
+    uint32_t total_ops = total_operations_.load(std::memory_order_relaxed);
+    uint32_t failed_ops = failed_operations_.load(std::memory_order_relaxed);
     
-    // Fill diagnostics structure with atomic values (no lock needed)
-    diagnostics.system_healthy = (failed_operations_.load() < total_operations_.load() * 0.1); // Less than 10% failure rate
-    diagnostics.total_operations = total_operations_.load();
-    diagnostics.successful_operations = successful_operations_.load();
-    diagnostics.failed_operations = failed_operations_.load();
-    diagnostics.communication_errors = communication_errors_.load();
-    diagnostics.hardware_errors = hardware_errors_.load();
-    diagnostics.system_uptime_ms = uptime;
-    diagnostics.last_error = last_error_.load();
+    diagnostics.system_healthy = (total_ops == 0) ? true : (failed_ops < total_ops * 0.1);
+    diagnostics.total_operations = total_ops;
+    diagnostics.successful_operations = successful_operations_.load(std::memory_order_relaxed);
+    diagnostics.failed_operations = failed_ops;
+    diagnostics.communication_errors = communication_errors_.load(std::memory_order_relaxed);
+    diagnostics.hardware_errors = hardware_errors_.load(std::memory_order_relaxed);
+    diagnostics.system_uptime_ms = now - start_time;
+    diagnostics.last_error = last_error_.load(std::memory_order_relaxed);
     
-    // Get channel count and count channels by chip type (minimize registry lock scope)
+    // Single scoped lock for registry access only
     {
         std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
         
-        size_t total_count = 0;
-        diagnostics.channels_by_chip[0] = 0; // ESP32 channels
-        diagnostics.channels_by_chip[1] = 0; // TMC9660 channels
+        uint32_t esp32_count = 0;
+        uint32_t tmc9660_count = 0;
+        uint32_t total_count = 0;
         
         for (const auto& [name, channel_info] : adc_registry_) {
             if (channel_info && channel_info->is_registered) {
                 total_count++;
                 if (channel_info->hardware_chip == HfAdcChipType::ESP32_INTERNAL) {
-                    diagnostics.channels_by_chip[0]++;
+                    esp32_count++;
                 } else if (channel_info->hardware_chip == HfAdcChipType::TMC9660_CONTROLLER) {
-                    diagnostics.channels_by_chip[1]++;
+                    tmc9660_count++;
                 }
             }
         }
         
         diagnostics.total_channels_registered = total_count;
+        diagnostics.channels_by_chip[0] = esp32_count;
+        diagnostics.channels_by_chip[1] = tmc9660_count;
     }
     
     return hf_adc_err_t::ADC_SUCCESS;
@@ -210,7 +218,8 @@ hf_adc_err_t AdcManager::RegisterChannel(std::string_view name, std::unique_ptr<
 }
 
 BaseAdc* AdcManager::Get(std::string_view name) noexcept {
-    if (!is_initialized_.load()) {
+    // Quick check without lock
+    if (!is_initialized_.load(std::memory_order_acquire)) {
         return nullptr;
     }
     
@@ -280,14 +289,16 @@ void AdcManager::LogAllRegisteredChannels() const noexcept {
 
 hf_adc_err_t AdcManager::ReadChannelV(std::string_view name, float& voltage,
                                      hf_u8_t numOfSamplesToAvg, hf_time_t timeBetweenSamples) noexcept {
-    if (!is_initialized_.load()) {
+    // Quick check without lock
+    if (!is_initialized_.load(std::memory_order_acquire)) {
         return hf_adc_err_t::ADC_ERR_NOT_INITIALIZED;
     }
     
-    // Find channel info with minimal lock scope
+    // Extract required data in single lock scope
     BaseAdc* adc_driver = nullptr;
     uint8_t hardware_channel_id = 0;
     AdcChannelInfo* channel_info = nullptr;
+    uint64_t current_time = GetCurrentTimeMs();
     
     {
         std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
@@ -296,29 +307,28 @@ hf_adc_err_t AdcManager::ReadChannelV(std::string_view name, float& voltage,
             channel_info = it->second.get();
             adc_driver = channel_info->adc_driver.get();
             hardware_channel_id = channel_info->hardware_channel_id;
+            
+            // Update access statistics while we have the lock
+            channel_info->access_count++;
+            channel_info->last_access_time = current_time;
         }
     }
     
     if (!channel_info || !adc_driver) {
         UpdateLastError(hf_adc_err_t::ADC_ERR_SENSOR_NOT_FOUND);
+        UpdateStatistics(false);
         return hf_adc_err_t::ADC_ERR_SENSOR_NOT_FOUND;
-    }
-    
-    // Update access statistics (quick lock for statistics update)
-    {
-        std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
-        channel_info->access_count++;
-        channel_info->last_access_time = GetCurrentTimeMs();
     }
     
     // Perform the read operation (no locks needed for ADC operation)
     hf_adc_err_t result = adc_driver->ReadChannelV(
         hardware_channel_id, voltage, numOfSamplesToAvg, timeBetweenSamples);
     
-    // Update statistics
+    // Update statistics (atomic operations, no lock needed)
     UpdateStatistics(result == hf_adc_err_t::ADC_SUCCESS);
+    
     if (result != hf_adc_err_t::ADC_SUCCESS) {
-        // Quick lock for error count update
+        // Single lock for error count update
         {
             std::lock_guard<RtosMutex> registry_lock(registry_mutex_);
             channel_info->error_count++;
@@ -925,25 +935,25 @@ Tmc9660Handler* AdcManager::GetTmc9660Handler(uint8_t device_index) noexcept {
 }
 
 void AdcManager::UpdateStatistics(bool success) noexcept {
-    total_operations_.fetch_add(1);
+    total_operations_.fetch_add(1, std::memory_order_relaxed);
     
     if (success) {
-        successful_operations_.fetch_add(1);
+        successful_operations_.fetch_add(1, std::memory_order_relaxed);
     } else {
-        failed_operations_.fetch_add(1);
+        failed_operations_.fetch_add(1, std::memory_order_relaxed);
     }
 }
 
 void AdcManager::UpdateLastError(hf_adc_err_t error_code) noexcept {
-    last_error_.store(error_code);
+    last_error_.store(error_code, std::memory_order_relaxed);
     
-    // Update specific error counters
+    // Update specific error counters (atomic operations, no locks needed)
     switch (error_code) {
         case hf_adc_err_t::ADC_ERR_COMMUNICATION_FAILURE:
-            communication_errors_.fetch_add(1);
+            communication_errors_.fetch_add(1, std::memory_order_relaxed);
             break;
         case hf_adc_err_t::ADC_ERR_HARDWARE_FAULT:
-            hardware_errors_.fetch_add(1);
+            hardware_errors_.fetch_add(1, std::memory_order_relaxed);
             break;
         default:
             break;
