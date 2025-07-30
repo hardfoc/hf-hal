@@ -246,6 +246,7 @@ private:
 ### Development Guidelines
 - **[📝 Coding Standards](docs/development/CODING_STANDARDS.md)** - Code style and conventions
 - **[🏗️ Architecture Guidelines](docs/development/ARCHITECTURE_GUIDELINES.md)** - System design principles
+- **[⚡ Performance Optimization Guide](docs/development/PERFORMANCE_OPTIMIZATION_GUIDE.md)** - String lookups vs cached access
 - **[🧪 Testing Requirements](docs/development/TESTING_REQUIREMENTS.md)** - Test coverage and quality
 - **[📚 Documentation Standards](docs/development/DOCUMENTATION_STANDARDS.md)** - Documentation requirements
 
