@@ -226,7 +226,7 @@ void interrupt_example() {
     if (!i2c) return;
     
     // Create handler with interrupt pin
-    BaseGpio* int_pin = nullptr; // Get from GPIO manager
+    BaseGpio* int_pin = nullptr; // Get from GpioManager
     Pcal95555Handler handler(*i2c, int_pin);
     
     if (!handler.EnsureInitialized()) return;
@@ -388,7 +388,7 @@ void interrupt_monitoring() {
     auto* i2c = comm.GetI2cDevice(I2cDeviceId::PCAL9555_GPIO_EXPANDER);
     if (!i2c) return;
     
-    BaseGpio* int_pin = nullptr; // Get from GPIO manager
+    BaseGpio* int_pin = nullptr; // Get from GpioManager
     Pcal95555Handler handler(*i2c, int_pin);
     
     if (!handler.EnsureInitialized()) return;

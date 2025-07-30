@@ -232,7 +232,7 @@ Every source file must have a comprehensive header:
  * Error Handling:
  * - GPIO_ERR_SUCCESS: Operation completed successfully
  * - GPIO_ERR_INVALID_PARAMETER: Invalid pin name or state
- * - GPIO_ERR_NOT_INITIALIZED: GPIO manager not initialized
+ * - GPIO_ERR_NOT_INITIALIZED: GpioManager not initialized
  * - GPIO_ERR_HARDWARE_FAULT: Hardware communication error
  */
 ```
@@ -325,7 +325,7 @@ bool SetPin(std::string_view pin_name, bool state) noexcept;
 
 ### Error Conditions
 - **GPIO_ERR_INVALID_PARAMETER**: Invalid pin name or parameters
-- **GPIO_ERR_NOT_INITIALIZED**: GPIO manager not initialized
+- **GPIO_ERR_NOT_INITIALIZED**: GpioManager not initialized
 - **GPIO_ERR_HARDWARE_FAULT**: Hardware communication error
 - **GPIO_ERR_PERMISSION_DENIED**: Pin access denied
 
@@ -420,7 +420,7 @@ static GpioManager& GetInstance() noexcept;
 void gpio_example() {
     auto& gpio = GpioManager::GetInstance();
     
-    // Initialize GPIO manager
+    // Initialize GpioManager
     gpio.EnsureInitialized();
     
     // Configure pin as output

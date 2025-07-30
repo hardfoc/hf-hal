@@ -68,7 +68,7 @@ Component handlers provide high-level management interfaces for system resources
 
 | Component | Purpose | Hardware Sources | Documentation |
 |-----------|---------|------------------|---------------|
-| **🎛️ GpioManager** | GPIO pin management | ESP32-C6, PCAL95555, TMC9660 | **[📖 GPIO Manager Guide](docs/component-handlers/GPIO_MANAGER_README.md)** |
+| **🎛️ GpioManager** | GPIO pin management | ESP32-C6, PCAL95555, TMC9660 | **[📖 GpioManager Guide](docs/component-handlers/GPIO_MANAGER_README.md)** |
 | **📊 AdcManager** | ADC channel management | ESP32-C6, TMC9660 | **[📖 ADC Manager Guide](docs/component-handlers/ADC_MANAGER_README.md)** |
 | **📡 CommChannelsManager** | Communication interfaces | ESP32-C6 SPI/I2C/UART/CAN | **[📖 Comm Manager Guide](docs/component-handlers/COMM_CHANNELS_MANAGER_README.md)** |
 | **🎛️ MotorController** | Motor controller management | TMC9660 devices | **[📖 Motor Controller Guide](docs/component-handlers/MOTOR_CONTROLLER_README.md)** |
@@ -137,10 +137,10 @@ Driver handlers provide hardware-specific interfaces for individual devices. Eac
 
 ### Core System Architecture
 - **[🏗️ Hardware Abstraction Architecture](docs/development/ARCHITECTURE_GUIDELINES.md)** - Complete HAL architecture
-- **[⚡ GPIO System Architecture](docs/component-handlers/GPIO_MANAGER_README.md)** - GPIO system design and implementation
+- **[🎛️ GpioManager Architecture](docs/component-handlers/GPIO_MANAGER_README.md)** - GPIO management system design and implementation
 
 ### System Integration Guides
-- **[🔧 GPIO Manager Guide](docs/component-handlers/GPIO_MANAGER_README.md)** - GPIO system guide
+- **[🎛️ GpioManager Guide](docs/component-handlers/GPIO_MANAGER_README.md)** - Advanced GPIO management system
 - **[📊 ADC Manager Guide](docs/component-handlers/ADC_MANAGER_README.md)** - ADC system guide
 - **[📡 Communication Manager](docs/component-handlers/COMM_CHANNELS_MANAGER_README.md)** - Communication system documentation
 

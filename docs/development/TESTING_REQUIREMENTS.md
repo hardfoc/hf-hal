@@ -625,10 +625,10 @@ TEST_F(CoverageTest, AllErrorPaths) {
 #### Test Documentation
 ```cpp
 /**
- * @brief Test GPIO manager initialization and basic operations
+ * @brief Test GpioManager initialization and basic operations
  * 
  * This test verifies:
- * - Successful initialization of GPIO manager
+ * - Successful initialization of GpioManager
  * - Basic pin operations (set/get)
  * - Error handling for invalid operations
  * - Thread safety of operations

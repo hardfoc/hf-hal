@@ -54,7 +54,7 @@ void gpio_example() {
     
     // Initialize the manager
     if (!gpio.EnsureInitialized()) {
-        printf("Failed to initialize GPIO manager\n");
+        printf("Failed to initialize GpioManager\n");
         return;
     }
     
@@ -261,7 +261,7 @@ The GpioManager uses comprehensive error handling with specific error codes:
 // Common error codes
 hf_gpio_err_t::HF_GPIO_SUCCESS              // Operation successful
 hf_gpio_err_t::HF_GPIO_ERR_INVALID_PARAMETER // Invalid pin name or parameters
-hf_gpio_err_t::HF_GPIO_ERR_NOT_INITIALIZED   // GPIO manager not initialized
+hf_gpio_err_t::HF_GPIO_ERR_NOT_INITIALIZED   // GpioManager not initialized
 hf_gpio_err_t::HF_GPIO_ERR_HARDWARE_FAULT    // Hardware communication error
 hf_gpio_err_t::HF_GPIO_ERR_PERMISSION_DENIED // Pin access denied
 hf_gpio_err_t::HF_GPIO_ERR_OUT_OF_MEMORY     // Memory allocation failed
@@ -445,7 +445,7 @@ void error_handling_example() {
     
     // Check initialization
     if (!gpio.EnsureInitialized()) {
-        printf("ERROR: Failed to initialize GPIO manager\n");
+        printf("ERROR: Failed to initialize GpioManager\n");
         return;
     }
     

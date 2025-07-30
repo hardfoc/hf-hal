@@ -302,13 +302,12 @@ if (encoder_handler) {
 - **[🏗️ Vortex API Architecture](API/Vortex.h)** - API design and implementation
 
 ### 🎯 Core System Documentation
-- **[🔧 GPIO Manager](docs/component-handlers/GPIO_MANAGER_README.md)** - GPIO system guide
+- **[🎛️ GpioManager](docs/component-handlers/GPIO_MANAGER_README.md)** - Advanced GPIO management system
 - **[📊 ADC Manager](docs/component-handlers/ADC_MANAGER_README.md)** - ADC system guide
 - **[🏗️ Architecture Guidelines](docs/development/ARCHITECTURE_GUIDELINES.md)** - Core architecture
-- **[⚡ GPIO System](docs/component-handlers/GPIO_MANAGER_README.md)** - GPIO system design
 
 ### 📚 Component Handler Documentation
-- **[🎛️ GPIO Manager](docs/component-handlers/GPIO_MANAGER_README.md)** - GPIO management system
+- **[🎛️ GpioManager](docs/component-handlers/GPIO_MANAGER_README.md)** - Advanced GPIO management system
 - **[📊 ADC Manager](docs/component-handlers/ADC_MANAGER_README.md)** - ADC management system
 - **[📡 Communication Manager](docs/component-handlers/COMM_CHANNELS_MANAGER_README.md)** - Communication interfaces
 - **[🧭 IMU Manager](docs/component-handlers/IMU_MANAGER_README.md)** - IMU sensor management
