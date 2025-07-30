@@ -171,8 +171,9 @@ String-based functions like `gpio.SetPin("GPIO_EXT_GPIO_CS_1", true)` and `adc.R
 
 ```cpp
 // String-based API - Great for convenience and extensibility
-gpio.SetPin("GPIO_EXT_GPIO_CS_1", true);
-float voltage = adc.ReadVoltage("ADC_TMC9660_AIN3");
+gpio.Set("GPIO_EXT_GPIO_CS_1", true);
+float voltage;
+adc.ReadChannelV("ADC_TMC9660_AIN3", voltage);
 ```
 
 #### ⚡ Cached Access (High Performance)
@@ -180,16 +181,16 @@ For performance-critical applications, cache base component pointers for direct 
 
 ```cpp
 // Cache GPIO and ADC pointers for fast access
-auto* gpio_cs1 = vortex.gpio.Get("GPIO_EXT_GPIO_CS_1").get();
+auto gpio_cs1 = vortex.gpio.Get("GPIO_EXT_GPIO_CS_1");
 auto* adc_temp = vortex.adc.Get("ADC_TMC9660_AIN3");
 
 // Direct access - Much faster for tight loops
 if (gpio_cs1) {
-    gpio_cs1->SetActive();  // Direct hardware access
+    gpio_cs1->SetActive();  // Direct BaseGpio access
 }
 if (adc_temp) {
     float voltage;
-    adc_temp->ReadVoltage(voltage);  // Direct hardware access
+    adc_temp->ReadChannelV(0, voltage);  // Direct BaseAdc access
 }
 ```
 
@@ -232,22 +233,23 @@ extern "C" void app_main(void) {
         auto& leds = vortex.leds;
         
         // Use components naturally (string-based for convenience)
-        gpio.SetPin("GPIO_EXT_GPIO_CS_1", true);
-        float voltage = adc.ReadVoltage("ADC_TMC9660_AIN3");
+        gpio.Set("GPIO_EXT_GPIO_CS_1", true);
+        float voltage;
+        adc.ReadChannelV("ADC_TMC9660_AIN3", voltage);
         auto* motor_handler = motors.handler(0);
         leds.SetStatus(LedAnimation::STATUS_OK);
         
         // For performance-critical code, cache component pointers
-        auto* gpio_cs1 = gpio.Get("GPIO_EXT_GPIO_CS_1").get();
+        auto gpio_cs1 = gpio.Get("GPIO_EXT_GPIO_CS_1");
         auto* adc_temp = adc.Get("ADC_TMC9660_AIN3");
         
         // Use cached pointers for high-frequency operations
         if (gpio_cs1 && adc_temp) {
             for (int i = 0; i < 10000; i++) {
-                // Direct access - much faster than string lookups
+                // Direct BaseGpio/BaseAdc access - much faster than string lookups
                 gpio_cs1->Toggle();
                 float reading;
-                adc_temp->ReadVoltage(reading);
+                adc_temp->ReadChannelV(0, reading);  // Note: requires channel ID
             }
         }
         

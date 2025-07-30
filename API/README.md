@@ -85,12 +85,14 @@ The Vortex API provides two access patterns for optimal performance across all c
 auto& vortex = Vortex::GetInstance();
 if (vortex.EnsureInitialized()) {
     // GPIO operations with string lookup
-    vortex.gpio.SetPin("GPIO_EXT_GPIO_CS_1", true);
-    bool state = vortex.gpio.GetPin("GPIO_PCAL_GPIO17");
+    vortex.gpio.Set("GPIO_EXT_GPIO_CS_1", true);
+    bool state;
+    vortex.gpio.Read("GPIO_PCAL_GPIO17", state);
     
     // ADC operations with string lookup
-    float voltage = vortex.adc.ReadVoltage("ADC_TMC9660_AIN3");
-    float current = vortex.adc.ReadVoltage("TMC9660_CURRENT_I0");
+    float voltage, current;
+    vortex.adc.ReadChannelV("ADC_TMC9660_AIN3", voltage);
+    vortex.adc.ReadChannelV("TMC9660_CURRENT_I0", current);
     
     // Motor control with string-based identification
     auto* motor = vortex.motors.handler(0);
@@ -123,8 +125,8 @@ if (vortex.EnsureInitialized()) {
         gpio_cs1->Toggle();                    // ~10-50ns vs ~100-500ns
         
         float temp, current;
-        adc_temp->ReadVoltage(temp);           // ~20-100ns vs ~200-800ns
-        adc_current->ReadVoltage(current);     // Direct hardware access
+        adc_temp->ReadChannelV(0, temp);           // ~20-100ns vs ~200-800ns
+        adc_current->ReadChannelV(0, current);     // Direct BaseAdc access
         
         // Process readings for motor control
         if (auto driver = motor_handler->GetTmc9660Driver()) {
