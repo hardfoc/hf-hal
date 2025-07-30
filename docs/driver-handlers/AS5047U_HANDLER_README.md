@@ -6,44 +6,44 @@
 ![Hardware](https://img.shields.io/badge/hardware-AS5047U-orange.svg)
 ![Interface](https://img.shields.io/badge/interface-SPI-green.svg)
 
-**High-precision magnetic position encoder driver handler with advanced features**
+**Unified handler for AS5047U magnetic rotary position sensor with SPI integration**
 
 </div>
 
 ## 📋 Overview
 
-The `As5047uHandler` is a specialized driver handler for the AS5047U magnetic position encoder. It provides high-precision 14-bit angular position sensing with advanced features like automatic gain control, magnetic field diagnostics, and programmable zero position.
+The `As5047uHandler` is a unified handler for AS5047U magnetic rotary position sensor that provides a modern, comprehensive interface for high-precision angle measurement and velocity calculation. It supports SPI communication, offers advanced features like Dynamic Angle Error Compensation (DAEC), and provides comprehensive diagnostics and error handling.
 
 ### ✨ Key Features
 
-- **📐 High Precision**: 14-bit resolution (0.022° accuracy)
-- **🔄 360° Sensing**: Absolute position measurement
-- **⚡ High Speed**: Up to 28,000 RPM operation
-- **📡 SPI Interface**: Fast digital communication
-- **🛡️ Built-in Diagnostics**: Magnetic field strength monitoring
-- **⚙️ Programmable Features**: Zero position, rotation direction
-- **🔍 Advanced Filtering**: Hysteresis and filtering options
-- **🏥 Health Monitoring**: Error detection and status reporting
+- **🎯 High Precision**: 14-bit absolute angle measurement (0-16383 counts per revolution)
+- **⚡ Velocity Measurement**: Multiple unit conversions (rad/s, deg/s, RPM)
+- **🔧 Dynamic Angle Error Compensation**: DAEC for improved accuracy
+- **📡 SPI Interface**: Configurable frame formats (16/24/32-bit)
+- **🛡️ Thread-Safe**: Concurrent access from multiple tasks
+- **🏥 Comprehensive Diagnostics**: Magnetic field monitoring and error detection
+- **⚙️ Advanced Configuration**: OTP programming and interface outputs
+- **🔍 Health Monitoring**: AGC monitoring and calibration status
 
 ## 🏗️ Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    As5047uHandler                              │
+│                   As5047uHandler                               │
 ├─────────────────────────────────────────────────────────────────┤
-│  Position Interface │ Angle, velocity, and acceleration       │
+│  Angle Measurement │ 14-bit absolute position sensing          │
 ├─────────────────────────────────────────────────────────────────┤
-│  SPI Communication  │ 16-bit register access with CRC         │
+│  Velocity Calculation │ Real-time rotational velocity         │
 ├─────────────────────────────────────────────────────────────────┤
-│  Diagnostic System  │ Magnetic field and error monitoring     │
+│  SPI Communication │ Configurable frame formats               │
 ├─────────────────────────────────────────────────────────────────┤
-│  AS5047U Driver     │ Low-level register and calibration      │
+│  AS5047U Driver   │ Low-level sensor register control         │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ## 🚀 Quick Start
 
-### Basic Position Reading
+### Basic Angle Measurement
 
 ```cpp
 #include "utils-and-drivers/driver-handlers/As5047uHandler.h"
@@ -61,24 +61,20 @@ void as5047u_basic_example() {
     }
     
     // Create AS5047U handler
-    As5047uHandler encoder(*spi);
+    As5047uHandler handler(*spi);
     
-    // Initialize encoder
-    if (!encoder.Initialize()) {
+    // Initialize handler
+    if (handler.Initialize() != As5047uError::SUCCESS) {
         printf("Failed to initialize AS5047U\n");
         return;
     }
     
-    printf("AS5047U Position Encoder ready\n");
-    
-    // Read position continuously
-    for (int i = 0; i < 100; i++) {
-        float angle_deg = encoder.GetAngleDegrees();
-        uint16_t raw_count = encoder.GetRawPosition();
-        
-        printf("Position: %.2f° (raw: %u)\n", angle_deg, raw_count);
-        
-        vTaskDelay(pdMS_TO_TICKS(100));
+    // Read angle measurement
+    As5047uMeasurement measurement;
+    if (handler.ReadMeasurement(measurement) == As5047uError::SUCCESS) {
+        printf("Angle: %u LSB (%.2f°)\n", measurement.angle_compensated, 
+               As5047uHandler::LSBToDegrees(measurement.angle_compensated));
+        printf("Velocity: %.2f RPM\n", measurement.velocity_rpm);
     }
 }
 ```
@@ -92,809 +88,478 @@ void as5047u_basic_example() {
 class As5047uHandler {
 public:
     // Constructor
-    As5047uHandler(BaseSpi& spi_interface);
-    
+    explicit As5047uHandler(BaseSpi& spi_interface, 
+                           const As5047uConfig& config = GetDefaultConfig()) noexcept;
+
     // Initialization
-    bool Initialize() noexcept;
+    As5047uError Initialize() noexcept;
+    As5047uError Deinitialize() noexcept;
     bool IsInitialized() const noexcept;
-    void Deinitialize() noexcept;
-    
-    // Communication testing
-    bool TestCommunication() noexcept;
+    bool IsSensorReady() const noexcept;
+    std::shared_ptr<AS5047U> GetSensor() noexcept;
 };
 ```
 
-#### Position Reading
+#### Sensor Measurements
 ```cpp
-// Raw position data
-uint16_t GetRawPosition() noexcept;
-uint16_t GetRawPositionWithStatus() noexcept;
+// Complete measurement data
+As5047uError ReadMeasurement(As5047uMeasurement& measurement) noexcept;
 
-// Angle conversion
-float GetAngleDegrees() noexcept;
-float GetAngleRadians() noexcept;
+// Angle measurements
+As5047uError ReadAngle(uint16_t& angle) noexcept;
+As5047uError ReadRawAngle(uint16_t& raw_angle) noexcept;
 
-// Velocity calculation (requires multiple samples)
-float GetVelocityRpm() noexcept;
-float GetVelocityRadPerSec() noexcept;
-
-// Multi-turn support
-int32_t GetAbsolutePosition() noexcept;  // Accumulated position
-void ResetPosition() noexcept;
+// Velocity measurements
+As5047uError ReadVelocity(int16_t& velocity_lsb) noexcept;
+As5047uError ReadVelocityDegPerSec(double& velocity_deg_per_sec) noexcept;
+As5047uError ReadVelocityRadPerSec(double& velocity_rad_per_sec) noexcept;
+As5047uError ReadVelocityRPM(double& velocity_rpm) noexcept;
 ```
 
-#### Configuration and Calibration
+#### Sensor Diagnostics
 ```cpp
-// Zero position setting
-bool SetZeroPosition() noexcept;
-bool SetZeroPosition(uint16_t zero_count) noexcept;
-uint16_t GetZeroPosition() const noexcept;
-
-// Rotation direction
-bool SetRotationDirection(RotationDirection direction) noexcept;
-RotationDirection GetRotationDirection() const noexcept;
-
-// Hysteresis and filtering
-bool SetHysteresis(HysteresisLevel level) noexcept;
-bool SetFastFilterThreshold(uint8_t threshold) noexcept;
-bool SetSlowFilterThreshold(uint8_t threshold) noexcept;
+// Diagnostic information
+As5047uError ReadDiagnostics(As5047uDiagnostics& diagnostics) noexcept;
+As5047uError ReadAGC(uint8_t& agc_value) noexcept;
+As5047uError ReadMagnitude(uint16_t& magnitude) noexcept;
+As5047uError ReadErrorFlags(uint16_t& error_flags) noexcept;
+As5047uError IsMagneticFieldOK(bool& field_ok) noexcept;
 ```
 
-#### Diagnostics and Status
+#### Sensor Configuration
 ```cpp
-// Error flags
-struct ErrorFlags {
-    bool parity_error;
-    bool invalid_command;
-    bool framing_error;
-    bool voltage_error;
-    bool magnetic_field_too_strong;
-    bool magnetic_field_too_weak;
-    bool cordic_overflow;
-    bool offset_compensation_ready;
-};
+// Basic configuration
+As5047uError SetZeroPosition(uint16_t zero_position) noexcept;
+As5047uError GetZeroPosition(uint16_t& zero_position) noexcept;
+As5047uError SetRotationDirection(bool clockwise) noexcept;
 
-ErrorFlags GetErrorFlags() noexcept;
-bool HasErrors() noexcept;
-
-// Magnetic field diagnostics
-uint8_t GetMagneticFieldStrength() noexcept;
-bool IsMagneticFieldOk() noexcept;
-
-// Automatic gain control
-uint8_t GetAutomaticGainControl() noexcept;
+// Advanced features
+As5047uError SetDAEC(bool enable) noexcept;
+As5047uError SetAdaptiveFilter(bool enable) noexcept;
+As5047uError ConfigureInterface(bool enable_abi, bool enable_uvw, bool enable_pwm) noexcept;
+As5047uError SetABIResolution(uint8_t resolution_bits) noexcept;
+As5047uError SetUVWPolePairs(uint8_t pole_pairs) noexcept;
+As5047uError SetHighTemperatureMode(bool enable) noexcept;
 ```
 
-### Configuration Enums
-
+#### Advanced Features
 ```cpp
-// Rotation direction
-enum class RotationDirection {
-    CLOCKWISE = 0,
-    COUNTER_CLOCKWISE = 1
-};
+// OTP programming
+As5047uError ProgramOTP() noexcept;
+As5047uError PerformCalibration() noexcept;
+As5047uError ResetToDefaults() noexcept;
 
-// Hysteresis levels
-enum class HysteresisLevel {
-    OFF = 0,
-    LSB_1 = 1,
-    LSB_2 = 2,
-    LSB_3 = 3
-};
-
-// Power modes
-enum class PowerMode {
-    NORMAL = 0,
-    LOW_POWER_1 = 1,
-    LOW_POWER_2 = 2,
-    LOW_POWER_3 = 3
-};
+// Configuration management
+As5047uError UpdateConfiguration(const As5047uConfig& config) noexcept;
+As5047uError GetConfiguration(As5047uConfig& config) noexcept;
 ```
 
-## 🎯 Hardware Features
-
-### AS5047U Capabilities
-
-| Feature | Specification | Description |
-|---------|---------------|-------------|
-| **Resolution** | 14-bit (16384 counts) | 0.022° per LSB |
-| **Accuracy** | ±0.05° (typ) | High precision measurement |
-| **Speed** | Up to 28,000 RPM | High-speed operation |
-| **Supply Voltage** | 4.5V - 5.5V | Single supply operation |
-| **SPI Interface** | Up to 10 MHz | Fast digital communication |
-| **Update Rate** | Up to 28 kSPS | High-frequency sampling |
-| **Temperature Range** | -40°C to +150°C | Industrial temperature range |
-| **Package** | TSSOP14 | Compact surface mount |
-
-### Register Map Overview
-
+#### Utility Methods
 ```cpp
-// AS5047U Register Addresses
-enum class As5047uRegister : uint16_t {
-    // Volatile registers
-    NOP = 0x0000,
-    ERRFL = 0x0001,      // Error flags
-    PROG = 0x0003,       // Programming register
-    DIAAGC = 0x3FFC,     // Diagnostics and AGC
-    MAG = 0x3FFD,        // Magnetic field strength
-    ANGLEUNC = 0x3FFE,   // Angle without compensation
-    ANGLECOM = 0x3FFF,   // Angle with compensation
-    
-    // Non-volatile registers  
-    ZPOSM = 0x0016,      // Zero position MSB
-    ZPOSL = 0x0017,      // Zero position LSB
-    SETTINGS1 = 0x0018,  // Settings register 1
-    SETTINGS2 = 0x0019,  // Settings register 2
-};
+// Conversion utilities
+static constexpr double LSBToDegrees(uint16_t angle_lsb) noexcept;
+static constexpr double LSBToRadians(uint16_t angle_lsb) noexcept;
+static constexpr uint16_t DegreesToLSB(double degrees) noexcept;
+static constexpr uint16_t RadiansToLSB(double radians) noexcept;
+
+// Information
+const char* GetDescription() const noexcept;
+As5047uError GetLastError() const noexcept;
+void DumpDiagnostics() const noexcept;
+static As5047uConfig GetDefaultConfig() noexcept;
 ```
 
-## 🔧 Configuration
+## 🎯 Hardware Support
 
-### SPI Communication Setup
+### AS5047U Features
 
-```cpp
-// AS5047U SPI configuration
-struct As5047uSpiConfig {
-    uint32_t max_clock_hz = 10000000;   // 10 MHz max
-    uint8_t mode = 1;                   // SPI Mode 1 (CPOL=0, CPHA=1)
-    uint8_t bits_per_word = 16;         // 16-bit transfers
-    bool use_cs_control = true;         // Manual CS control
-    uint32_t cs_delay_us = 1;           // CS setup/hold time
-};
-```
+- **14-bit Resolution**: 0-16383 LSB per revolution (0.0219° resolution)
+- **Absolute Position**: Non-volatile zero position programming
+- **Velocity Measurement**: Real-time rotational velocity calculation
+- **Dynamic Angle Error Compensation**: DAEC for improved accuracy
+- **Magnetic Field Monitoring**: AGC and magnitude monitoring
+- **Interface Outputs**: ABI incremental, UVW commutation, PWM output
+- **SPI Communication**: Configurable frame formats (16/24/32-bit)
+- **High Temperature**: Optional 150°C operation mode
+- **OTP Programming**: One-time programmable settings
 
-### Initialization Configuration
+### SPI Frame Formats
 
-```cpp
-// Initialization options
-struct As5047uConfig {
-    RotationDirection rotation_dir = RotationDirection::CLOCKWISE;
-    HysteresisLevel hysteresis = HysteresisLevel::LSB_1;
-    uint8_t fast_filter_threshold = 3;
-    uint8_t slow_filter_threshold = 16;
-    PowerMode power_mode = PowerMode::NORMAL;
-    bool enable_uvw_abi = false;        // UVW/ABI output pins
-    bool enable_pwm_output = false;     // PWM output
-    uint16_t zero_position = 0;         // Custom zero position
-};
-```
+The AS5047U supports multiple SPI frame formats:
+- **16-bit**: Standard format for basic operations
+- **24-bit**: Extended format with additional data
+- **32-bit**: Full format with maximum information
 
 ## 📊 Examples
 
-### Basic Position Monitoring
+### Basic Angle Reading
 
 ```cpp
-#include "utils-and-drivers/driver-handlers/As5047uHandler.h"
-
-void position_monitoring_example() {
-    // Setup SPI communication
+void basic_angle_example() {
     auto& comm = CommChannelsManager::GetInstance();
     comm.EnsureInitialized();
+    
     auto* spi = comm.GetSpiDevice(SpiDeviceId::AS5047U_POSITION_ENCODER);
+    if (!spi) return;
     
-    // Create encoder handler
-    As5047uHandler encoder(*spi);
+    As5047uHandler handler(*spi);
+    if (handler.Initialize() != As5047uError::SUCCESS) return;
     
-    if (!encoder.Initialize()) {
-        printf("AS5047U initialization failed\n");
+    // Read angle measurements
+    uint16_t angle;
+    if (handler.ReadAngle(angle) == As5047uError::SUCCESS) {
+        double angle_degrees = As5047uHandler::LSBToDegrees(angle);
+        double angle_radians = As5047uHandler::LSBToRadians(angle);
+        
+        printf("Angle: %u LSB (%.2f°, %.4f rad)\n", 
+               angle, angle_degrees, angle_radians);
+    }
+    
+    // Read velocity
+    double velocity_rpm;
+    if (handler.ReadVelocityRPM(velocity_rpm) == As5047uError::SUCCESS) {
+        printf("Velocity: %.2f RPM\n", velocity_rpm);
+    }
+}
+```
+
+### Complete Measurement Data
+
+```cpp
+void complete_measurement_example() {
+    auto& comm = CommChannelsManager::GetInstance();
+    comm.EnsureInitialized();
+    
+    auto* spi = comm.GetSpiDevice(SpiDeviceId::AS5047U_POSITION_ENCODER);
+    if (!spi) return;
+    
+    As5047uHandler handler(*spi);
+    if (handler.Initialize() != As5047uError::SUCCESS) return;
+    
+    // Read complete measurement data
+    As5047uMeasurement measurement;
+    if (handler.ReadMeasurement(measurement) == As5047uError::SUCCESS) {
+        printf("Complete measurement data:\n");
+        printf("  Raw angle: %u LSB\n", measurement.angle_raw);
+        printf("  Compensated angle: %u LSB\n", measurement.angle_compensated);
+        printf("  Angle degrees: %.2f°\n", 
+               As5047uHandler::LSBToDegrees(measurement.angle_compensated));
+        printf("  Velocity LSB: %d\n", measurement.velocity_raw);
+        printf("  Velocity deg/s: %.2f\n", measurement.velocity_deg_per_sec);
+        printf("  Velocity rad/s: %.4f\n", measurement.velocity_rad_per_sec);
+        printf("  Velocity RPM: %.2f\n", measurement.velocity_rpm);
+        printf("  AGC value: %u\n", measurement.agc_value);
+        printf("  Magnitude: %u\n", measurement.magnitude);
+        printf("  Error flags: 0x%04X\n", measurement.error_flags);
+        printf("  Valid: %s\n", measurement.valid ? "Yes" : "No");
+    }
+}
+```
+
+### Diagnostics and Health Monitoring
+
+```cpp
+void diagnostics_example() {
+    auto& comm = CommChannelsManager::GetInstance();
+    comm.EnsureInitialized();
+    
+    auto* spi = comm.GetSpiDevice(SpiDeviceId::AS5047U_POSITION_ENCODER);
+    if (!spi) return;
+    
+    As5047uHandler handler(*spi);
+    if (handler.Initialize() != As5047uError::SUCCESS) return;
+    
+    // Read comprehensive diagnostics
+    As5047uDiagnostics diagnostics;
+    if (handler.ReadDiagnostics(diagnostics) == As5047uError::SUCCESS) {
+        printf("Sensor diagnostics:\n");
+        printf("  Magnetic field OK: %s\n", diagnostics.magnetic_field_ok ? "Yes" : "No");
+        printf("  AGC warning: %s\n", diagnostics.agc_warning ? "Yes" : "No");
+        printf("  CORDIC overflow: %s\n", diagnostics.cordic_overflow ? "Yes" : "No");
+        printf("  Offset compensation OK: %s\n", diagnostics.offset_compensation_ok ? "Yes" : "No");
+        printf("  Communication OK: %s\n", diagnostics.communication_ok ? "Yes" : "No");
+        printf("  Last error flags: 0x%04X\n", diagnostics.last_error_flags);
+        printf("  Communication errors: %u\n", diagnostics.communication_errors);
+        printf("  Total measurements: %u\n", diagnostics.total_measurements);
+    }
+    
+    // Check magnetic field status
+    bool field_ok;
+    if (handler.IsMagneticFieldOK(field_ok) == As5047uError::SUCCESS) {
+        printf("Magnetic field status: %s\n", field_ok ? "OK" : "WEAK");
+    }
+    
+    // Read AGC value
+    uint8_t agc_value;
+    if (handler.ReadAGC(agc_value) == As5047uError::SUCCESS) {
+        printf("AGC value: %u (0-255)\n", agc_value);
+    }
+}
+```
+
+### Configuration and Calibration
+
+```cpp
+void configuration_example() {
+    auto& comm = CommChannelsManager::GetInstance();
+    comm.EnsureInitialized();
+    
+    auto* spi = comm.GetSpiDevice(SpiDeviceId::AS5047U_POSITION_ENCODER);
+    if (!spi) return;
+    
+    As5047uHandler handler(*spi);
+    if (handler.Initialize() != As5047uError::SUCCESS) return;
+    
+    // Set zero position
+    uint16_t zero_position = 8192;  // 180 degrees
+    if (handler.SetZeroPosition(zero_position) == As5047uError::SUCCESS) {
+        printf("Zero position set to %u LSB\n", zero_position);
+    }
+    
+    // Enable DAEC
+    if (handler.SetDAEC(true) == As5047uError::SUCCESS) {
+        printf("DAEC enabled\n");
+    }
+    
+    // Enable adaptive filtering
+    if (handler.SetAdaptiveFilter(true) == As5047uError::SUCCESS) {
+        printf("Adaptive filtering enabled\n");
+    }
+    
+    // Configure interface outputs
+    if (handler.ConfigureInterface(true, false, false) == As5047uError::SUCCESS) {
+        printf("ABI output enabled\n");
+    }
+    
+    // Set ABI resolution
+    if (handler.SetABIResolution(12) == As5047uError::SUCCESS) {
+        printf("ABI resolution set to 12 bits\n");
+    }
+    
+    // Set rotation direction
+    if (handler.SetRotationDirection(true) == As5047uError::SUCCESS) {
+        printf("Clockwise rotation enabled\n");
+    }
+}
+```
+
+### Advanced Configuration
+
+```cpp
+void advanced_config_example() {
+    auto& comm = CommChannelsManager::GetInstance();
+    comm.EnsureInitialized();
+    
+    auto* spi = comm.GetSpiDevice(SpiDeviceId::AS5047U_POSITION_ENCODER);
+    if (!spi) return;
+    
+    // Create custom configuration
+    As5047uConfig config = As5047uHandler::GetDefaultConfig();
+    config.frame_format = FrameFormat::FRAME_24BIT;
+    config.crc_retries = 3;
+    config.enable_daec = true;
+    config.enable_adaptive_filter = true;
+    config.zero_position = 0;
+    config.enable_abi_output = true;
+    config.enable_uvw_output = false;
+    config.enable_pwm_output = false;
+    config.abi_resolution_bits = 12;
+    config.uvw_pole_pairs = 4;
+    config.high_temperature_mode = false;
+    
+    As5047uHandler handler(*spi, config);
+    if (handler.Initialize() != As5047uError::SUCCESS) return;
+    
+    // Verify configuration
+    As5047uConfig current_config;
+    if (handler.GetConfiguration(current_config) == As5047uError::SUCCESS) {
+        printf("Current configuration:\n");
+        printf("  Frame format: %d\n", static_cast<int>(current_config.frame_format));
+        printf("  DAEC enabled: %s\n", current_config.enable_daec ? "Yes" : "No");
+        printf("  Adaptive filter: %s\n", current_config.enable_adaptive_filter ? "Yes" : "No");
+        printf("  Zero position: %u\n", current_config.zero_position);
+        printf("  ABI output: %s\n", current_config.enable_abi_output ? "Yes" : "No");
+        printf("  ABI resolution: %u bits\n", current_config.abi_resolution_bits);
+    }
+}
+```
+
+### Error Handling
+
+```cpp
+void error_handling_example() {
+    auto& comm = CommChannelsManager::GetInstance();
+    comm.EnsureInitialized();
+    
+    auto* spi = comm.GetSpiDevice(SpiDeviceId::AS5047U_POSITION_ENCODER);
+    if (!spi) return;
+    
+    As5047uHandler handler(*spi);
+    
+    // Check initialization
+    As5047uError result = handler.Initialize();
+    if (result != As5047uError::SUCCESS) {
+        printf("ERROR: Failed to initialize AS5047U: %s\n", 
+               As5047uErrorToString(result));
         return;
     }
     
-    // Check for magnetic field
-    if (!encoder.IsMagneticFieldOk()) {
-        printf("WARNING: Magnetic field not optimal\n");
-        printf("Field strength: %u\n", encoder.GetMagneticFieldStrength());
-    }
-    
-    printf("AS5047U position monitoring started\n");
-    
-    // Continuous position monitoring
-    for (int i = 0; i < 1000; i++) {
-        // Read position data
-        float angle = encoder.GetAngleDegrees();
-        uint16_t raw = encoder.GetRawPosition();
-        
-        // Check for errors
-        if (encoder.HasErrors()) {
-            auto errors = encoder.GetErrorFlags();
-            printf("ERROR: ");
-            if (errors.magnetic_field_too_weak) printf("MagWeak ");
-            if (errors.magnetic_field_too_strong) printf("MagStrong ");
-            if (errors.parity_error) printf("Parity ");
-            printf("\n");
-        }
-        
-        // Display position
-        printf("Angle: %7.2f° (raw: %5u)\n", angle, raw);
-        
-        vTaskDelay(pdMS_TO_TICKS(50));
-    }
-}
-```
-
-### Velocity Measurement
-
-```cpp
-void velocity_measurement_example() {
-    As5047uHandler encoder(*spi);
-    encoder.Initialize();
-    
-    printf("AS5047U velocity measurement demo\n");
-    
-    // Variables for velocity calculation
-    float previous_angle = encoder.GetAngleDegrees();
-    uint32_t previous_time = esp_timer_get_time();
-    
-    for (int i = 0; i < 500; i++) {
-        // Get current position and time
-        float current_angle = encoder.GetAngleDegrees();
-        uint32_t current_time = esp_timer_get_time();
-        
-        // Calculate time difference
-        float dt_sec = (current_time - previous_time) / 1000000.0f;
-        
-        // Calculate angular difference (handle wrap-around)
-        float angle_diff = current_angle - previous_angle;
-        if (angle_diff > 180.0f) {
-            angle_diff -= 360.0f;
-        } else if (angle_diff < -180.0f) {
-            angle_diff += 360.0f;
-        }
-        
-        // Calculate velocity
-        float velocity_deg_per_sec = angle_diff / dt_sec;
-        float velocity_rpm = velocity_deg_per_sec * 60.0f / 360.0f;
-        
-        // Display results
-        printf("Position: %7.2f°, Velocity: %8.1f°/s (%6.1f RPM)\n",
-               current_angle, velocity_deg_per_sec, velocity_rpm);
-        
-        // Update previous values
-        previous_angle = current_angle;
-        previous_time = current_time;
-        
-        vTaskDelay(pdMS_TO_TICKS(20));  // 50 Hz sampling
-    }
-}
-```
-
-### Multi-Turn Position Tracking
-
-```cpp
-void multi_turn_tracking_example() {
-    As5047uHandler encoder(*spi);
-    encoder.Initialize();
-    
-    printf("AS5047U multi-turn position tracking\n");
-    
-    // Reset absolute position counter
-    encoder.ResetPosition();
-    
-    int32_t total_rotations = 0;
-    float previous_angle = encoder.GetAngleDegrees();
-    
-    printf("Rotate the encoder to test multi-turn tracking...\n");
-    
-    for (int i = 0; i < 2000; i++) {
-        float current_angle = encoder.GetAngleDegrees();
-        
-        // Detect full rotations
-        float angle_diff = current_angle - previous_angle;
-        if (angle_diff > 180.0f) {
-            // Crossed 0° going backwards
-            total_rotations--;
-            printf("Full rotation backwards (total: %ld)\n", total_rotations);
-        } else if (angle_diff < -180.0f) {
-            // Crossed 0° going forwards
-            total_rotations++;
-            printf("Full rotation forwards (total: %ld)\n", total_rotations);
-        }
-        
-        // Calculate absolute position
-        float absolute_angle = (total_rotations * 360.0f) + current_angle;
-        int32_t absolute_position = encoder.GetAbsolutePosition();
-        
-        printf("Current: %6.1f°, Absolute: %8.1f°, Turns: %ld\n",
-               current_angle, absolute_angle, total_rotations);
-        
-        previous_angle = current_angle;
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-}
-```
-
-### Calibration and Zero Setting
-
-```cpp
-void calibration_example() {
-    As5047uHandler encoder(*spi);
-    encoder.Initialize();
-    
-    printf("AS5047U calibration and zero setting\n");
-    
-    // Read current position
-    float current_angle = encoder.GetAngleDegrees();
-    uint16_t current_raw = encoder.GetRawPosition();
-    
-    printf("Current position: %.2f° (raw: %u)\n", current_angle, current_raw);
-    
-    // Set current position as zero
-    printf("Setting current position as zero reference...\n");
-    if (encoder.SetZeroPosition()) {
-        printf("Zero position set successfully\n");
-    } else {
-        printf("Failed to set zero position\n");
+    // Safe angle reading
+    uint16_t angle;
+    result = handler.ReadAngle(angle);
+    if (result != As5047uError::SUCCESS) {
+        printf("ERROR: Failed to read angle: %s\n", As5047uErrorToString(result));
         return;
     }
     
-    // Verify zero setting
-    vTaskDelay(pdMS_TO_TICKS(100));
-    float new_angle = encoder.GetAngleDegrees();
-    printf("New angle after zero set: %.2f°\n", new_angle);
-    
-    // Test rotation direction setting
-    printf("\nTesting rotation direction...\n");
-    
-    // Set clockwise direction
-    encoder.SetRotationDirection(RotationDirection::CLOCKWISE);
-    printf("Direction set to CLOCKWISE\n");
-    
-    for (int i = 0; i < 10; i++) {
-        printf("CW - Position: %.2f°\n", encoder.GetAngleDegrees());
-        vTaskDelay(pdMS_TO_TICKS(500));
+    // Check sensor readiness
+    if (!handler.IsSensorReady()) {
+        printf("ERROR: Sensor not ready\n");
+        return;
     }
     
-    // Set counter-clockwise direction
-    encoder.SetRotationDirection(RotationDirection::COUNTER_CLOCKWISE);
-    printf("Direction set to COUNTER_CLOCKWISE\n");
-    
-    for (int i = 0; i < 10; i++) {
-        printf("CCW - Position: %.2f°\n", encoder.GetAngleDegrees());
-        vTaskDelay(pdMS_TO_TICKS(500));
-    }
-    
-    // Restore clockwise direction
-    encoder.SetRotationDirection(RotationDirection::CLOCKWISE);
-    printf("Direction restored to CLOCKWISE\n");
-}
-```
-
-### Diagnostic Monitoring
-
-```cpp
-void diagnostic_monitoring_example() {
-    As5047uHandler encoder(*spi);
-    encoder.Initialize();
-    
-    printf("AS5047U diagnostic monitoring\n");
-    printf("==============================\n");
-    
-    for (int i = 0; i < 200; i++) {
-        // Read position and diagnostics
-        float angle = encoder.GetAngleDegrees();
-        uint8_t mag_field = encoder.GetMagneticFieldStrength();
-        uint8_t agc = encoder.GetAutomaticGainControl();
-        
-        // Check error flags
-        auto errors = encoder.GetErrorFlags();
-        
-        // Display diagnostic information
-        printf("Pos: %6.1f°, MagField: %3u, AGC: %3u", angle, mag_field, agc);
-        
-        // Display error status
-        if (encoder.HasErrors()) {
-            printf(" [ERRORS:");
-            if (errors.magnetic_field_too_weak) printf(" MagWeak");
-            if (errors.magnetic_field_too_strong) printf(" MagStrong");
-            if (errors.parity_error) printf(" Parity");
-            if (errors.invalid_command) printf(" InvCmd");
-            if (errors.framing_error) printf(" Frame");
-            if (errors.voltage_error) printf(" Voltage");
-            if (errors.cordic_overflow) printf(" CORDIC");
-            printf("]");
-        } else {
-            printf(" [OK]");
-        }
-        
-        // Magnetic field status
-        if (mag_field < 50) {
-            printf(" [MAG: WEAK]");
-        } else if (mag_field > 200) {
-            printf(" [MAG: STRONG]");
-        } else {
-            printf(" [MAG: OK]");
-        }
-        
-        printf("\n");
-        
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-}
-```
-
-### Advanced Filtering Configuration
-
-```cpp
-void filtering_configuration_example() {
-    As5047uHandler encoder(*spi);
-    encoder.Initialize();
-    
-    printf("AS5047U filtering configuration test\n");
-    
-    // Test different hysteresis levels
-    HysteresisLevel hysteresis_levels[] = {
-        HysteresisLevel::OFF,
-        HysteresisLevel::LSB_1,
-        HysteresisLevel::LSB_2,
-        HysteresisLevel::LSB_3
-    };
-    
-    const char* hysteresis_names[] = {
-        "OFF", "1 LSB", "2 LSB", "3 LSB"
-    };
-    
-    for (int h = 0; h < 4; h++) {
-        printf("\nTesting hysteresis level: %s\n", hysteresis_names[h]);
-        encoder.SetHysteresis(hysteresis_levels[h]);
-        
-        // Collect stability data
-        float sum = 0.0f;
-        float min_val = 360.0f;
-        float max_val = 0.0f;
-        constexpr int samples = 100;
-        
-        for (int i = 0; i < samples; i++) {
-            float angle = encoder.GetAngleDegrees();
-            sum += angle;
-            min_val = std::min(min_val, angle);
-            max_val = std::max(max_val, angle);
-            vTaskDelay(pdMS_TO_TICKS(10));
-        }
-        
-        float average = sum / samples;
-        float range = max_val - min_val;
-        
-        printf("  Average: %.3f°\n", average);
-        printf("  Range: %.3f°\n", range);
-        printf("  Stability: %s\n", (range < 0.1f) ? "EXCELLENT" : 
-                                   (range < 0.5f) ? "GOOD" : "POOR");
-    }
-    
-    // Test filter thresholds
-    printf("\nTesting filter thresholds:\n");
-    
-    uint8_t fast_thresholds[] = {1, 3, 6, 9};
-    uint8_t slow_thresholds[] = {8, 16, 32, 48};
-    
-    for (int t = 0; t < 4; t++) {
-        printf("Fast: %u, Slow: %u\n", fast_thresholds[t], slow_thresholds[t]);
-        
-        encoder.SetFastFilterThreshold(fast_thresholds[t]);
-        encoder.SetSlowFilterThreshold(slow_thresholds[t]);
-        
-        // Measure response time (simplified test)
-        auto start_time = esp_timer_get_time();
-        float start_angle = encoder.GetAngleDegrees();
-        
-        // Wait for significant change (would need actual rotation)
-        for (int i = 0; i < 50; i++) {
-            float current_angle = encoder.GetAngleDegrees();
-            if (std::abs(current_angle - start_angle) > 1.0f) {
-                auto response_time = esp_timer_get_time() - start_time;
-                printf("  Response time: %llu µs\n", response_time);
-                break;
-            }
-            vTaskDelay(pdMS_TO_TICKS(1));
+    // Monitor error flags
+    uint16_t error_flags;
+    if (handler.ReadErrorFlags(error_flags) == As5047uError::SUCCESS) {
+        if (error_flags != 0) {
+            printf("WARNING: Error flags detected: 0x%04X\n", error_flags);
         }
     }
     
-    // Restore default settings
-    encoder.SetHysteresis(HysteresisLevel::LSB_1);
-    encoder.SetFastFilterThreshold(3);
-    encoder.SetSlowFilterThreshold(16);
-    
-    printf("Filter configuration test complete\n");
-}
-```
-
-### Performance Benchmarking
-
-```cpp
-void performance_benchmark() {
-    As5047uHandler encoder(*spi);
-    encoder.Initialize();
-    
-    printf("AS5047U Performance Benchmark\n");
-    printf("=============================\n");
-    
-    // Test read speed
-    auto start_time = esp_timer_get_time();
-    constexpr int READ_COUNT = 10000;
-    
-    for (int i = 0; i < READ_COUNT; i++) {
-        encoder.GetRawPosition();
+    // Check magnetic field
+    bool field_ok;
+    if (handler.IsMagneticFieldOK(field_ok) == As5047uError::SUCCESS) {
+        if (!field_ok) {
+            printf("WARNING: Weak magnetic field detected\n");
+        }
     }
     
-    auto end_time = esp_timer_get_time();
-    float avg_read_time = (end_time - start_time) / (float)READ_COUNT;
-    float reads_per_second = 1000000.0f / avg_read_time;
-    
-    printf("Raw position reads:\n");
-    printf("  Average time: %.2f µs\n", avg_read_time);
-    printf("  Reads per second: %.0f\n", reads_per_second);
-    printf("  Max theoretical RPM: %.0f\n", reads_per_second * 60.0f / 16384.0f);
-    
-    // Test angle conversion performance
-    start_time = esp_timer_get_time();
-    
-    for (int i = 0; i < READ_COUNT; i++) {
-        encoder.GetAngleDegrees();
-    }
-    
-    end_time = esp_timer_get_time();
-    float avg_angle_time = (end_time - start_time) / (float)READ_COUNT;
-    float angles_per_second = 1000000.0f / avg_angle_time;
-    
-    printf("Angle conversion:\n");
-    printf("  Average time: %.2f µs\n", avg_angle_time);
-    printf("  Conversions per second: %.0f\n", angles_per_second);
-    
-    // Test diagnostic read performance
-    start_time = esp_timer_get_time();
-    constexpr int DIAG_COUNT = 1000;
-    
-    for (int i = 0; i < DIAG_COUNT; i++) {
-        encoder.GetErrorFlags();
-        encoder.GetMagneticFieldStrength();
-    }
-    
-    end_time = esp_timer_get_time();
-    float avg_diag_time = (end_time - start_time) / (float)DIAG_COUNT;
-    
-    printf("Diagnostic reads:\n");
-    printf("  Average time: %.2f µs\n", avg_diag_time);
-    
-    // Memory usage
-    printf("Memory usage:\n");
-    printf("  Handler size: %zu bytes\n", sizeof(As5047uHandler));
-    
-    printf("Performance benchmark complete\n");
+    printf("All operations successful\n");
 }
 ```
 
 ## 🔍 Advanced Usage
 
-### Custom SPI Interface
+### Continuous Monitoring
 
 ```cpp
-// Example of creating a custom SPI interface with enhanced timing
-class HighSpeedAs5047uHandler : public As5047uHandler {
-public:
-    HighSpeedAs5047uHandler(BaseSpi& spi) : As5047uHandler(spi) {}
-    
-    bool Initialize() noexcept override {
-        // Configure SPI for maximum speed
-        if (!As5047uHandler::Initialize()) {
-            return false;
-        }
-        
-        // Additional high-speed optimizations
-        ConfigureForHighSpeed();
-        return true;
-    }
-    
-    float GetAngleDegreesOptimized() noexcept {
-        // Optimized angle reading with reduced overhead
-        uint16_t raw = GetRawPositionFast();
-        return ConvertRawToAngle(raw);
-    }
-    
-private:
-    void ConfigureForHighSpeed() {
-        // Reduce filter thresholds for faster response
-        SetFastFilterThreshold(1);
-        SetSlowFilterThreshold(4);
-        
-        // Minimize hysteresis
-        SetHysteresis(HysteresisLevel::OFF);
-    }
-    
-    uint16_t GetRawPositionFast() noexcept {
-        // Direct register access without error checking for speed
-        return ReadRegisterDirect(As5047uRegister::ANGLECOM);
-    }
-    
-    float ConvertRawToAngle(uint16_t raw) noexcept {
-        // Optimized conversion
-        return (raw & 0x3FFF) * (360.0f / 16384.0f);
-    }
-};
-```
-
-### Motion Control Integration
-
-```cpp
-// Example of integrating AS5047U with motor control
-class EncoderFeedbackController {
-public:
-    EncoderFeedbackController(As5047uHandler& encoder, MotorController& motor)
-        : encoder_(encoder), motor_(motor), target_angle_(0.0f) {}
-    
-    bool Initialize() {
-        if (!encoder_.Initialize()) {
-            return false;
-        }
-        
-        // Set encoder as zero reference
-        encoder_.SetZeroPosition();
-        
-        // Configure control parameters
-        kp_ = 2.0f;  // Proportional gain
-        ki_ = 0.1f;  // Integral gain
-        kd_ = 0.05f; // Derivative gain
-        
-        return true;
-    }
-    
-    void SetTargetAngle(float angle_degrees) {
-        target_angle_ = angle_degrees;
-    }
-    
-    void Update() {
-        // Read current position
-        float current_angle = encoder_.GetAngleDegrees();
-        
-        // Calculate error
-        float error = target_angle_ - current_angle;
-        
-        // Handle wrap-around
-        if (error > 180.0f) error -= 360.0f;
-        if (error < -180.0f) error += 360.0f;
-        
-        // PID control calculation
-        float dt = 0.001f;  // 1ms update rate
-        
-        integral_error_ += error * dt;
-        float derivative_error = (error - previous_error_) / dt;
-        
-        float control_output = (kp_ * error) + (ki_ * integral_error_) + (kd_ * derivative_error);
-        
-        // Convert to motor velocity command
-        float velocity_rpm = control_output * 10.0f;  // Scale factor
-        
-        // Apply to motor
-        auto* handler = motor_.handler(0);
-        if (handler) {
-            auto tmc = handler->GetTmc9660Driver();
-            tmc->SetTargetVelocity(static_cast<int32_t>(velocity_rpm));
-        }
-        
-        previous_error_ = error;
-    }
-    
-    float GetPositionError() const {
-        return target_angle_ - encoder_.GetAngleDegrees();
-    }
-    
-private:
-    As5047uHandler& encoder_;
-    MotorController& motor_;
-    float target_angle_;
-    float kp_, ki_, kd_;
-    float integral_error_ = 0.0f;
-    float previous_error_ = 0.0f;
-};
-```
-
-## 🚨 Error Handling
-
-### Comprehensive Error Management
-
-```cpp
-void comprehensive_error_handling() {
+void continuous_monitoring() {
     auto& comm = CommChannelsManager::GetInstance();
-    if (!comm.EnsureInitialized()) {
-        printf("ERROR: Communication manager failed\n");
-        return;
-    }
+    comm.EnsureInitialized();
     
     auto* spi = comm.GetSpiDevice(SpiDeviceId::AS5047U_POSITION_ENCODER);
-    if (!spi) {
-        printf("ERROR: SPI device not available\n");
-        return;
-    }
+    if (!spi) return;
     
-    if (!spi->IsInitialized()) {
-        printf("ERROR: SPI interface not initialized\n");
-        return;
-    }
+    As5047uHandler handler(*spi);
+    if (handler.Initialize() != As5047uError::SUCCESS) return;
     
-    As5047uHandler encoder(*spi);
-    
-    // Test communication first
-    if (!encoder.TestCommunication()) {
-        printf("ERROR: AS5047U not responding\n");
-        return;
-    }
-    
-    // Initialize with error checking
-    if (!encoder.Initialize()) {
-        printf("ERROR: AS5047U initialization failed\n");
-        return;
-    }
-    
-    printf("AS5047U initialized successfully\n");
-    
-    // Monitor for errors during operation
-    uint32_t error_count = 0;
-    uint32_t total_reads = 0;
-    
+    // Continuous monitoring loop
     for (int i = 0; i < 1000; i++) {
-        total_reads++;
-        
-        // Read position with error checking
-        float angle = encoder.GetAngleDegrees();
-        
-        // Check for hardware errors
-        if (encoder.HasErrors()) {
-            error_count++;
-            auto errors = encoder.GetErrorFlags();
+        As5047uMeasurement measurement;
+        if (handler.ReadMeasurement(measurement) == As5047uError::SUCCESS) {
+            double angle_deg = As5047uHandler::LSBToDegrees(measurement.angle_compensated);
             
-            printf("ERROR %u (%.1f%% rate):", error_count, 
-                   100.0f * error_count / total_reads);
+            printf("Sample %d: Angle=%.2f°, Velocity=%.2f RPM, AGC=%u\n", 
+                   i, angle_deg, measurement.velocity_rpm, measurement.agc_value);
             
-            if (errors.magnetic_field_too_weak) {
-                printf(" Magnetic field too weak");
-            }
-            if (errors.magnetic_field_too_strong) {
-                printf(" Magnetic field too strong");
-            }
-            if (errors.parity_error) {
-                printf(" Parity error");
-            }
-            if (errors.voltage_error) {
-                printf(" Voltage error");
+            // Check for issues
+            if (measurement.error_flags != 0) {
+                printf("WARNING: Error flags: 0x%04X\n", measurement.error_flags);
             }
             
-            printf("\n");
-            
-            // Too many errors indicate hardware problem
-            if (error_count > 50) {
-                printf("CRITICAL: Too many errors, check hardware\n");
-                break;
+            if (measurement.agc_value < 50 || measurement.agc_value > 200) {
+                printf("WARNING: AGC out of range: %u\n", measurement.agc_value);
             }
         }
         
-        // Check magnetic field quality
-        if (!encoder.IsMagneticFieldOk()) {
-            uint8_t field_strength = encoder.GetMagneticFieldStrength();
-            printf("WARNING: Magnetic field issue (strength: %u)\n", field_strength);
-        }
+        vTaskDelay(pdMS_TO_TICKS(10));  // 100Hz monitoring
+    }
+}
+```
+
+### Calibration and OTP Programming
+
+```cpp
+void calibration_example() {
+    auto& comm = CommChannelsManager::GetInstance();
+    comm.EnsureInitialized();
+    
+    auto* spi = comm.GetSpiDevice(SpiDeviceId::AS5047U_POSITION_ENCODER);
+    if (!spi) return;
+    
+    As5047uHandler handler(*spi);
+    if (handler.Initialize() != As5047uError::SUCCESS) return;
+    
+    // Perform calibration
+    printf("Starting sensor calibration...\n");
+    if (handler.PerformCalibration() == As5047uError::SUCCESS) {
+        printf("Calibration completed successfully\n");
         
-        vTaskDelay(pdMS_TO_TICKS(10));
+        // Program settings to OTP (WARNING: One-time operation)
+        printf("Programming settings to OTP...\n");
+        if (handler.ProgramOTP() == As5047uError::SUCCESS) {
+            printf("Settings programmed to OTP successfully\n");
+        } else {
+            printf("Failed to program OTP\n");
+        }
+    } else {
+        printf("Calibration failed\n");
     }
     
-    float error_rate = 100.0f * error_count / total_reads;
-    printf("Operation completed: %u errors in %u reads (%.2f%%)\n", 
-           error_count, total_reads, error_rate);
+    // Reset to defaults if needed
+    printf("Resetting to defaults...\n");
+    if (handler.ResetToDefaults() == As5047uError::SUCCESS) {
+        printf("Reset to defaults completed\n");
+    }
+}
+```
+
+### Multi-Sensor Integration
+
+```cpp
+void multi_sensor_integration() {
+    auto& comm = CommChannelsManager::GetInstance();
+    comm.EnsureInitialized();
     
-    if (error_rate < 1.0f) {
-        printf("System operating normally\n");
-    } else if (error_rate < 5.0f) {
-        printf("Some errors detected, check mounting and magnetic field\n");
-    } else {
-        printf("High error rate, hardware service required\n");
+    // Create multiple AS5047U handlers
+    std::vector<std::unique_ptr<As5047uHandler>> handlers;
+    
+    // Create handlers for different SPI devices
+    auto* spi1 = comm.GetSpiDevice(SpiDeviceId::AS5047U_POSITION_ENCODER);
+    auto* spi2 = comm.GetSpiDevice(SpiDeviceId::EXTERNAL_DEVICE_1);
+    
+    if (spi1) {
+        auto handler1 = std::make_unique<As5047uHandler>(*spi1);
+        if (handler1->Initialize() == As5047uError::SUCCESS) {
+            handlers.push_back(std::move(handler1));
+        }
+    }
+    
+    if (spi2) {
+        auto handler2 = std::make_unique<As5047uHandler>(*spi2);
+        if (handler2->Initialize() == As5047uError::SUCCESS) {
+            handlers.push_back(std::move(handler2));
+        }
+    }
+    
+    // Process data from all sensors
+    for (size_t i = 0; i < handlers.size(); i++) {
+        As5047uMeasurement measurement;
+        if (handlers[i]->ReadMeasurement(measurement) == As5047uError::SUCCESS) {
+            double angle_deg = As5047uHandler::LSBToDegrees(measurement.angle_compensated);
+            printf("Sensor %zu: Angle=%.2f°, Velocity=%.2f RPM\n", 
+                   i, angle_deg, measurement.velocity_rpm);
+        }
     }
 }
 ```
 
 ## 📚 See Also
 
-- **[MotorController Documentation](../component-handlers/MOTOR_CONTROLLER_README.md)** - Motor control integration
-- **[CommChannelsManager Documentation](../component-handlers/COMM_CHANNELS_MANAGER_README.md)** - SPI interface setup
-- **[AS5047U Datasheet](https://ams.com/as5047u)** - Official hardware documentation
-- **[SPI Interface Guide](../hardware/SPI_INTERFACE_GUIDE.md)** - SPI communication setup
-- **[Position Control Guide](../tutorials/POSITION_CONTROL_GUIDE.md)** - Position control applications
+- **[MotorController Documentation](../component-handlers/MOTOR_CONTROLLER_README.md)** - Motor management system
+- **[CommChannelsManager Documentation](../component-handlers/COMM_CHANNELS_MANAGER_README.md)** - Communication interfaces
+- **[TMC9660 Handler Documentation](TMC9660_HANDLER_README.md)** - Motor controller handler
+- **[BNO08x Handler Documentation](BNO08X_HANDLER_README.md)** - IMU sensor handler
 
 ---
 

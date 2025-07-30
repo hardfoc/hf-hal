@@ -1,4 +1,4 @@
-# AdcManager - ADC Management System
+# AdcManager - Advanced ADC Management System
 
 <div align="center">
 
@@ -6,13 +6,13 @@
 ![Thread Safe](https://img.shields.io/badge/thread--safe-yes-green.svg)
 ![Hardware](https://img.shields.io/badge/hardware-ESP32--C6%20|%20TMC9660-orange.svg)
 
-**Advanced ADC management system for the HardFOC platform**
+**Comprehensive ADC management system for the HardFOC platform**
 
 </div>
 
 ## 📋 Overview
 
-The `AdcManager` is a singleton component handler that provides unified, thread-safe access to ADC channels across multiple hardware sources. It abstracts the complexity of managing ADC channels from ESP32-C6 internal ADC and TMC9660 motor controller ADC through a single, consistent API.
+The `AdcManager` is a singleton component handler that provides unified, thread-safe access to ADC channels across multiple hardware sources. It integrates with the platform mapping system to automatically manage ADC channels from ESP32-C6 internal ADC and TMC9660 motor controller ADC through a single, consistent API using string-based channel identification.
 
 ### ✨ Key Features
 
@@ -59,12 +59,16 @@ void adc_example() {
     }
     
     // Read raw ADC value
-    uint16_t raw = adc.ReadRaw("ESP32_ADC1_CH0");
-    printf("Raw ADC value: %u\n", raw);
+    uint32_t raw_value;
+    if (adc.ReadChannelCount("ESP32_ADC1_CH0", raw_value) == HF_ADC_SUCCESS) {
+        printf("Raw ADC value: %u\n", raw_value);
+    }
     
     // Read calibrated voltage
-    float voltage = adc.ReadVoltage("ESP32_ADC1_CH0");
-    printf("Voltage: %.3fV\n", voltage);
+    float voltage;
+    if (adc.ReadChannelV("ESP32_ADC1_CH0", voltage) == HF_ADC_SUCCESS) {
+        printf("Voltage: %.3fV\n", voltage);
+    }
 }
 ```
 
@@ -86,97 +90,115 @@ public:
 };
 ```
 
+#### ADC Registration and Management
+```cpp
+// Channel registration
+hf_adc_err_t RegisterAdc(std::string_view name, std::unique_ptr<BaseAdc> adc) noexcept;
+BaseAdc* Get(std::string_view name) noexcept;
+bool Contains(std::string_view name) const noexcept;
+size_t Size() const noexcept;
+```
+
 #### Single Channel Operations
 ```cpp
 // Raw ADC readings
-uint16_t ReadRaw(std::string_view channel_name) noexcept;
-uint32_t ReadRaw32(std::string_view channel_name) noexcept;
+hf_adc_err_t ReadChannelCount(std::string_view name, uint32_t& count, 
+                             uint8_t samples = 1, uint16_t interval_ms = 0) noexcept;
 
 // Voltage readings
-float ReadVoltage(std::string_view channel_name) noexcept;
-float ReadVoltageFiltered(std::string_view channel_name, uint8_t samples = 16) noexcept;
+hf_adc_err_t ReadChannelV(std::string_view name, float& voltage,
+                         uint8_t samples = 1, uint16_t interval_ms = 0) noexcept;
 
 // Channel validation
-bool IsChannelAvailable(std::string_view channel_name) const noexcept;
-bool IsChannelCalibrated(std::string_view channel_name) const noexcept;
+bool IsChannelAvailable(std::string_view name) const noexcept;
 ```
 
 #### Batch Operations
 ```cpp
-// Multi-channel raw readings
-template<size_t N>
-AdcMultiReading<N> ReadMultipleRaw(const std::array<std::string_view, N>& channels) noexcept;
-
-// Multi-channel voltage readings
-template<size_t N>
-AdcMultiReading<N> ReadMultipleVoltages(const std::array<std::string_view, N>& channels) noexcept;
-
-// Optimized batch structures
-template<size_t N>
-struct AdcMultiReading {
-    std::array<uint16_t, N> raw_values;
-    std::array<float, N> voltages;
-    std::array<bool, N> success_flags;
-    uint64_t timestamp;
-    bool all_successful;
-};
+// Multi-channel operations
+AdcBatchResult BatchRead(const AdcBatchOperation& operation) noexcept;
+AdcBatchResult BatchReadVoltages(const std::vector<std::string_view>& channels,
+                                uint8_t samples = 1, uint16_t interval_ms = 0) noexcept;
+AdcBatchResult BatchReadCounts(const std::vector<std::string_view>& channels,
+                              uint8_t samples = 1, uint16_t interval_ms = 0) noexcept;
 ```
 
-#### Calibration and Configuration
+#### Statistics and Diagnostics
 ```cpp
-// Channel calibration
-bool CalibrateChannel(std::string_view channel_name) noexcept;
-bool SetChannelCalibration(std::string_view channel_name, 
-                          float reference_voltage, 
-                          float voltage_divider = 1.0f) noexcept;
-
-// Channel configuration
-bool ConfigureChannel(std::string_view channel_name, 
-                     AdcResolution resolution = AdcResolution::ADC_12_BIT,
-                     AdcAttenuation attenuation = AdcAttenuation::ADC_ATTEN_DB_11) noexcept;
+// System diagnostics
+hf_adc_err_t GetSystemDiagnostics(AdcSystemDiagnostics& diagnostics) const noexcept;
+hf_adc_err_t GetStatistics(std::string_view name, BaseAdc::AdcStatistics& statistics) const noexcept;
+hf_adc_err_t ResetStatistics(std::string_view name) noexcept;
+void DumpStatistics() const noexcept;
 ```
 
-### Diagnostics and Monitoring
+### Data Structures
 
-#### System Status
+#### AdcChannelInfo
 ```cpp
-// Health monitoring
-struct AdcSystemStatus {
-    bool overall_healthy;
-    uint32_t total_channels_registered;
-    uint32_t esp32_channels_active;
-    uint32_t tmc9660_channels_active;
-    uint32_t total_errors;
-    uint32_t calibration_errors;
-    uint64_t last_error_time;
-    float average_read_time_us;
-};
-
-AdcSystemStatus GetSystemStatus() const noexcept;
-bool IsSystemHealthy() const noexcept;
-```
-
-#### Channel Information
-```cpp
-// Channel details
 struct AdcChannelInfo {
-    std::string_view name;
-    std::unique_ptr<BaseAdc> adc_driver;
-    HfFunctionalAdcChannel functional_channel;
-    HfAdcChipType hardware_chip;
-    uint8_t hardware_channel_id;
-    bool is_registered;
-    float reference_voltage;
-    uint32_t resolution_bits;
-    uint32_t max_voltage_mv;
-    float voltage_divider;
-    uint32_t access_count;
-    uint32_t error_count;
-    uint64_t last_access_time;
+    std::string_view name;                      // Human-readable name
+    std::unique_ptr<BaseAdc> adc_driver;        // ADC driver instance
+    HfFunctionalAdcChannel functional_channel;  // Functional channel identifier
+    HfAdcChipType hardware_chip;                // Hardware chip identifier
+    uint8_t hardware_channel_id;                // Hardware channel ID within the chip
+    bool is_registered;                         // Registration status
+    
+    // Hardware configuration
+    float reference_voltage;                    // Reference voltage for conversion
+    uint32_t resolution_bits;                   // ADC resolution in bits
+    uint32_t max_voltage_mv;                    // Maximum voltage in millivolts
+    float voltage_divider;                      // Voltage divider ratio
+    
+    // Statistics and monitoring
+    uint32_t access_count;                      // Number of times accessed
+    uint32_t error_count;                       // Number of errors encountered
+    uint64_t last_access_time;                  // Timestamp of last access
 };
+```
 
-std::optional<AdcChannelInfo> GetChannelInfo(std::string_view channel_name) const noexcept;
-std::vector<std::string> GetRegisteredChannels() const noexcept;
+#### AdcSystemDiagnostics
+```cpp
+struct AdcSystemDiagnostics {
+    bool system_healthy;                           // Overall system health
+    uint32_t total_channels_registered;            // Total channels registered
+    uint32_t channels_by_chip[4];                  // Channels per chip
+    uint32_t total_operations;                     // Total operations performed
+    uint32_t successful_operations;                // Successful operations
+    uint32_t failed_operations;                    // Failed operations
+    uint32_t calibration_errors;                   // Calibration errors
+    uint32_t communication_errors;                 // Communication errors
+    uint32_t hardware_errors;                      // Hardware errors
+    uint64_t system_uptime_ms;                     // System uptime
+    float average_read_time_us;                    // Average read time in microseconds
+    hf_adc_err_t last_error;                       // Last error encountered
+};
+```
+
+#### AdcBatchOperation
+```cpp
+struct AdcBatchOperation {
+    std::vector<std::string_view> channel_names;    // Channel names to operate on
+    std::vector<uint8_t> samples_per_channel;       // Samples per channel
+    std::vector<uint16_t> intervals_ms;             // Intervals between samples in ms
+    bool use_individual_specs;                      // Use individual specs or common settings
+    uint8_t common_samples;                         // Common number of samples
+    uint16_t common_interval_ms;                    // Common sampling interval
+};
+```
+
+#### AdcBatchResult
+```cpp
+struct AdcBatchResult {
+    std::vector<std::string_view> channel_names;    // Channel names operated on
+    std::vector<float> voltages;                    // Resulting voltage readings
+    std::vector<uint32_t> raw_values;               // Raw ADC values
+    std::vector<hf_adc_err_t> results;              // Individual operation results
+    hf_adc_err_t overall_result;                    // Overall operation result
+    uint32_t total_time_ms;                         // Total operation time
+    
+    bool AllSuccessful() const noexcept;            // Check if all operations were successful
+};
 ```
 
 ## 🎯 Hardware Support
@@ -186,7 +208,7 @@ std::vector<std::string> GetRegisteredChannels() const noexcept;
 | Hardware | Channels Available | Resolution | Reference Voltage | Features |
 |----------|-------------------|------------|------------------|----------|
 | **ESP32-C6** | 6 channels (ADC1: 0-4, ADC2: 0) | 12-bit | 3.3V | Calibration, attenuation |
-| **TMC9660** | 3 channels (AIN1, AIN2, AIN3) | 12-bit | 3.3V | Motor feedback, diagnostics |
+| **TMC9660** | 12 channels (4 current + 4 analog + 4 voltage/temp) | 12-bit | 3.3V | Motor feedback, diagnostics |
 
 ### Channel Naming Convention
 
@@ -196,9 +218,12 @@ std::vector<std::string> GetRegisteredChannels() const noexcept;
 "ESP32_ADC2_CH0"                        // ADC2 channel 0
 
 // TMC9660 ADC channels
-"TMC9660_AIN1"                          // Analog input 1
-"TMC9660_AIN2"                          // Analog input 2  
-"TMC9660_AIN3"                          // Analog input 3
+"TMC9660_CURRENT_I0" to "TMC9660_CURRENT_I3"     // Current sense channels
+"TMC9660_AIN0" to "TMC9660_AIN3"                 // External analog inputs
+"TMC9660_VOLTAGE_SUPPLY"                         // Supply voltage monitoring
+"TMC9660_VOLTAGE_DRIVER"                         // Driver voltage monitoring
+"TMC9660_TEMP_CHIP"                             // Chip temperature
+"TMC9660_TEMP_EXTERNAL"                         // External temperature
 
 // Functional channel names (platform-mapped)
 "MOTOR_CURRENT_SENSE"                   // Motor current feedback
@@ -221,30 +246,18 @@ The AdcManager automatically integrates with the platform mapping system:
 // Channels are registered automatically during initialization
 ```
 
-### Hardware Configuration
+### Error Handling
+
+The AdcManager uses comprehensive error handling with specific error codes:
 
 ```cpp
-// ESP32-C6 ADC configuration
-enum class AdcResolution {
-    ADC_9_BIT = 9,
-    ADC_10_BIT = 10,
-    ADC_11_BIT = 11,
-    ADC_12_BIT = 12
-};
-
-enum class AdcAttenuation {
-    ADC_ATTEN_DB_0 = 0,    // 0dB, input range: 0-1.1V
-    ADC_ATTEN_DB_2_5,      // 2.5dB, input range: 0-1.5V
-    ADC_ATTEN_DB_6,        // 6dB, input range: 0-2.2V
-    ADC_ATTEN_DB_11        // 11dB, input range: 0-3.9V
-};
-
-// TMC9660 ADC configuration
-struct Tmc9660AdcConfig {
-    uint32_t sampling_rate_hz = 1000;
-    bool enable_filtering = true;
-    uint8_t filter_samples = 8;
-};
+// Common error codes
+hf_adc_err_t::HF_ADC_SUCCESS              // Operation successful
+hf_adc_err_t::HF_ADC_ERR_INVALID_PARAMETER // Invalid channel name or parameters
+hf_adc_err_t::HF_ADC_ERR_NOT_INITIALIZED   // ADC manager not initialized
+hf_adc_err_t::HF_ADC_ERR_HARDWARE_FAULT    // Hardware communication error
+hf_adc_err_t::HF_ADC_ERR_CALIBRATION       // Calibration error
+hf_adc_err_t::HF_ADC_ERR_OUT_OF_MEMORY     // Memory allocation failed
 ```
 
 ## 📊 Examples
@@ -259,16 +272,21 @@ void basic_adc_example() {
     adc.Initialize();
     
     // Single channel readings
-    uint16_t raw = adc.ReadRaw("ESP32_ADC1_CH0");
-    float voltage = adc.ReadVoltage("ESP32_ADC1_CH0");
+    uint32_t raw_value;
+    float voltage;
     
-    printf("Channel ESP32_ADC1_CH0:\n");
-    printf("  Raw: %u\n", raw);
-    printf("  Voltage: %.3fV\n", voltage);
+    if (adc.ReadChannelCount("ESP32_ADC1_CH0", raw_value) == HF_ADC_SUCCESS) {
+        printf("Channel ESP32_ADC1_CH0 raw: %u\n", raw_value);
+    }
     
-    // Filtered reading for more stability
-    float filtered_voltage = adc.ReadVoltageFiltered("ESP32_ADC1_CH0", 16);
-    printf("  Filtered: %.3fV\n", filtered_voltage);
+    if (adc.ReadChannelV("ESP32_ADC1_CH0", voltage) == HF_ADC_SUCCESS) {
+        printf("Channel ESP32_ADC1_CH0 voltage: %.3fV\n", voltage);
+    }
+    
+    // Multiple samples for stability
+    if (adc.ReadChannelV("ESP32_ADC1_CH0", voltage, 16) == HF_ADC_SUCCESS) {
+        printf("Channel ESP32_ADC1_CH0 filtered: %.3fV\n", voltage);
+    }
 }
 ```
 
@@ -280,19 +298,19 @@ void multi_channel_example() {
     adc.Initialize();
     
     // Define channels to read
-    std::array<std::string_view, 4> channels = {
+    std::vector<std::string_view> channels = {
         "ESP32_ADC1_CH0",
         "ESP32_ADC1_CH1",
-        "TMC9660_AIN1",
-        "TMC9660_AIN2"
+        "TMC9660_AIN0",
+        "TMC9660_AIN1"
     };
     
     // Read all channels simultaneously
-    auto readings = adc.ReadMultipleVoltages(channels);
+    auto readings = adc.BatchReadVoltages(channels, 4);  // 4 samples each
     
-    printf("Multi-channel readings (timestamp: %llu):\n", readings.timestamp);
+    printf("Multi-channel readings (time: %u ms):\n", readings.total_time_ms);
     for (size_t i = 0; i < channels.size(); i++) {
-        if (readings.success_flags[i]) {
+        if (readings.results[i] == HF_ADC_SUCCESS) {
             printf("  %.*s: %.3fV (raw: %u)\n",
                    static_cast<int>(channels[i].size()), channels[i].data(),
                    readings.voltages[i], readings.raw_values[i]);
@@ -302,7 +320,7 @@ void multi_channel_example() {
         }
     }
     
-    printf("All successful: %s\n", readings.all_successful ? "YES" : "NO");
+    printf("All successful: %s\n", readings.AllSuccessful() ? "YES" : "NO");
 }
 ```
 
@@ -313,18 +331,15 @@ void motor_current_example() {
     auto& adc = AdcManager::GetInstance();
     adc.Initialize();
     
-    // Configure current sense channel with appropriate scaling
-    adc.SetChannelCalibration("TMC9660_AIN1", 3.3f, 10.0f);  // 10:1 voltage divider
-    
-    // Monitor motor current
+    // Monitor motor current from TMC9660
     printf("Motor current monitoring:\n");
     for (int i = 0; i < 100; i++) {
-        float voltage = adc.ReadVoltage("TMC9660_AIN1");
-        
-        // Convert voltage to current (example: 0.1V/A current sensor)
-        float current = voltage / 0.1f;
-        
-        printf("Current: %.2fA (%.3fV)\n", current, voltage);
+        float voltage;
+        if (adc.ReadChannelV("TMC9660_CURRENT_I0", voltage, 8) == HF_ADC_SUCCESS) {
+            // Convert voltage to current (example: 0.1V/A current sensor)
+            float current = voltage / 0.1f;
+            printf("Current: %.2fA (%.3fV)\n", current, voltage);
+        }
         
         vTaskDelay(pdMS_TO_TICKS(100));
     }
@@ -338,22 +353,20 @@ void battery_voltage_example() {
     auto& adc = AdcManager::GetInstance();
     adc.Initialize();
     
-    // Configure battery voltage channel (assuming voltage divider)
-    adc.SetChannelCalibration("ESP32_ADC1_CH2", 3.3f, 3.0f);  // 3:1 voltage divider
-    
     // Monitor battery voltage with filtering
     while (true) {
-        float battery_voltage = adc.ReadVoltageFiltered("ESP32_ADC1_CH2", 32);
-        
-        printf("Battery: %.2fV", battery_voltage);
-        
-        // Battery status indication
-        if (battery_voltage > 12.0f) {
-            printf(" [GOOD]\n");
-        } else if (battery_voltage > 10.5f) {
-            printf(" [LOW]\n");
-        } else {
-            printf(" [CRITICAL]\n");
+        float battery_voltage;
+        if (adc.ReadChannelV("ESP32_ADC1_CH2", battery_voltage, 32) == HF_ADC_SUCCESS) {
+            printf("Battery: %.2fV", battery_voltage);
+            
+            // Battery status indication
+            if (battery_voltage > 12.0f) {
+                printf(" [GOOD]\n");
+            } else if (battery_voltage > 10.5f) {
+                printf(" [LOW]\n");
+            } else {
+                printf(" [CRITICAL]\n");
+            }
         }
         
         vTaskDelay(pdMS_TO_TICKS(1000));
@@ -369,106 +382,36 @@ void diagnostics_example() {
     adc.Initialize();
     
     // Get system status
-    auto status = adc.GetSystemStatus();
-    
-    printf("ADC System Status:\n");
-    printf("  Overall healthy: %s\n", status.overall_healthy ? "YES" : "NO");
-    printf("  Total channels: %u\n", status.total_channels_registered);
-    printf("  ESP32 channels: %u\n", status.esp32_channels_active);
-    printf("  TMC9660 channels: %u\n", status.tmc9660_channels_active);
-    printf("  Total errors: %u\n", status.total_errors);
-    printf("  Calibration errors: %u\n", status.calibration_errors);
-    printf("  Avg read time: %.2fµs\n", status.average_read_time_us);
-    
-    // Get detailed channel information
-    auto channels = adc.GetRegisteredChannels();
-    printf("\nRegistered channels (%zu total):\n", channels.size());
-    
-    for (const auto& channel : channels) {
-        auto info = adc.GetChannelInfo(channel);
-        if (info) {
-            printf("  %s:\n", channel.c_str());
-            printf("    Hardware chip: %d\n", static_cast<int>(info->hardware_chip));
-            printf("    Channel ID: %u\n", info->hardware_channel_id);
-            printf("    Reference: %.3fV\n", info->reference_voltage);
-            printf("    Resolution: %u bits\n", info->resolution_bits);
-            printf("    Voltage divider: %.2f\n", info->voltage_divider);
-            printf("    Access count: %u\n", info->access_count);
-            printf("    Errors: %u\n", info->error_count);
-        }
-    }
-}
-```
-
-### Advanced Calibration
-
-```cpp
-void calibration_example() {
-    auto& adc = AdcManager::GetInstance();
-    adc.Initialize();
-    
-    // Calibrate specific channels
-    if (adc.CalibrateChannel("ESP32_ADC1_CH0")) {
-        printf("ESP32_ADC1_CH0 calibrated successfully\n");
+    AdcSystemDiagnostics diagnostics;
+    if (adc.GetSystemDiagnostics(diagnostics) == HF_ADC_SUCCESS) {
+        printf("ADC System Status:\n");
+        printf("  Overall healthy: %s\n", diagnostics.system_healthy ? "YES" : "NO");
+        printf("  Total channels: %u\n", diagnostics.total_channels_registered);
+        printf("  Total operations: %u\n", diagnostics.total_operations);
+        printf("  Successful operations: %u\n", diagnostics.successful_operations);
+        printf("  Failed operations: %u\n", diagnostics.failed_operations);
+        printf("  Calibration errors: %u\n", diagnostics.calibration_errors);
+        printf("  Communication errors: %u\n", diagnostics.communication_errors);
+        printf("  Hardware errors: %u\n", diagnostics.hardware_errors);
+        printf("  Avg read time: %.2fµs\n", diagnostics.average_read_time_us);
+        printf("  System uptime: %llu ms\n", diagnostics.system_uptime_ms);
     }
     
-    // Custom calibration for voltage divider circuits
-    adc.SetChannelCalibration("ESP32_ADC1_CH1", 3.3f, 2.0f);  // 2:1 divider
-    adc.SetChannelCalibration("ESP32_ADC1_CH2", 3.3f, 4.7f);  // 4.7:1 divider
-    
-    // Verify calibration
-    for (const auto& channel : {"ESP32_ADC1_CH0", "ESP32_ADC1_CH1", "ESP32_ADC1_CH2"}) {
-        if (adc.IsChannelCalibrated(channel)) {
-            printf("Channel %s: Calibrated\n", channel);
-        } else {
-            printf("Channel %s: Not calibrated\n", channel);
-        }
+    // Get channel statistics
+    BaseAdc::AdcStatistics stats;
+    if (adc.GetStatistics("ESP32_ADC1_CH0", stats) == HF_ADC_SUCCESS) {
+        printf("\nChannel ESP32_ADC1_CH0 statistics:\n");
+        printf("  Access count: %u\n", stats.access_count);
+        printf("  Error count: %u\n", stats.error_count);
+        printf("  Last access time: %llu\n", stats.last_access_time);
     }
+    
+    // Dump all statistics
+    adc.DumpStatistics();
 }
 ```
 
 ## 🔍 Advanced Usage
-
-### High-Speed Sampling
-
-```cpp
-void high_speed_sampling() {
-    auto& adc = AdcManager::GetInstance();
-    adc.Initialize();
-    
-    // Configure for high-speed sampling
-    adc.ConfigureChannel("ESP32_ADC1_CH0", AdcResolution::ADC_12_BIT, 
-                        AdcAttenuation::ADC_ATTEN_DB_11);
-    
-    // Collect samples at high rate
-    constexpr size_t SAMPLE_COUNT = 1000;
-    std::array<uint16_t, SAMPLE_COUNT> samples;
-    
-    auto start_time = esp_timer_get_time();
-    
-    for (size_t i = 0; i < SAMPLE_COUNT; i++) {
-        samples[i] = adc.ReadRaw("ESP32_ADC1_CH0");
-    }
-    
-    auto end_time = esp_timer_get_time();
-    float sample_rate = SAMPLE_COUNT * 1000000.0f / (end_time - start_time);
-    
-    printf("Collected %zu samples at %.1f samples/sec\n", SAMPLE_COUNT, sample_rate);
-    
-    // Calculate statistics
-    uint32_t sum = 0;
-    uint16_t min_val = samples[0], max_val = samples[0];
-    
-    for (const auto& sample : samples) {
-        sum += sample;
-        min_val = std::min(min_val, sample);
-        max_val = std::max(max_val, sample);
-    }
-    
-    float average = static_cast<float>(sum) / SAMPLE_COUNT;
-    printf("Statistics: min=%u, max=%u, avg=%.1f\n", min_val, max_val, average);
-}
-```
 
 ### Performance Optimization
 
@@ -478,9 +421,9 @@ void optimized_adc_usage() {
     adc.Initialize();
     
     // Use batch operations for better performance
-    std::array<std::string_view, 6> channels = {
+    std::vector<std::string_view> channels = {
         "ESP32_ADC1_CH0", "ESP32_ADC1_CH1", "ESP32_ADC1_CH2",
-        "TMC9660_AIN1", "TMC9660_AIN2", "TMC9660_AIN3"
+        "TMC9660_AIN0", "TMC9660_AIN1", "TMC9660_AIN2"
     };
     
     // Benchmark single vs batch reads
@@ -489,7 +432,8 @@ void optimized_adc_usage() {
     // Single reads (slower)
     for (int i = 0; i < 100; i++) {
         for (const auto& channel : channels) {
-            adc.ReadVoltage(channel);
+            float voltage;
+            adc.ReadChannelV(channel, voltage);
         }
     }
     
@@ -499,7 +443,7 @@ void optimized_adc_usage() {
     
     // Batch reads (faster)
     for (int i = 0; i < 100; i++) {
-        adc.ReadMultipleVoltages(channels);
+        adc.BatchReadVoltages(channels, 1);
     }
     
     auto batch_time = esp_timer_get_time() - start_time;
@@ -508,6 +452,38 @@ void optimized_adc_usage() {
     printf("  Single reads: %lld µs\n", single_time);
     printf("  Batch reads: %lld µs\n", batch_time);
     printf("  Speedup: %.1fx\n", static_cast<float>(single_time) / batch_time);
+}
+```
+
+### Advanced Batch Operations
+
+```cpp
+void advanced_batch_example() {
+    auto& adc = AdcManager::GetInstance();
+    adc.Initialize();
+    
+    // Create batch operation with individual specifications
+    std::vector<std::string_view> channels = {
+        "ESP32_ADC1_CH0", "ESP32_ADC1_CH1", "TMC9660_AIN0"
+    };
+    
+    std::vector<uint8_t> samples = {16, 8, 32};  // Different sample counts
+    std::vector<uint16_t> intervals = {0, 10, 5}; // Different intervals
+    
+    AdcBatchOperation operation(channels, samples, intervals);
+    auto result = adc.BatchRead(operation);
+    
+    printf("Advanced batch operation results:\n");
+    for (size_t i = 0; i < channels.size(); i++) {
+        if (result.results[i] == HF_ADC_SUCCESS) {
+            printf("  %.*s: %.3fV (raw: %u, samples: %u, interval: %u ms)\n",
+                   static_cast<int>(channels[i].size()), channels[i].data(),
+                   result.voltages[i], result.raw_values[i],
+                   samples[i], intervals[i]);
+        }
+    }
+    
+    printf("Total time: %u ms\n", result.total_time_ms);
 }
 ```
 
@@ -532,17 +508,20 @@ void error_handling_example() {
     }
     
     // Safe ADC operations with error checking
-    uint16_t raw = adc.ReadRaw("ESP32_ADC1_CH0");
-    if (raw == 0xFFFF) {  // Error indicator
-        printf("ERROR: Failed to read ADC channel\n");
+    float voltage;
+    auto result = adc.ReadChannelV("ESP32_ADC1_CH0", voltage);
+    if (result != HF_ADC_SUCCESS) {
+        printf("ERROR: Failed to read ADC channel: %d\n", static_cast<int>(result));
     }
     
     // Monitor system health
-    if (!adc.IsSystemHealthy()) {
-        printf("WARNING: ADC system health check failed\n");
-        auto status = adc.GetSystemStatus();
-        printf("Total errors: %u\n", status.total_errors);
-        printf("Calibration errors: %u\n", status.calibration_errors);
+    AdcSystemDiagnostics diagnostics;
+    if (adc.GetSystemDiagnostics(diagnostics) == HF_ADC_SUCCESS) {
+        if (!diagnostics.system_healthy) {
+            printf("WARNING: ADC system health check failed\n");
+            printf("Failed operations: %u\n", diagnostics.failed_operations);
+            printf("Calibration errors: %u\n", diagnostics.calibration_errors);
+        }
     }
 }
 ```
@@ -564,21 +543,23 @@ void motor_adc_integration() {
     // Monitor motor parameters via ADC
     while (true) {
         // Read motor current from TMC9660 ADC
-        float motor_current = adc.ReadVoltage("TMC9660_AIN1");
-        
-        // Read supply voltage
-        float supply_voltage = adc.ReadVoltage("ESP32_ADC1_CH0");
-        
-        // Check for overcurrent condition
-        if (motor_current > 5.0f) {
-            printf("Overcurrent detected: %.2fA\n", motor_current);
-            // Disable motor or reduce current
+        float motor_current;
+        if (adc.ReadChannelV("TMC9660_CURRENT_I0", motor_current) == HF_ADC_SUCCESS) {
+            // Check for overcurrent condition
+            if (motor_current > 5.0f) {
+                printf("Overcurrent detected: %.2fA\n", motor_current);
+                // Disable motor or reduce current
+            }
         }
         
-        // Check for undervoltage condition
-        if (supply_voltage < 10.0f) {
-            printf("Undervoltage detected: %.2fV\n", supply_voltage);
-            // Implement protection measures
+        // Read supply voltage
+        float supply_voltage;
+        if (adc.ReadChannelV("ESP32_ADC1_CH0", supply_voltage) == HF_ADC_SUCCESS) {
+            // Check for undervoltage condition
+            if (supply_voltage < 10.0f) {
+                printf("Undervoltage detected: %.2fV\n", supply_voltage);
+                // Implement protection measures
+            }
         }
         
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -592,7 +573,6 @@ void motor_adc_integration() {
 - **[CommChannelsManager Documentation](COMM_CHANNELS_MANAGER_README.md)** - Communication interfaces
 - **[MotorController Documentation](MOTOR_CONTROLLER_README.md)** - Motor control system
 - **[TMC9660 Handler Documentation](../driver-handlers/TMC9660_HANDLER_README.md)** - TMC9660 driver with ADC
-- **[Complete ADC System Guide](../HARDFOC_GPIO_ADC_SYSTEM.md)** - Comprehensive system documentation
 
 ---
 

@@ -12,7 +12,7 @@
 
 ## 📋 Overview
 
-The `MotorController` is a singleton component handler that provides unified management of multiple TMC9660 motor controllers. It supports the onboard TMC9660 device and up to 3 external TMC9660 devices, providing array-based access to individual motor controllers and their associated GPIO/ADC resources.
+The `MotorController` is a singleton component handler that provides unified management of multiple TMC9660 motor controllers. It supports the onboard TMC9660 device and up to 2 external TMC9660 devices, providing array-based access to individual motor controllers and their associated GPIO/ADC resources.
 
 ### ✨ Key Features
 
@@ -70,16 +70,18 @@ void motor_example() {
     // Get onboard TMC9660 handler
     auto* handler = motor.handler(0);  // Index 0 = onboard device
     if (handler && handler->Initialize()) {
-        auto tmc = handler->GetTmc9660Driver();
+        auto tmc = motor.driver(0);  // Get TMC9660 driver
         
-        // Configure motor parameters
-        tmc->SetTargetVelocity(1000);  // RPM
-        tmc->SetMaxCurrent(1000);      // mA
-        
-        // Enable motor
-        tmc->EnableMotor(true);
-        
-        printf("Motor controller ready\n");
+        if (tmc) {
+            // Configure motor parameters
+            tmc->SetTargetVelocity(1000);  // RPM
+            tmc->SetMaxCurrent(1000);      // mA
+            
+            // Enable motor
+            tmc->EnableMotor(true);
+            
+            printf("Motor controller ready\n");
+        }
     }
 }
 ```
@@ -114,11 +116,13 @@ bool CreateExternalDevice(uint8_t csDeviceIndex,
                          SpiDeviceId spiDeviceId, 
                          uint8_t address,
                          const tmc9660::BootloaderConfig* bootCfg = nullptr);
-
 bool DeleteExternalDevice(uint8_t csDeviceIndex);
 
 // Device information
 uint8_t GetDeviceCount() const noexcept;
+bool IsDeviceValid(uint8_t deviceIndex) const noexcept;
+bool IsExternalSlotAvailable(uint8_t csDeviceIndex) const noexcept;
+std::vector<uint8_t> GetActiveDeviceIndices() const noexcept;
 ```
 
 #### Device Constants
@@ -129,27 +133,14 @@ static constexpr uint8_t EXTERNAL_DEVICE_1_INDEX = 2;
 static constexpr uint8_t EXTERNAL_DEVICE_2_INDEX = 3;
 ```
 
-### TMC9660 Handler Access
-
-Each TMC9660 device is managed through a `Tmc9660Handler` instance:
-
+#### System Management
 ```cpp
-// Get handler for specific device
-auto* handler = motor.handler(0);  // Onboard device
+// Device initialization
+std::vector<bool> InitializeAllDevices();
+std::vector<bool> GetInitializationStatus() const;
 
-if (handler) {
-    // Initialize the handler
-    if (handler->Initialize()) {
-        // Access TMC9660 driver
-        auto tmc = handler->GetTmc9660Driver();
-        
-        // Access GPIO wrapper
-        auto gpio = handler->GetGpioWrapper();
-        
-        // Access ADC wrapper
-        auto adc = handler->GetAdcWrapper();
-    }
-}
+// Statistics
+void DumpStatistics() const noexcept;
 ```
 
 ## 🎯 Hardware Support
@@ -162,331 +153,254 @@ if (handler) {
 | **Current Control** | Configurable current limits | ✅ 0-2A range |
 | **Velocity Control** | RPM-based speed control | ✅ Up to 10,000 RPM |
 | **Position Control** | Absolute/relative positioning | ✅ 32-bit resolution |
-| **GPIO** | 8 configurable GPIO pins | ✅ Digital I/O |
-| **ADC** | 3 analog input channels | ✅ 12-bit resolution |
+| **GPIO** | 18 configurable GPIO pins | ✅ Digital I/O |
+| **ADC** | 12 analog input channels | ✅ 12-bit resolution |
 | **Fault Detection** | Overcurrent, overtemperature | ✅ Automatic protection |
 | **Communication** | SPI/UART interfaces | ✅ Configurable |
-
-### Communication Interfaces
-
-```cpp
-// SPI Configuration
-struct SpiConfig {
-    uint32_t clock_speed_hz = 1000000;  // 1 MHz
-    uint8_t mode = 3;                   // SPI Mode 3
-    uint8_t bits_per_word = 8;
-};
-
-// UART Configuration  
-struct UartConfig {
-    uint32_t baud_rate = 115200;
-    uint8_t data_bits = 8;
-    uint8_t stop_bits = 1;
-    uart_parity_t parity = UART_PARITY_DISABLE;
-};
-```
-
-## 🔧 Configuration
-
-### Default Bootloader Configuration
-
-```cpp
-// Default TMC9660 bootloader settings
-static const tmc9660::BootloaderConfig kDefaultBootConfig = {
-    .motor_type = tmc9660::MotorType::STEPPER,
-    .current_limit_ma = 1000,
-    .microstep_resolution = 256,
-    .velocity_limit_rpm = 1000,
-    .acceleration_limit_rpm_per_s = 1000,
-    .enable_stallguard = true,
-    .stallguard_threshold = 100,
-    .enable_coolstep = true,
-    .enable_spreadcycle = true
-};
-```
-
-### External Device Configuration
-
-```cpp
-// Create external TMC9660 device
-bool success = motor.CreateExternalDevice(
-    MotorController::EXTERNAL_DEVICE_1_INDEX,  // Device index 2
-    SpiDeviceId::EXTERNAL_DEVICE_1,            // SPI device ID
-    0x01,                                      // TMC9660 address
-    &custom_boot_config                        // Optional config
-);
-```
 
 ## 📊 Examples
 
 ### Basic Motor Control
 
 ```cpp
-#include "component-handlers/MotorController.h"
-
-void basic_motor_control() {
+void basic_motor_example() {
     auto& motor = MotorController::GetInstance();
     motor.EnsureInitialized();
     
     // Get onboard motor controller
     auto* handler = motor.handler(0);
-    if (!handler || !handler->Initialize()) {
-        printf("Failed to initialize motor handler\n");
-        return;
-    }
-    
-    auto tmc = handler->GetTmc9660Driver();
-    
-    // Configure motor parameters
-    tmc->SetMotorType(tmc9660::MotorType::STEPPER);
-    tmc->SetMaxCurrent(800);           // 800mA
-    tmc->SetMicrostepResolution(256);  // 256 microsteps
-    tmc->SetVelocityLimit(500);        // 500 RPM
-    tmc->SetAccelerationLimit(1000);   // 1000 RPM/s
-    
-    // Enable motor
-    tmc->EnableMotor(true);
-    
-    // Move motor
-    printf("Moving motor...\n");
-    tmc->MoveToPosition(1000);  // Move to position 1000
-    
-    // Wait for completion
-    while (tmc->IsMoving()) {
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-    
-    printf("Move completed\n");
-    tmc->EnableMotor(false);
-}
-```
-
-### Velocity Control
-
-```cpp
-void velocity_control_example() {
-    auto& motor = MotorController::GetInstance();
-    motor.EnsureInitialized();
-    
-    auto* handler = motor.handler(0);
-    if (!handler || !handler->Initialize()) return;
-    
-    auto tmc = handler->GetTmc9660Driver();
-    
-    // Configure for velocity mode
-    tmc->SetControlMode(tmc9660::ControlMode::VELOCITY);
-    tmc->SetMaxCurrent(1000);
-    tmc->SetAccelerationLimit(2000);
-    
-    tmc->EnableMotor(true);
-    
-    // Velocity ramp test
-    printf("Velocity ramp test:\n");
-    for (int rpm = 0; rpm <= 1000; rpm += 100) {
-        printf("Setting velocity: %d RPM\n", rpm);
-        tmc->SetTargetVelocity(rpm);
-        vTaskDelay(pdMS_TO_TICKS(2000));  // Wait 2 seconds
-        
-        // Read actual velocity
-        int32_t actual_vel = tmc->GetActualVelocity();
-        printf("  Actual velocity: %ld RPM\n", actual_vel);
-    }
-    
-    // Stop motor
-    tmc->SetTargetVelocity(0);
-    vTaskDelay(pdMS_TO_TICKS(1000));
-    tmc->EnableMotor(false);
-}
-```
-
-### Multi-Motor Control
-
-```cpp
-void multi_motor_example() {
-    auto& motor = MotorController::GetInstance();
-    motor.EnsureInitialized();
-    
-    // Create external motor controller
-    bool external_created = motor.CreateExternalDevice(
-        MotorController::EXTERNAL_DEVICE_1_INDEX,
-        SpiDeviceId::EXTERNAL_DEVICE_1,
-        0x01  // Device address
-    );
-    
-    if (!external_created) {
-        printf("Failed to create external motor device\n");
-        return;
-    }
-    
-    // Initialize both motors
-    auto* motor1 = motor.handler(0);  // Onboard
-    auto* motor2 = motor.handler(2);  // External
-    
-    if (!motor1 || !motor1->Initialize() ||
-        !motor2 || !motor2->Initialize()) {
-        printf("Failed to initialize motors\n");
-        return;
-    }
-    
-    auto tmc1 = motor1->GetTmc9660Driver();
-    auto tmc2 = motor2->GetTmc9660Driver();
-    
-    // Configure both motors
-    for (auto* tmc : {tmc1.get(), tmc2.get()}) {
-        tmc->SetMaxCurrent(800);
-        tmc->SetMicrostepResolution(256);
-        tmc->SetVelocityLimit(500);
-        tmc->EnableMotor(true);
-    }
-    
-    // Synchronized movement
-    printf("Synchronized motor movement\n");
-    tmc1->MoveToPosition(1000);
-    tmc2->MoveToPosition(-1000);  // Opposite direction
-    
-    // Wait for both to complete
-    while (tmc1->IsMoving() || tmc2->IsMoving()) {
-        printf("Motor 1 pos: %ld, Motor 2 pos: %ld\n",
-               tmc1->GetActualPosition(), tmc2->GetActualPosition());
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-    
-    printf("Synchronized movement completed\n");
-    
-    // Disable motors
-    tmc1->EnableMotor(false);
-    tmc2->EnableMotor(false);
-}
-```
-
-### Motor GPIO and ADC Usage
-
-```cpp
-void motor_io_example() {
-    auto& motor = MotorController::GetInstance();
-    motor.EnsureInitialized();
-    
-    auto* handler = motor.handler(0);
-    if (!handler || !handler->Initialize()) return;
-    
-    // Access GPIO wrapper
-    auto gpio = handler->GetGpioWrapper();
-    auto adc = handler->GetAdcWrapper();
-    
-    if (gpio && adc) {
-        // Configure GPIO pins
-        gpio->ConfigurePin(0, false);  // Pin 0 as output
-        gpio->ConfigurePin(1, true);   // Pin 1 as input
-        
-        printf("TMC9660 GPIO and ADC monitoring:\n");
-        
-        for (int i = 0; i < 10; i++) {
-            // Toggle output pin
-            gpio->SetPin(0, i % 2);
+    if (handler && handler->Initialize()) {
+        auto tmc = motor.driver(0);
+        if (tmc) {
+            // Configure motor
+            tmc->SetMotorType(tmc9660::MotorType::BLDC);
+            tmc->SetMaxCurrent(1000);  // 1A
+            tmc->SetTargetVelocity(500);  // 500 RPM
             
-            // Read input pin
-            bool input_state = gpio->GetPin(1);
+            // Enable motor
+            tmc->EnableMotor(true);
             
-            // Read ADC channels
-            uint16_t ain1 = adc->ReadRaw(0);  // AIN1
-            uint16_t ain2 = adc->ReadRaw(1);  // AIN2
-            uint16_t ain3 = adc->ReadRaw(2);  // AIN3
+            printf("Motor enabled at 500 RPM\n");
             
-            printf("GPIO1: %s, AIN1: %u, AIN2: %u, AIN3: %u\n",
-                   input_state ? "HIGH" : "LOW", ain1, ain2, ain3);
+            // Run for 5 seconds
+            vTaskDelay(pdMS_TO_TICKS(5000));
             
-            vTaskDelay(pdMS_TO_TICKS(1000));
-        }
-    }
-}
-```
-
-### Fault Monitoring
-
-```cpp
-void fault_monitoring_example() {
-    auto& motor = MotorController::GetInstance();
-    motor.EnsureInitialized();
-    
-    auto* handler = motor.handler(0);
-    if (!handler || !handler->Initialize()) return;
-    
-    auto tmc = handler->GetTmc9660Driver();
-    
-    // Enable fault monitoring
-    tmc->EnableStallguard(true);
-    tmc->SetStallguardThreshold(100);
-    tmc->EnableOvertemperatureProtection(true);
-    tmc->EnableOvercurrentProtection(true);
-    
-    tmc->EnableMotor(true);
-    
-    printf("Motor fault monitoring active...\n");
-    
-    while (true) {
-        // Check for faults
-        auto status = tmc->GetDriverStatus();
-        
-        if (status.stall_detected) {
-            printf("FAULT: Motor stall detected!\n");
+            // Stop motor
+            tmc->SetTargetVelocity(0);
             tmc->EnableMotor(false);
-            break;
+            
+            printf("Motor stopped\n");
         }
-        
-        if (status.overtemperature_warning) {
-            printf("WARNING: Motor overtemperature!\n");
-        }
-        
-        if (status.overcurrent_detected) {
-            printf("FAULT: Overcurrent detected!\n");
-            tmc->EnableMotor(false);
-            break;
-        }
-        
-        // Print status
-        printf("Current: %dmA, Temp: %d°C, Pos: %ld\n",
-               status.actual_current_ma,
-               status.temperature_celsius,
-               tmc->GetActualPosition());
-        
-        vTaskDelay(pdMS_TO_TICKS(500));
     }
-    
-    printf("Fault monitoring stopped\n");
 }
 ```
 
-### Communication Interface Testing
+### Multi-Device Management
 
 ```cpp
-void communication_test() {
+void multi_device_example() {
     auto& motor = MotorController::GetInstance();
     motor.EnsureInitialized();
     
-    printf("Testing TMC9660 communication...\n");
+    // Create external device
+    if (motor.CreateExternalDevice(2, SpiDeviceId::EXTERNAL_DEVICE_1, 0x01)) {
+        printf("External device created at index 2\n");
+        
+        // Initialize external device
+        auto* ext_handler = motor.handler(2);
+        if (ext_handler && ext_handler->Initialize()) {
+            auto ext_tmc = motor.driver(2);
+            if (ext_tmc) {
+                // Configure external motor
+                ext_tmc->SetMotorType(tmc9660::MotorType::STEPPER);
+                ext_tmc->SetMaxCurrent(800);  // 800mA
+                ext_tmc->SetTargetVelocity(1000);  // 1000 RPM
+                ext_tmc->EnableMotor(true);
+                
+                printf("External motor enabled\n");
+            }
+        }
+    }
     
-    for (uint8_t device_idx = 0; device_idx < motor.GetDeviceCount(); device_idx++) {
-        auto* handler = motor.handler(device_idx);
-        if (!handler) continue;
+    // Control both motors
+    auto onboard_tmc = motor.driver(0);
+    auto external_tmc = motor.driver(2);
+    
+    if (onboard_tmc && external_tmc) {
+        // Synchronized motor control
+        onboard_tmc->SetTargetVelocity(750);
+        external_tmc->SetTargetVelocity(750);
         
-        printf("Testing device %u:\n", device_idx);
-        
-        // Test communication
-        bool comm_ok = handler->TestCommunication();
-        printf("  Communication: %s\n", comm_ok ? "OK" : "FAILED");
-        
-        if (comm_ok && handler->Initialize()) {
-            auto tmc = handler->GetTmc9660Driver();
+        printf("Both motors synchronized at 750 RPM\n");
+    }
+}
+```
+
+### Device Information and Status
+
+```cpp
+void device_info_example() {
+    auto& motor = MotorController::GetInstance();
+    motor.EnsureInitialized();
+    
+    // Get device count
+    uint8_t device_count = motor.GetDeviceCount();
+    printf("Active devices: %u\n", device_count);
+    
+    // Get active device indices
+    auto active_indices = motor.GetActiveDeviceIndices();
+    printf("Active device indices: ");
+    for (auto index : active_indices) {
+        printf("%u ", index);
+    }
+    printf("\n");
+    
+    // Check device validity
+    for (uint8_t i = 0; i < 4; i++) {
+        if (motor.IsDeviceValid(i)) {
+            printf("Device %u is valid\n", i);
             
-            // Read device info
-            uint32_t version = tmc->GetChipVersion();
-            printf("  Chip version: 0x%08lX\n", version);
+            // Check initialization status
+            auto* handler = motor.handler(i);
+            if (handler) {
+                printf("  Handler available\n");
+                
+                auto tmc = motor.driver(i);
+                if (tmc) {
+                    printf("  Driver available\n");
+                    
+                    // Get motor status
+                    bool enabled = tmc->IsMotorEnabled();
+                    float velocity = tmc->GetCurrentVelocity();
+                    float current = tmc->GetCurrentCurrent();
+                    
+                    printf("  Motor enabled: %s\n", enabled ? "YES" : "NO");
+                    printf("  Current velocity: %.1f RPM\n", velocity);
+                    printf("  Current current: %.1f mA\n", current);
+                }
+            }
+        }
+    }
+}
+```
+
+### External Device Management
+
+```cpp
+void external_device_example() {
+    auto& motor = MotorController::GetInstance();
+    motor.EnsureInitialized();
+    
+    // Check if external slots are available
+    if (motor.IsExternalSlotAvailable(2)) {
+        printf("External slot 2 is available\n");
+        
+        // Create external device with custom configuration
+        tmc9660::BootloaderConfig custom_config{};
+        custom_config.motor_type = tmc9660::MotorType::BLDC;
+        custom_config.current_limit_ma = 1500;
+        custom_config.velocity_limit_rpm = 2000;
+        
+        if (motor.CreateExternalDevice(2, SpiDeviceId::EXTERNAL_DEVICE_1, 0x02, &custom_config)) {
+            printf("External device created with custom config\n");
             
-            // Test register access
-            tmc->SetMaxCurrent(500);
-            uint16_t current = tmc->GetMaxCurrent();
-            printf("  Current setting test: %s\n", 
-                   (current == 500) ? "PASS" : "FAIL");
+            // Use the external device
+            auto* handler = motor.handler(2);
+            if (handler && handler->Initialize()) {
+                auto tmc = motor.driver(2);
+                if (tmc) {
+                    tmc->EnableMotor(true);
+                    tmc->SetTargetVelocity(1000);
+                    printf("External motor running\n");
+                }
+            }
+        }
+    }
+    
+    // Delete external device when done
+    if (motor.DeleteExternalDevice(2)) {
+        printf("External device deleted\n");
+    }
+}
+```
+
+### System Diagnostics
+
+```cpp
+void diagnostics_example() {
+    auto& motor = MotorController::GetInstance();
+    motor.EnsureInitialized();
+    
+    // Initialize all devices
+    auto init_results = motor.InitializeAllDevices();
+    printf("Device initialization results:\n");
+    for (size_t i = 0; i < init_results.size(); i++) {
+        printf("  Device %zu: %s\n", i, init_results[i] ? "SUCCESS" : "FAILED");
+    }
+    
+    // Get initialization status
+    auto status = motor.GetInitializationStatus();
+    printf("Device initialization status:\n");
+    for (size_t i = 0; i < status.size(); i++) {
+        printf("  Device %zu: %s\n", i, status[i] ? "INITIALIZED" : "NOT INITIALIZED");
+    }
+    
+    // Dump comprehensive statistics
+    motor.DumpStatistics();
+}
+```
+
+### Advanced Motor Control
+
+```cpp
+void advanced_control_example() {
+    auto& motor = MotorController::GetInstance();
+    motor.EnsureInitialized();
+    
+    auto* handler = motor.handler(0);
+    if (handler && handler->Initialize()) {
+        auto tmc = motor.driver(0);
+        if (tmc) {
+            // Configure for BLDC motor
+            tmc->SetMotorType(tmc9660::MotorType::BLDC);
+            tmc->SetMaxCurrent(1200);  // 1.2A
+            tmc->SetVelocityLimit(2000);  // 2000 RPM max
+            tmc->SetAccelerationLimit(1000);  // 1000 RPM/s acceleration
+            
+            // Enable motor
+            tmc->EnableMotor(true);
+            
+            // Velocity control loop
+            for (int i = 0; i < 10; i++) {
+                float target_velocity = 500.0f + (i * 100.0f);  // Ramp up
+                tmc->SetTargetVelocity(target_velocity);
+                
+                printf("Target velocity: %.1f RPM\n", target_velocity);
+                
+                // Monitor actual velocity
+                for (int j = 0; j < 10; j++) {
+                    float actual_velocity = tmc->GetCurrentVelocity();
+                    float current = tmc->GetCurrentCurrent();
+                    
+                    printf("  Actual: %.1f RPM, Current: %.1f mA\n", 
+                           actual_velocity, current);
+                    
+                    vTaskDelay(pdMS_TO_TICKS(100));
+                }
+            }
+            
+            // Ramp down
+            for (int i = 10; i >= 0; i--) {
+                float target_velocity = 500.0f + (i * 100.0f);
+                tmc->SetTargetVelocity(target_velocity);
+                vTaskDelay(pdMS_TO_TICKS(500));
+            }
+            
+            // Stop motor
+            tmc->SetTargetVelocity(0);
+            tmc->EnableMotor(false);
+            
+            printf("Motor control complete\n");
         }
     }
 }
@@ -494,102 +408,7 @@ void communication_test() {
 
 ## 🔍 Advanced Usage
 
-### Custom Boot Configuration
-
-```cpp
-void custom_boot_config_example() {
-    // Define custom bootloader configuration
-    tmc9660::BootloaderConfig custom_config = {
-        .motor_type = tmc9660::MotorType::BLDC,
-        .current_limit_ma = 1500,
-        .microstep_resolution = 512,
-        .velocity_limit_rpm = 2000,
-        .acceleration_limit_rpm_per_s = 5000,
-        .enable_stallguard = false,
-        .stallguard_threshold = 0,
-        .enable_coolstep = true,
-        .enable_spreadcycle = false,
-        .pwm_frequency_khz = 35,
-        .enable_stealth_chop = true
-    };
-    
-    auto& motor = MotorController::GetInstance();
-    motor.EnsureInitialized();
-    
-    // Create external device with custom config
-    bool success = motor.CreateExternalDevice(
-        MotorController::EXTERNAL_DEVICE_1_INDEX,
-        SpiDeviceId::EXTERNAL_DEVICE_1,
-        0x01,
-        &custom_config
-    );
-    
-    if (success) {
-        printf("External motor created with custom configuration\n");
-        
-        auto* handler = motor.handler(MotorController::EXTERNAL_DEVICE_1_INDEX);
-        if (handler && handler->Initialize()) {
-            auto tmc = handler->GetTmc9660Driver();
-            printf("BLDC motor controller ready\n");
-        }
-    }
-}
-```
-
-### Performance Optimization
-
-```cpp
-void performance_optimization() {
-    auto& motor = MotorController::GetInstance();
-    motor.EnsureInitialized();
-    
-    auto* handler = motor.handler(0);
-    if (!handler || !handler->Initialize()) return;
-    
-    auto tmc = handler->GetTmc9660Driver();
-    
-    // Optimize for high-performance operation
-    tmc->SetControlMode(tmc9660::ControlMode::VELOCITY);
-    tmc->SetMicrostepResolution(256);  // Higher resolution
-    tmc->EnableSpreadCycle(true);      // Better high-speed performance
-    tmc->EnableStealthChop(false);     // Disable for performance
-    tmc->SetPwmFrequency(70000);       // 70kHz PWM
-    
-    // Set aggressive acceleration
-    tmc->SetAccelerationLimit(10000);  // 10000 RPM/s
-    tmc->SetVelocityLimit(5000);       // 5000 RPM
-    
-    tmc->EnableMotor(true);
-    
-    // High-speed velocity profile
-    std::array<int32_t, 5> velocities = {1000, 2000, 3000, 4000, 5000};
-    
-    for (auto velocity : velocities) {
-        printf("Accelerating to %ld RPM...\n", velocity);
-        auto start_time = esp_timer_get_time();
-        
-        tmc->SetTargetVelocity(velocity);
-        
-        // Wait for velocity to stabilize
-        while (std::abs(tmc->GetActualVelocity() - velocity) > 50) {
-            vTaskDelay(pdMS_TO_TICKS(1));
-        }
-        
-        auto end_time = esp_timer_get_time();
-        printf("  Reached in %.1f ms\n", (end_time - start_time) / 1000.0f);
-        
-        vTaskDelay(pdMS_TO_TICKS(1000));  // Hold velocity
-    }
-    
-    // Decelerate to stop
-    tmc->SetTargetVelocity(0);
-    tmc->EnableMotor(false);
-}
-```
-
-## 🚨 Error Handling
-
-### Comprehensive Error Handling
+### Error Handling
 
 ```cpp
 void error_handling_example() {
@@ -601,113 +420,89 @@ void error_handling_example() {
         return;
     }
     
-    // Validate device exists
+    // Validate device before use
+    if (!motor.IsDeviceValid(0)) {
+        printf("ERROR: Onboard device not valid\n");
+        return;
+    }
+    
+    // Safe device access
     auto* handler = motor.handler(0);
     if (!handler) {
-        printf("ERROR: Motor handler not available\n");
+        printf("ERROR: Handler not available\n");
         return;
     }
     
-    // Initialize with error checking
     if (!handler->Initialize()) {
-        printf("ERROR: Failed to initialize TMC9660 handler\n");
+        printf("ERROR: Failed to initialize handler\n");
         return;
     }
     
-    auto tmc = handler->GetTmc9660Driver();
+    auto tmc = motor.driver(0);
     if (!tmc) {
         printf("ERROR: TMC9660 driver not available\n");
         return;
     }
     
-    // Test communication before use
-    if (!handler->TestCommunication()) {
-        printf("ERROR: TMC9660 communication failed\n");
-        return;
+    // Safe motor operations
+    try {
+        tmc->SetTargetVelocity(500);
+        tmc->EnableMotor(true);
+        printf("Motor operations successful\n");
+    } catch (const std::exception& e) {
+        printf("ERROR: Motor operation failed: %s\n", e.what());
     }
-    
-    // Monitor for runtime errors
-    tmc->EnableMotor(true);
-    
-    for (int i = 0; i < 100; i++) {
-        auto status = tmc->GetDriverStatus();
-        
-        if (status.communication_error) {
-            printf("ERROR: Communication error detected\n");
-            break;
-        }
-        
-        if (status.stall_detected) {
-            printf("ERROR: Motor stall detected\n");
-            tmc->EnableMotor(false);
-            break;
-        }
-        
-        if (status.overtemperature_error) {
-            printf("ERROR: Overtemperature shutdown\n");
-            tmc->EnableMotor(false);
-            break;
-        }
-        
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-    
-    printf("Motor control completed successfully\n");
 }
 ```
 
-## 🔗 Integration
-
-### Integration with GPIO and ADC Managers
+### Integration with Other Managers
 
 ```cpp
 #include "component-handlers/All.h"
 
-void integrated_motor_control() {
+void integrated_example() {
     // Initialize all managers
+    auto& motor = MotorController::GetInstance();
     auto& gpio = GpioManager::GetInstance();
     auto& adc = AdcManager::GetInstance();
-    auto& motor = MotorController::GetInstance();
+    auto& comm = CommChannelsManager::GetInstance();
     
+    motor.EnsureInitialized();
     gpio.EnsureInitialized();
     adc.Initialize();
-    motor.EnsureInitialized();
+    comm.EnsureInitialized();
     
-    // Configure external enable pin
-    gpio.ConfigurePin("ESP32_GPIO_5", false);  // Motor enable output
-    gpio.ConfigurePin("ESP32_GPIO_6", true);   // Emergency stop input
-    
-    // Motor control with external safety
+    // Get motor controller
     auto* handler = motor.handler(0);
     if (handler && handler->Initialize()) {
-        auto tmc = handler->GetTmc9660Driver();
-        
-        // Enable motor via external GPIO
-        gpio.SetPin("ESP32_GPIO_5", true);
-        tmc->EnableMotor(true);
-        
-        printf("Integrated motor control active\n");
-        
-        while (true) {
-            // Check emergency stop
-            bool e_stop = !gpio.GetPin("ESP32_GPIO_6");  // Active low
-            if (e_stop) {
-                printf("Emergency stop activated!\n");
-                tmc->EnableMotor(false);
-                gpio.SetPin("ESP32_GPIO_5", false);
-                break;
+        auto tmc = motor.driver(0);
+        if (tmc) {
+            // Use GPIO for motor enable/disable
+            gpio.SetDirection("TMC9660_ENABLE", HF_GPIO_DIRECTION_OUTPUT);
+            gpio.SetActive("TMC9660_ENABLE");
+            
+            // Monitor motor current via ADC
+            float motor_current;
+            if (adc.ReadChannelV("TMC9660_CURRENT_I0", motor_current) == HF_ADC_SUCCESS) {
+                printf("Motor current: %.2fA\n", motor_current);
+                
+                // Check for overcurrent
+                if (motor_current > 1.5f) {
+                    printf("Overcurrent detected! Disabling motor\n");
+                    gpio.SetInactive("TMC9660_ENABLE");
+                    tmc->EnableMotor(false);
+                }
             }
             
-            // Monitor supply voltage via ADC
-            float supply_voltage = adc.ReadVoltage("ESP32_ADC1_CH0");
-            if (supply_voltage < 10.0f) {
-                printf("Low voltage detected: %.2fV\n", supply_voltage);
-                tmc->EnableMotor(false);
-                break;
+            // Monitor motor fault via GPIO
+            gpio.SetDirection("TMC9660_FAULT", HF_GPIO_DIRECTION_INPUT);
+            bool fault_state;
+            if (gpio.Read("TMC9660_FAULT", fault_state) == HF_GPIO_SUCCESS) {
+                if (!fault_state) {  // Fault is active low
+                    printf("Motor fault detected!\n");
+                    tmc->EnableMotor(false);
+                }
             }
-            
-            // Normal operation
-            vTaskDelay(pdMS_TO_TICKS(100));
         }
     }
 }
@@ -718,8 +513,7 @@ void integrated_motor_control() {
 - **[GpioManager Documentation](GPIO_MANAGER_README.md)** - GPIO management system
 - **[AdcManager Documentation](ADC_MANAGER_README.md)** - ADC management system
 - **[CommChannelsManager Documentation](COMM_CHANNELS_MANAGER_README.md)** - Communication interfaces
-- **[TMC9660 Handler Documentation](../driver-handlers/TMC9660_HANDLER_README.md)** - TMC9660 device driver
-- **[Complete Motor Control Guide](../HARDFOC_GPIO_ADC_SYSTEM.md)** - Comprehensive system documentation
+- **[TMC9660 Handler Documentation](../driver-handlers/TMC9660_HANDLER_README.md)** - TMC9660 driver
 
 ---
 
