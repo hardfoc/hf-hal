@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Vortex API provides a beautiful, unified singleton interface to all component handlers in the HardFOC Vortex platform. It implements lazy initialization with proper dependency management, ensuring all systems are properly initialized in the correct order before exposing them to the user.
+The Vortex API provides a unified singleton interface to all component handlers in the HardFOC Vortex platform. It implements lazy initialization with proper dependency management, ensuring all systems are properly initialized in the correct order before exposing them to the user.
 
 ## 🏗️ Architecture
 
@@ -336,4 +336,4 @@ This API is part of the HardFOC HAL and follows the same licensing terms.
 
 ---
 
-**The Vortex API provides a beautiful, unified interface to the entire HardFOC platform, making it easy to access all components through a single, well-designed interface.** 
+**The Vortex API provides a unified interface to the entire HardFOC platform, making it easy to access all components through a single, well-designed interface.** 

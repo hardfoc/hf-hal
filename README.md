@@ -17,16 +17,16 @@
 
 ## 🎯 Overview
 
-The HardFOC HAL provides a comprehensive, thread-safe hardware abstraction layer specifically designed for the **HardFOC Vortex V1** motor controller board. The system features the **Vortex API** - a beautiful, unified singleton interface that provides seamless access to all component handlers including GPIO, ADC, communication interfaces, motor controllers, IMU sensors, encoders, LED management, and temperature monitoring.
+The HardFOC HAL provides a comprehensive, thread-safe hardware abstraction layer specifically designed for the **HardFOC Vortex V1** motor controller board. The system features the **Vortex API** - a unified singleton interface that provides access to all component handlers including GPIO, ADC, communication interfaces, motor controllers, IMU sensors, encoders, LED management, and temperature monitoring.
 
-The **Vortex API** is named after the **HardFOC Vortex V1** board, providing a unified interface that mirrors the board's integrated design philosophy where all components work together seamlessly.
+The **Vortex API** is named after the **HardFOC Vortex V1** board, providing a unified interface that mirrors the board's integrated design philosophy where all components work together.
 
 ### ✨ Key Features
 
 - **🔌 Vortex API**: Unified singleton interface to all system components
 - **🏗️ HardFOC Vortex V1 Optimized**: Specifically designed for the Vortex V1 board
 - **🔧 Unified Hardware Management**: Single API for GPIO, ADC, SPI, I2C, UART, and CAN
-- **🎛️ Multi-Source Support**: ESP32-C6, PCAL95555, TMC9660 seamlessly integrated
+- **🎛️ Multi-Source Support**: ESP32-C6, PCAL95555, TMC9660 integrated
 - **🔒 Thread-Safe Operations**: Concurrent access from multiple tasks
 - **📊 Advanced Diagnostics**: Real-time health monitoring and error tracking
 - **⚡ High Performance**: Optimized batch operations and interrupt handling
@@ -36,9 +36,9 @@ The **Vortex API** is named after the **HardFOC Vortex V1** board, providing a u
 
 ## 🔌 Vortex API - Unified System Interface
 
-The **Vortex API** is the heart of the HardFOC Vortex V1 system, providing a beautiful, unified interface to all component handlers. Named after the **HardFOC Vortex V1** board, it implements lazy initialization with proper dependency management, ensuring all systems are properly initialized in the correct order.
+The **Vortex API** is the heart of the HardFOC Vortex V1 system, providing a unified interface to all component handlers. Named after the **HardFOC Vortex V1** board, it implements lazy initialization with proper dependency management, ensuring all systems are properly initialized in the correct order.
 
-The API design mirrors the **Vortex V1** board's philosophy of integrated, seamless operation where all components work together as a unified system rather than separate modules.
+The API design mirrors the **Vortex V1** board's philosophy of integrated operation where all components work together as a unified system rather than separate modules.
 
 ### 🏗️ Vortex API Architecture
 
@@ -692,6 +692,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 [⭐ Star us on GitHub](https://github.com/hardfoc/hf-hal-vortex-v1) • [🐛 Report Bug](https://github.com/hardfoc/hf-hal-vortex-v1/issues) • [💡 Request Feature](https://github.com/hardfoc/hf-hal-vortex-v1/issues)
 
-**The Vortex API provides a beautiful, unified interface to the HardFOC Vortex V1 board!**
+**The Vortex API provides a unified interface to the HardFOC Vortex V1 board!**
 
 </div>
