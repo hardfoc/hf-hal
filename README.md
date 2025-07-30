@@ -305,7 +305,6 @@ if (encoder_handler) {
 - **[🔧 GPIO Manager](docs/component-handlers/GPIO_MANAGER_README.md)** - GPIO system guide
 - **[📊 ADC Manager](docs/component-handlers/ADC_MANAGER_README.md)** - ADC system guide
 - **[🏗️ Architecture Guidelines](docs/development/ARCHITECTURE_GUIDELINES.md)** - Core architecture
-- **[⚡ GPIO System](docs/component-handlers/GPIO_MANAGER_README.md)** - GPIO system design
 
 ### 📚 Component Handler Documentation
 - **[🎛️ GPIO Manager](docs/component-handlers/GPIO_MANAGER_README.md)** - GPIO management system
