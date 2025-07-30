@@ -251,6 +251,10 @@ private:
 - **[🧪 Testing Requirements](docs/development/TESTING_REQUIREMENTS.md)** - Test coverage and quality
 - **[📚 Documentation Standards](docs/development/DOCUMENTATION_STANDARDS.md)** - Documentation requirements
 
+### Documentation Corrections
+- **[📋 Documentation Corrections Summary](DOCUMENTATION_CORRECTIONS.md)** - Summary of base interface corrections made
+- **[🚗 Motor Controller Corrections](MOTOR_CONTROLLER_CORRECTIONS.md)** - Comprehensive TMC9660 driver interface corrections
+
 ### Contribution Workflow
 1. **Fork Repository** - Create your own fork for development
 2. **Create Feature Branch** - Isolate your changes in a feature branch  
