@@ -74,6 +74,136 @@ void adc_example() {
 
 ## 📖 API Reference
 
+### Critical Enum Values and Meanings
+
+#### **ADC Error Code Enums**
+```cpp
+// ADC Success/Error Codes
+hf_adc_err_t::ADC_SUCCESS = 0                      // Operation successful
+hf_adc_err_t::ADC_ERR_INVALID_PARAMETER = 4        // Invalid parameter
+hf_adc_err_t::ADC_ERR_CHANNEL_NOT_FOUND = 7        // Channel not found
+hf_adc_err_t::ADC_ERR_INVALID_CHANNEL = 13         // Invalid channel
+hf_adc_err_t::ADC_ERR_HARDWARE_FAULT = 19          // Hardware fault
+hf_adc_err_t::ADC_ERR_COMMUNICATION_FAILURE = 20   // Communication failure
+hf_adc_err_t::ADC_ERR_CALIBRATION_FAILURE = 22     // Calibration failure
+hf_adc_err_t::ADC_ERR_VOLTAGE_OUT_OF_RANGE = 23    // Voltage out of range
+```
+
+#### **ADC Channel Types**
+```cpp
+// Channel ID type (platform-agnostic)
+using hf_channel_id_t = hf_u32_t;  // 32-bit unsigned integer
+
+// Invalid channel constant
+constexpr hf_channel_id_t HF_INVALID_CHANNEL = std::numeric_limits<hf_channel_id_t>::max();
+
+// Time types for sampling
+using hf_time_t = hf_u32_t;        // Time in milliseconds
+using hf_timeout_ms_t = hf_time_t; // Timeout in milliseconds
+```
+
+#### **ADC Sampling Parameters**
+```cpp
+// Sample count type
+using hf_u8_t = uint8_t;  // 8-bit unsigned integer (0-255 samples)
+
+// Common timeout values
+constexpr hf_time_t HF_TIMEOUT_DEFAULT_MS = 1000;  // Default timeout
+constexpr hf_time_t HF_TIMEOUT_NONE = 0;           // No timeout (wait indefinitely)
+constexpr hf_time_t HF_TIMEOUT_MAX = std::numeric_limits<hf_time_t>::max();
+```
+
+### **🎯 How to Use ADC Enums Correctly**
+
+#### **1. ADC Error Handling Best Practices**
+```cpp
+// Always check return codes for ADC operations
+float voltage;
+auto result = adc.ReadChannelV("ADC_TMC9660_AIN3", voltage);
+if (result != hf_adc_err_t::ADC_SUCCESS) {
+    logger.Error("ADC", "Failed to read voltage: %s", HfAdcErrToString(result));
+    
+    // Handle specific error types
+    switch (result) {
+        case hf_adc_err_t::ADC_ERR_CHANNEL_NOT_FOUND:
+            logger.Error("ADC", "Channel not found - check channel name");
+            break;
+        case hf_adc_err_t::ADC_ERR_HARDWARE_FAULT:
+            logger.Error("ADC", "Hardware fault - check connections");
+            break;
+        case hf_adc_err_t::ADC_ERR_VOLTAGE_OUT_OF_RANGE:
+            logger.Error("ADC", "Voltage out of range - check input voltage");
+            break;
+        default:
+            logger.Error("ADC", "Unknown error occurred");
+            break;
+    }
+}
+```
+
+#### **2. ADC Sampling Configuration**
+```cpp
+// Single sample reading (fastest)
+float voltage;
+adc.ReadChannelV("ADC_TMC9660_AIN3", voltage, 1, 0);
+
+// Multiple sample averaging (more accurate)
+float voltage_avg;
+adc.ReadChannelV("ADC_TMC9660_AIN3", voltage_avg, 16, 1);  // 16 samples, 1ms between
+
+// Raw count reading
+uint32_t raw_count;
+adc.ReadChannelCount("ADC_TMC9660_AIN3", raw_count, 8, 2);  // 8 samples, 2ms between
+```
+
+#### **3. Batch ADC Operations**
+```cpp
+// Read multiple channels simultaneously
+std::vector<std::string_view> channels = {
+    "ADC_TMC9660_AIN0", "ADC_TMC9660_AIN1", 
+    "ADC_TMC9660_AIN2", "ADC_TMC9660_AIN3"
+};
+
+auto batch_result = adc.BatchRead(channels, 4, 1);  // 4 samples per channel, 1ms interval
+if (batch_result.overall_result == hf_adc_err_t::ADC_SUCCESS) {
+    for (size_t i = 0; i < channels.size(); i++) {
+        logger.Info("ADC", "Channel %s: %.3fV", channels[i].data(), batch_result.voltages[i]);
+    }
+}
+```
+
+#### **4. Timeout and Error Handling**
+```cpp
+// Use appropriate timeouts for different operations
+float voltage;
+
+// Fast operation (short timeout)
+auto result = adc.ReadChannelV("ADC_TMC9660_AIN3", voltage, 1, 0);
+if (result == hf_adc_err_t::ADC_ERR_TIMEOUT) {
+    logger.Warn("ADC", "Fast read timeout - consider longer timeout");
+}
+
+// Slow operation (longer timeout for averaging)
+result = adc.ReadChannelV("ADC_TMC9660_AIN3", voltage, 64, 5);  // 64 samples, 5ms between
+if (result == hf_adc_err_t::ADC_ERR_TIMEOUT) {
+    logger.Error("ADC", "Averaging read timeout - check hardware");
+}
+```
+
+#### **5. Channel Validation**
+```cpp
+// Check if channel exists before using
+if (adc.Contains("ADC_TMC9660_AIN3")) {
+    float voltage;
+    auto result = adc.ReadChannelV("ADC_TMC9660_AIN3", voltage);
+    if (result == hf_adc_err_t::ADC_SUCCESS) {
+        logger.Info("ADC", "Voltage reading: %.3fV", voltage);
+    }
+} else {
+    logger.Error("ADC", "Channel ADC_TMC9660_AIN3 not available");
+}
+```
+
 ### Core Operations
 
 #### Initialization

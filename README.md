@@ -78,15 +78,16 @@ extern "C" void app_main(void) {
         auto& temp = vortex.temp;        // Temperature sensors
         
         // Use any component naturally
-        gpio.SetPin("GPIO_EXT_GPIO_CS_1", true);
-        float voltage = adc.ReadVoltage("ADC_TMC9660_AIN3");
+        gpio.Set("GPIO_EXT_GPIO_CS_1", true);
+        float voltage;
+        adc.ReadChannelV("ADC_TMC9660_AIN3", voltage);
         auto* motor_handler = motors.handler(0);
         leds.SetStatus(LedAnimation::STATUS_OK);
         
         // Get system diagnostics
         VortexSystemDiagnostics diagnostics;
         vortex.GetSystemDiagnostics(diagnostics);
-        printf("HardFOC Vortex V1 System Health: %s\n", 
+        logger.Info("MAIN", "HardFOC Vortex V1 System Health: %s\n", 
                diagnostics.system_healthy ? "HEALTHY" : "UNHEALTHY");
     }
 }
@@ -113,22 +114,22 @@ The Vortex API provides direct access to all component handlers on the HardFOC V
 // Get comprehensive system diagnostics for HardFOC Vortex V1
 VortexSystemDiagnostics diagnostics;
 if (vortex.GetSystemDiagnostics(diagnostics)) {
-    printf("HardFOC Vortex V1 Overall Health: %s\n", diagnostics.system_healthy ? "HEALTHY" : "UNHEALTHY");
-    printf("Initialized Components: %u/%u\n", 
+    logger.Info("MAIN", "HardFOC Vortex V1 Overall Health: %s\n", diagnostics.system_healthy ? "HEALTHY" : "UNHEALTHY");
+    logger.Info("MAIN", "Initialized Components: %u/%u\n", 
            diagnostics.initialized_components, diagnostics.total_components);
-    printf("Initialization Time: %llu ms\n", diagnostics.initialization_time_ms);
-    printf("System Uptime: %llu ms\n", diagnostics.system_uptime_ms);
+    logger.Info("MAIN", "Initialization Time: %llu ms\n", diagnostics.initialization_time_ms);
+    logger.Info("MAIN", "System Uptime: %llu ms\n", diagnostics.system_uptime_ms);
 }
 
 // Perform health check
 if (vortex.PerformHealthCheck()) {
-    printf("All HardFOC Vortex V1 systems operational\n");
+    logger.Info("MAIN", "All HardFOC Vortex V1 systems operational\n");
 }
 
 // Get failed components
 auto failed_components = vortex.GetFailedComponents();
 for (const auto& component : failed_components) {
-    printf("Failed: %s\n", component.c_str());
+    logger.Info("MAIN", "Failed: %s\n", component.c_str());
 }
 
 // Dump comprehensive statistics
@@ -164,16 +165,20 @@ The Vortex API manages initialization in the correct dependency order for the Ha
 The HardFOC Vortex V1 API provides two access patterns optimized for different use cases:
 
 #### 🔍 String-Based API (Convenience & Extensibility)
-String-based functions like `gpio.SetPin("GPIO_EXT_GPIO_CS_1", true)` and `adc.ReadVoltage("ADC_TMC9660_AIN3")` provide:
+String-based functions like `gpio.Set("GPIO_EXT_GPIO_CS_1", true)` and `adc.ReadChannelV("ADC_TMC9660_AIN3", voltage)` provide:
 - **Convenience**: Easy to use and understand
 - **Extensibility**: Dynamic pin registration and configuration
 - **Higher-level abstraction**: Perfect for application logic and configuration
 
 ```cpp
 // String-based API - Great for convenience and extensibility
-gpio.Set("GPIO_EXT_GPIO_CS_1", true);
+if (gpio.Set("GPIO_EXT_GPIO_CS_1", true) == hf_gpio_err_t::GPIO_SUCCESS) {
+    // GPIO set successfully
+}
 float voltage;
-adc.ReadChannelV("ADC_TMC9660_AIN3", voltage);
+if (adc.ReadChannelV("ADC_TMC9660_AIN3", voltage) == hf_adc_err_t::ADC_SUCCESS) {
+    // ADC reading successful
+}
 ```
 
 #### ⚡ Cached Access (High Performance)
@@ -199,11 +204,20 @@ if (adc_temp) {
 - **Cached access**: ~10-50ns (direct pointer access)
 - **Recommendation**: Use cached access for control loops >1kHz
 
+#### 🛡️ Error Handling
+All API methods return error codes that should be checked:
+- **GPIO Operations**: Return `hf_gpio_err_t` enum values
+- **ADC Operations**: Return `hf_adc_err_t` enum values
+- **Success**: `GPIO_SUCCESS` / `ADC_SUCCESS`
+- **Common Errors**: `GPIO_ERR_INVALID_PARAMETER`, `ADC_ERR_INVALID_CHANNEL`, etc.
+
 #### 🎯 Best Practices
 1. **Use string API** for: Configuration, initialization, debugging, user interfaces
 2. **Use cached access** for: Real-time control loops, high-frequency operations (>1kHz)
 3. **Batch operations** for: Multiple pins/channels accessed together
 4. **Cache validation**: Always check pointer validity before use
+5. **Error handling**: Always check return codes for all API calls
+6. **Resource management**: Use RAII patterns and proper cleanup
 
 ## 🚀 Quick Start
 
@@ -224,7 +238,7 @@ extern "C" void app_main(void) {
     
     // Initialize all systems with proper dependency management
     if (vortex.EnsureInitialized()) {
-        printf("HardFOC Vortex V1 initialized successfully!\n");
+        logger.Info("MAIN", "HardFOC Vortex V1 initialized successfully!\n");
         
         // Access any component through the unified interface
         auto& gpio = vortex.gpio;
@@ -233,9 +247,15 @@ extern "C" void app_main(void) {
         auto& leds = vortex.leds;
         
         // Use components naturally (string-based for convenience)
-        gpio.Set("GPIO_EXT_GPIO_CS_1", true);
+        if (gpio.Set("GPIO_EXT_GPIO_CS_1", true) == hf_gpio_err_t::GPIO_SUCCESS) {
+            logger.Info("MAIN", "GPIO set successfully\n");
+        }
+        
         float voltage;
-        adc.ReadChannelV("ADC_TMC9660_AIN3", voltage);
+        if (adc.ReadChannelV("ADC_TMC9660_AIN3", voltage) == hf_adc_err_t::ADC_SUCCESS) {
+            logger.Info("MAIN", "ADC reading: %.3fV\n", voltage);
+        }
+        
         auto* motor_handler = motors.handler(0);
         leds.SetStatus(LedAnimation::STATUS_OK);
         
@@ -257,18 +277,18 @@ extern "C" void app_main(void) {
         while (true) {
             // Check system health
             if (!vortex.PerformHealthCheck()) {
-                printf("HardFOC Vortex V1 system health check failed\n");
+                logger.Info("MAIN", "HardFOC Vortex V1 system health check failed\n");
             }
             
             vTaskDelay(pdMS_TO_TICKS(100));
         }
     } else {
-        printf("HardFOC Vortex V1 initialization failed!\n");
+        logger.Info("MAIN", "HardFOC Vortex V1 initialization failed!\n");
         
         // Get detailed failure information
         auto failed_components = vortex.GetFailedComponents();
         for (const auto& component : failed_components) {
-            printf("Failed component: %s\n", component.c_str());
+            logger.Info("MAIN", "Failed component: %s\n", component.c_str());
         }
     }
 }
@@ -281,16 +301,17 @@ extern "C" void app_main(void) {
 auto& gpio = vortex.gpio;
 
 // Configure and use GPIO pins on HardFOC Vortex V1
-gpio.ConfigurePin("GPIO_EXT_GPIO_CS_1", false);  // Configure as output
-gpio.SetPin("GPIO_EXT_GPIO_CS_1", true);         // Set pin high
+gpio.SetDirection("GPIO_EXT_GPIO_CS_1", hf_gpio_direction_t::GPIO_DIRECTION_OUTPUT);  // Configure as output
+gpio.Set("GPIO_EXT_GPIO_CS_1", true);         // Set pin high
 
 // Read input pins from PCAL95555 expander
-bool state = gpio.GetPin("GPIO_PCAL_GPIO17");
+bool state;
+gpio.Read("GPIO_PCAL_GPIO17", state);
 
 // Batch operations for performance
 std::array<std::string_view, 4> pins = {"GPIO_EXT_GPIO_CS_1", "GPIO_EXT_GPIO_CS_2", 
                                         "GPIO_PCAL_GPIO17", "GPIO_PCAL_GPIO18"};
-auto states = gpio.GetMultiplePins(pins);
+auto states = gpio.BatchRead(pins);
 ```
 
 #### ADC Operations
@@ -298,19 +319,23 @@ auto states = gpio.GetMultiplePins(pins);
 auto& adc = vortex.adc;
 
 // Read TMC9660 ADC channels
-float voltage = adc.ReadVoltage("ADC_TMC9660_AIN3");  // Temperature sensor
+float voltage;
+adc.ReadChannelV("ADC_TMC9660_AIN3", voltage);  // Temperature sensor
 
 // Read multiple TMC9660 channels simultaneously
 std::array<std::string_view, 4> channels = {
     "ADC_TMC9660_AIN0", "ADC_TMC9660_AIN1", 
     "ADC_TMC9660_AIN2", "ADC_TMC9660_AIN3"
 };
-auto readings = adc.ReadMultipleVoltages(channels);
+auto readings = adc.BatchRead(channels);
 
 // Read TMC9660 internal monitoring channels
-float current = adc.ReadVoltage("TMC9660_CURRENT_I0");
-float temperature = adc.ReadVoltage("TMC9660_CHIP_TEMPERATURE");
-float motor_velocity = adc.ReadVoltage("TMC9660_MOTOR_VELOCITY");
+float current;
+adc.ReadChannelV("TMC9660_CURRENT_I0", current);
+float temperature;
+adc.ReadChannelV("TMC9660_CHIP_TEMPERATURE", temperature);
+float motor_velocity;
+adc.ReadChannelV("TMC9660_MOTOR_VELOCITY", motor_velocity);
 ```
 
 #### Motor Control
@@ -349,7 +374,7 @@ if (encoder_handler) {
     // Read encoder angle
     uint16_t angle;
     if (encoders.ReadAngle(0, angle) == As5047uError::SUCCESS) {
-        printf("Encoder Angle: %u LSB\n", angle);
+        logger.Info("MAIN", "Encoder Angle: %u LSB\n", angle);
     }
 }
 ```
@@ -526,6 +551,148 @@ auto& motors = vortex.motors;
 auto& gpio = GpioManager::GetInstance();
 auto& adc = AdcManager::GetInstance();
 auto& motors = MotorController::GetInstance();
+
+// GPIO Operations
+gpio.Set("GPIO_EXT_GPIO_CS_1", true);                    // Set pin high
+bool state;
+gpio.Read("GPIO_PCAL_GPIO17", state);                    // Read pin state
+gpio.SetDirection("GPIO_EXT_GPIO_CS_1", hf_gpio_direction_t::HF_GPIO_DIRECTION_OUTPUT);
+
+// ADC Operations
+float voltage;
+adc.ReadChannelV("ADC_TMC9660_AIN3", voltage);           // Read voltage
+uint32_t raw_value;
+adc.ReadChannelCount("ADC_TMC9660_AIN3", raw_value);     // Read raw count
+```
+
+### Critical Enum Values and Meanings
+
+#### **GPIO State Enums**
+```cpp
+// GPIO Logical States (independent of electrical polarity)
+hf_gpio_state_t::HF_GPIO_STATE_INACTIVE = 0  // Logical inactive state
+hf_gpio_state_t::HF_GPIO_STATE_ACTIVE = 1    // Logical active state
+
+// GPIO Electrical Levels (actual voltage levels)
+hf_gpio_level_t::HF_GPIO_LEVEL_LOW = 0   // Electrical low level (0V)
+hf_gpio_level_t::HF_GPIO_LEVEL_HIGH = 1  // Electrical high level (VCC)
+
+// GPIO Active State Polarity (which electrical level = active)
+hf_gpio_active_state_t::HF_GPIO_ACTIVE_LOW = 0   // Active state is electrical low
+hf_gpio_active_state_t::HF_GPIO_ACTIVE_HIGH = 1  // Active state is electrical high
+```
+
+#### **GPIO Configuration Enums**
+```cpp
+// GPIO Direction/Mode
+hf_gpio_direction_t::HF_GPIO_DIRECTION_INPUT = 0   // Pin configured as input
+hf_gpio_direction_t::HF_GPIO_DIRECTION_OUTPUT = 1  // Pin configured as output
+
+// GPIO Output Drive Mode
+hf_gpio_output_mode_t::HF_GPIO_OUTPUT_MODE_PUSH_PULL = 0  // Push-pull (strong high/low)
+hf_gpio_output_mode_t::HF_GPIO_OUTPUT_MODE_OPEN_DRAIN = 1 // Open-drain (strong low, high-Z high)
+
+// GPIO Pull Resistor Configuration
+hf_gpio_pull_mode_t::HF_GPIO_PULL_MODE_FLOATING = 0  // No pull resistor (floating)
+hf_gpio_pull_mode_t::HF_GPIO_PULL_MODE_UP = 1        // Internal pull-up resistor
+hf_gpio_pull_mode_t::HF_GPIO_PULL_MODE_DOWN = 2      // Internal pull-down resistor
+hf_gpio_pull_mode_t::HF_GPIO_PULL_MODE_UP_DOWN = 3   // Both pull-up and pull-down
+```
+
+#### **GPIO Interrupt Trigger Enums**
+```cpp
+hf_gpio_interrupt_trigger_t::HF_GPIO_INTERRUPT_TRIGGER_NONE = 0         // No interrupt
+hf_gpio_interrupt_trigger_t::HF_GPIO_INTERRUPT_TRIGGER_RISING_EDGE = 1  // Low to high edge
+hf_gpio_interrupt_trigger_t::HF_GPIO_INTERRUPT_TRIGGER_FALLING_EDGE = 2 // High to low edge
+hf_gpio_interrupt_trigger_t::HF_GPIO_INTERRUPT_TRIGGER_BOTH_EDGES = 3   // Both edges
+hf_gpio_interrupt_trigger_t::HF_GPIO_INTERRUPT_TRIGGER_LOW_LEVEL = 4    // Low level
+hf_gpio_interrupt_trigger_t::HF_GPIO_INTERRUPT_TRIGGER_HIGH_LEVEL = 5   // High level
+```
+
+#### **Error Code Enums**
+```cpp
+// GPIO Success/Error Codes
+hf_gpio_err_t::GPIO_SUCCESS = 0                    // Operation successful
+hf_gpio_err_t::GPIO_ERR_INVALID_PARAMETER = 4      // Invalid parameter
+hf_gpio_err_t::GPIO_ERR_HARDWARE_FAULT = 13        // Hardware fault
+hf_gpio_err_t::GPIO_ERR_COMMUNICATION_FAILURE = 14 // Communication failure
+
+// ADC Success/Error Codes
+hf_adc_err_t::ADC_SUCCESS = 0                      // Operation successful
+hf_adc_err_t::ADC_ERR_INVALID_CHANNEL = 13         // Invalid channel
+hf_adc_err_t::ADC_ERR_HARDWARE_FAULT = 19          // Hardware fault
+hf_adc_err_t::ADC_ERR_COMMUNICATION_FAILURE = 20   // Communication failure
+```
+
+### **🎯 How to Use These Enums Correctly**
+
+#### **1. GPIO State vs Electrical Level Understanding**
+```cpp
+// IMPORTANT: Understand the difference between logical state and electrical level
+// Logical state = what the application sees (ACTIVE/INACTIVE)
+// Electrical level = actual voltage on the pin (HIGH/LOW)
+
+// Example: Active-low LED (LED turns ON when pin is electrically LOW)
+gpio.Set("LED_PIN", true);  // Sets logical state to ACTIVE (LED turns ON)
+// If pin is configured as ACTIVE_LOW, this sets electrical level to LOW
+
+// Example: Active-high relay (relay turns ON when pin is electrically HIGH)
+gpio.Set("RELAY_PIN", true);  // Sets logical state to ACTIVE (relay turns ON)
+// If pin is configured as ACTIVE_HIGH, this sets electrical level to HIGH
+```
+
+#### **2. Proper GPIO Configuration**
+```cpp
+// Configure pin as output with proper settings
+gpio.SetDirection("GPIO_EXT_GPIO_CS_1", hf_gpio_direction_t::HF_GPIO_DIRECTION_OUTPUT);
+gpio.SetOutputMode("GPIO_EXT_GPIO_CS_1", hf_gpio_output_mode_t::HF_GPIO_OUTPUT_MODE_PUSH_PULL);
+gpio.SetPullMode("GPIO_EXT_GPIO_CS_1", hf_gpio_pull_mode_t::HF_GPIO_PULL_MODE_UP);
+
+// Configure pin as input with pull-up
+gpio.SetDirection("GPIO_PCAL_GPIO17", hf_gpio_direction_t::HF_GPIO_DIRECTION_INPUT);
+gpio.SetPullMode("GPIO_PCAL_GPIO17", hf_gpio_pull_mode_t::HF_GPIO_PULL_MODE_UP);
+```
+
+#### **3. Interrupt Configuration**
+```cpp
+// Configure interrupt on rising edge
+gpio.ConfigureInterrupt("GPIO_PCAL_IMU_INT", 
+                       hf_gpio_interrupt_trigger_t::HF_GPIO_INTERRUPT_TRIGGER_RISING_EDGE,
+                       my_interrupt_callback);
+
+// Enable the interrupt
+gpio.EnableInterrupt("GPIO_PCAL_IMU_INT");
+```
+
+#### **4. Error Handling Best Practices**
+```cpp
+// Always check return codes
+auto result = gpio.Set("GPIO_EXT_GPIO_CS_1", true);
+if (result != hf_gpio_err_t::GPIO_SUCCESS) {
+    logger.Error("GPIO", "Failed to set pin: %s", HfGpioErrToString(result));
+    // Handle error appropriately
+}
+
+// For ADC operations
+float voltage;
+auto adc_result = adc.ReadChannelV("ADC_TMC9660_AIN3", voltage);
+if (adc_result != hf_adc_err_t::ADC_SUCCESS) {
+    logger.Error("ADC", "Failed to read voltage: %s", HfAdcErrToString(adc_result));
+    // Handle error appropriately
+}
+```
+
+#### **5. Understanding Active State Polarity**
+```cpp
+// Active-Low Configuration (common for LEDs, buttons)
+// Logical ACTIVE = Electrical LOW
+// Logical INACTIVE = Electrical HIGH
+// Use when: LED cathode connected to pin, button pulls pin low when pressed
+
+// Active-High Configuration (common for relays, enable signals)
+// Logical ACTIVE = Electrical HIGH  
+// Logical INACTIVE = Electrical LOW
+// Use when: LED anode connected to pin, relay needs high to activate
 ```
 
 ## 🧪 Examples
@@ -535,14 +702,14 @@ auto& motors = MotorController::GetInstance();
 #include "API/Vortex.h"
 
 extern "C" void app_main(void) {
-    printf("=== HardFOC Vortex V1 API Example ===\n");
+    logger.Info("MAIN", "=== HardFOC Vortex V1 API Example ===\n");
     
     // Get the unified Vortex API for HardFOC Vortex V1
     auto& vortex = Vortex::GetInstance();
     
     // Initialize all systems
     if (vortex.EnsureInitialized()) {
-        printf("✓ HardFOC Vortex V1 initialized successfully!\n");
+        logger.Info("MAIN", "✓ HardFOC Vortex V1 initialized successfully!\n");
         
         // Demonstrate all components
         DemonstrateComms(vortex);
@@ -555,17 +722,17 @@ extern "C" void app_main(void) {
         DemonstrateTemperature(vortex);
         
         // System health monitoring
-        printf("=== HardFOC Vortex V1 System Health Check ===\n");
+        logger.Info("MAIN", "=== HardFOC Vortex V1 System Health Check ===\n");
         if (vortex.PerformHealthCheck()) {
-            printf("✓ All HardFOC Vortex V1 systems operational\n");
+            logger.Info("MAIN", "✓ All HardFOC Vortex V1 systems operational\n");
         } else {
-            printf("✗ HardFOC Vortex V1 system health check failed\n");
+            logger.Info("MAIN", "✗ HardFOC Vortex V1 system health check failed\n");
         }
         
         // Continuous operation demo
-        printf("=== Continuous Operation Demo ===\n");
+        logger.Info("MAIN", "=== Continuous Operation Demo ===\n");
         for (int i = 0; i < 10; i++) {
-            printf("Tick %d/10 - Uptime: %llu ms\n", i + 1, vortex.GetSystemUptimeMs());
+            logger.Info("MAIN", "Tick %d/10 - Uptime: %llu ms\n", i + 1, vortex.GetSystemUptimeMs());
             
             // Blink LED to show activity
             if (i % 2 == 0) {
@@ -579,15 +746,15 @@ extern "C" void app_main(void) {
         
         // Final status
         vortex.leds.SetStatus(LedAnimation::STATUS_OK);
-        printf("=== HardFOC Vortex V1 Demo Complete ===\n");
+        logger.Info("MAIN", "=== HardFOC Vortex V1 Demo Complete ===\n");
         
     } else {
-        printf("✗ HardFOC Vortex V1 initialization failed!\n");
+        logger.Info("MAIN", "✗ HardFOC Vortex V1 initialization failed!\n");
         
         // Show what failed
         auto failed_components = vortex.GetFailedComponents();
         for (const auto& component : failed_components) {
-            printf("Failed component: %s\n", component.c_str());
+            logger.Info("MAIN", "Failed component: %s\n", component.c_str());
         }
     }
 }
@@ -596,36 +763,38 @@ extern "C" void app_main(void) {
 ### GPIO Control Example
 ```cpp
 void DemonstrateGpio(Vortex& vortex) {
-    printf("=== HardFOC Vortex V1 GPIO Management Demo ===\n");
+    logger.Info("MAIN", "=== HardFOC Vortex V1 GPIO Management Demo ===\n");
     
     auto& gpio = vortex.gpio;
     
     // Configure ESP32 GPIO pin as output
     gpio.ConfigurePin("GPIO_EXT_GPIO_CS_1", false);  // false = output
     
-    // Blink LED using ESP32 GPIO
-    for (int i = 0; i < 5; i++) {
-        gpio.SetPin("GPIO_EXT_GPIO_CS_1", true);
-        vTaskDelay(pdMS_TO_TICKS(200));
-        gpio.SetPin("GPIO_EXT_GPIO_CS_1", false);
-        vTaskDelay(pdMS_TO_TICKS(200));
-    }
+            // Blink LED using ESP32 GPIO
+        for (int i = 0; i < 5; i++) {
+            gpio.Set("GPIO_EXT_GPIO_CS_1", true);
+            vTaskDelay(pdMS_TO_TICKS(200));
+            gpio.Set("GPIO_EXT_GPIO_CS_1", false);
+            vTaskDelay(pdMS_TO_TICKS(200));
+        }
     
     // Read PCAL95555 GPIO pins
-    bool gpio17_state = gpio.GetPin("GPIO_PCAL_GPIO17");
-    bool gpio18_state = gpio.GetPin("GPIO_PCAL_GPIO18");
-    printf("PCAL95555 GPIO17: %s, GPIO18: %s\n", 
+    bool gpio17_state;
+    gpio.Read("GPIO_PCAL_GPIO17", gpio17_state);
+    bool gpio18_state;
+    gpio.Read("GPIO_PCAL_GPIO18", gpio18_state);
+    logger.Info("MAIN", "PCAL95555 GPIO17: %s, GPIO18: %s\n", 
            gpio17_state ? "HIGH" : "LOW", 
            gpio18_state ? "HIGH" : "LOW");
     
-    printf("✓ HardFOC Vortex V1 GPIO demo completed\n");
+    logger.Info("MAIN", "✓ HardFOC Vortex V1 GPIO demo completed\n");
 }
 ```
 
 ### Multi-Channel ADC Reading
 ```cpp
 void DemonstrateAdc(Vortex& vortex) {
-    printf("=== HardFOC Vortex V1 ADC Management Demo ===\n");
+    logger.Info("MAIN", "=== HardFOC Vortex V1 ADC Management Demo ===\n");
     
     auto& adc = vortex.adc;
     
@@ -635,41 +804,44 @@ void DemonstrateAdc(Vortex& vortex) {
         "ADC_TMC9660_AIN2", "ADC_TMC9660_AIN3"
     };
     
-    auto readings = adc.ReadMultipleVoltages(channels);
+    auto readings = adc.BatchRead(channels);
     
     for (size_t i = 0; i < channels.size(); i++) {
-        printf("  %s: %.3fV\n", channels[i].data(), readings.voltages[i]);
+        logger.Info("MAIN", "  %s: %.3fV\n", channels[i].data(), readings.voltages[i]);
     }
     
     // Read TMC9660 internal monitoring channels
-    float chip_temp = adc.ReadVoltage("TMC9660_CHIP_TEMPERATURE");
-    float motor_current = adc.ReadVoltage("TMC9660_MOTOR_CURRENT");
-    float supply_voltage = adc.ReadVoltage("TMC9660_SUPPLY_VOLTAGE");
+    float chip_temp;
+    adc.ReadChannelV("TMC9660_CHIP_TEMPERATURE", chip_temp);
+    float motor_current;
+    adc.ReadChannelV("TMC9660_MOTOR_CURRENT", motor_current);
+    float supply_voltage;
+    adc.ReadChannelV("TMC9660_SUPPLY_VOLTAGE", supply_voltage);
     
-    printf("  TMC9660 Chip Temperature: %.3fV\n", chip_temp);
-    printf("  TMC9660 Motor Current: %.3fV\n", motor_current);
-    printf("  TMC9660 Supply Voltage: %.3fV\n", supply_voltage);
+    logger.Info("MAIN", "  TMC9660 Chip Temperature: %.3fV\n", chip_temp);
+    logger.Info("MAIN", "  TMC9660 Motor Current: %.3fV\n", motor_current);
+    logger.Info("MAIN", "  TMC9660 Supply Voltage: %.3fV\n", supply_voltage);
     
-    printf("✓ HardFOC Vortex V1 ADC demo completed\n");
+    logger.Info("MAIN", "✓ HardFOC Vortex V1 ADC demo completed\n");
 }
 ```
 
 ### Motor Control Example
 ```cpp
 void DemonstrateMotors(Vortex& vortex) {
-    printf("=== HardFOC Vortex V1 Motor Controller Demo ===\n");
+    logger.Info("MAIN", "=== HardFOC Vortex V1 Motor Controller Demo ===\n");
     
     auto& motors = vortex.motors;
     
     // Get the onboard motor controller handler
     auto* handler = motors.handler(0);
     if (handler) {
-        printf("✓ HardFOC Vortex V1 onboard TMC9660 handler available\n");
+        logger.Info("MAIN", "✓ HardFOC Vortex V1 onboard TMC9660 handler available\n");
         
         // Get the underlying driver
         auto driver = motors.driver(0);
         if (driver) {
-            printf("✓ HardFOC Vortex V1 TMC9660 driver available\n");
+            logger.Info("MAIN", "✓ HardFOC Vortex V1 TMC9660 driver available\n");
             
             // Configure motor parameters
             driver->SetTargetVelocity(1000);  // RPM
@@ -678,10 +850,10 @@ void DemonstrateMotors(Vortex& vortex) {
             // Enable motor
             driver->EnableMotor(true);
             
-            printf("✓ HardFOC Vortex V1 motor controller configured and enabled\n");
+            logger.Info("MAIN", "✓ HardFOC Vortex V1 motor controller configured and enabled\n");
         }
     } else {
-        printf("✗ HardFOC Vortex V1 motor controller not available\n");
+        logger.Info("MAIN", "✗ HardFOC Vortex V1 motor controller not available\n");
     }
 }
 ```

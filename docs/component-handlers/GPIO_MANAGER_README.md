@@ -74,6 +74,122 @@ void gpio_example() {
 
 ## 📖 API Reference
 
+### Critical Enum Values and Meanings
+
+#### **GPIO State Enums**
+```cpp
+// GPIO Logical States (independent of electrical polarity)
+hf_gpio_state_t::HF_GPIO_STATE_INACTIVE = 0  // Logical inactive state
+hf_gpio_state_t::HF_GPIO_STATE_ACTIVE = 1    // Logical active state
+
+// GPIO Electrical Levels (actual voltage levels)
+hf_gpio_level_t::HF_GPIO_LEVEL_LOW = 0   // Electrical low level (0V)
+hf_gpio_level_t::HF_GPIO_LEVEL_HIGH = 1  // Electrical high level (VCC)
+
+// GPIO Active State Polarity (which electrical level = active)
+hf_gpio_active_state_t::HF_GPIO_ACTIVE_LOW = 0   // Active state is electrical low
+hf_gpio_active_state_t::HF_GPIO_ACTIVE_HIGH = 1  // Active state is electrical high
+```
+
+#### **GPIO Configuration Enums**
+```cpp
+// GPIO Direction/Mode
+hf_gpio_direction_t::HF_GPIO_DIRECTION_INPUT = 0   // Pin configured as input
+hf_gpio_direction_t::HF_GPIO_DIRECTION_OUTPUT = 1  // Pin configured as output
+
+// GPIO Output Drive Mode
+hf_gpio_output_mode_t::HF_GPIO_OUTPUT_MODE_PUSH_PULL = 0  // Push-pull (strong high/low)
+hf_gpio_output_mode_t::HF_GPIO_OUTPUT_MODE_OPEN_DRAIN = 1 // Open-drain (strong low, high-Z high)
+
+// GPIO Pull Resistor Configuration
+hf_gpio_pull_mode_t::HF_GPIO_PULL_MODE_FLOATING = 0  // No pull resistor (floating)
+hf_gpio_pull_mode_t::HF_GPIO_PULL_MODE_UP = 1        // Internal pull-up resistor
+hf_gpio_pull_mode_t::HF_GPIO_PULL_MODE_DOWN = 2      // Internal pull-down resistor
+hf_gpio_pull_mode_t::HF_GPIO_PULL_MODE_UP_DOWN = 3   // Both pull-up and pull-down
+```
+
+#### **GPIO Interrupt Trigger Enums**
+```cpp
+hf_gpio_interrupt_trigger_t::HF_GPIO_INTERRUPT_TRIGGER_NONE = 0         // No interrupt
+hf_gpio_interrupt_trigger_t::HF_GPIO_INTERRUPT_TRIGGER_RISING_EDGE = 1  // Low to high edge
+hf_gpio_interrupt_trigger_t::HF_GPIO_INTERRUPT_TRIGGER_FALLING_EDGE = 2 // High to low edge
+hf_gpio_interrupt_trigger_t::HF_GPIO_INTERRUPT_TRIGGER_BOTH_EDGES = 3   // Both edges
+hf_gpio_interrupt_trigger_t::HF_GPIO_INTERRUPT_TRIGGER_LOW_LEVEL = 4    // Low level
+hf_gpio_interrupt_trigger_t::HF_GPIO_INTERRUPT_TRIGGER_HIGH_LEVEL = 5   // High level
+```
+
+#### **Error Code Enums**
+```cpp
+// GPIO Success/Error Codes
+hf_gpio_err_t::GPIO_SUCCESS = 0                    // Operation successful
+hf_gpio_err_t::GPIO_ERR_INVALID_PARAMETER = 4      // Invalid parameter
+hf_gpio_err_t::GPIO_ERR_HARDWARE_FAULT = 13        // Hardware fault
+hf_gpio_err_t::GPIO_ERR_COMMUNICATION_FAILURE = 14 // Communication failure
+```
+
+### **🎯 How to Use These Enums Correctly**
+
+#### **1. GPIO State vs Electrical Level Understanding**
+```cpp
+// IMPORTANT: Understand the difference between logical state and electrical level
+// Logical state = what the application sees (ACTIVE/INACTIVE)
+// Electrical level = actual voltage on the pin (HIGH/LOW)
+
+// Example: Active-low LED (LED turns ON when pin is electrically LOW)
+gpio.Set("LED_PIN", true);  // Sets logical state to ACTIVE (LED turns ON)
+// If pin is configured as ACTIVE_LOW, this sets electrical level to LOW
+
+// Example: Active-high relay (relay turns ON when pin is electrically HIGH)
+gpio.Set("RELAY_PIN", true);  // Sets logical state to ACTIVE (relay turns ON)
+// If pin is configured as ACTIVE_HIGH, this sets electrical level to HIGH
+```
+
+#### **2. Proper GPIO Configuration**
+```cpp
+// Configure pin as output with proper settings
+gpio.SetDirection("GPIO_EXT_GPIO_CS_1", hf_gpio_direction_t::HF_GPIO_DIRECTION_OUTPUT);
+gpio.SetOutputMode("GPIO_EXT_GPIO_CS_1", hf_gpio_output_mode_t::HF_GPIO_OUTPUT_MODE_PUSH_PULL);
+gpio.SetPullMode("GPIO_EXT_GPIO_CS_1", hf_gpio_pull_mode_t::HF_GPIO_PULL_MODE_UP);
+
+// Configure pin as input with pull-up
+gpio.SetDirection("GPIO_PCAL_GPIO17", hf_gpio_direction_t::HF_GPIO_DIRECTION_INPUT);
+gpio.SetPullMode("GPIO_PCAL_GPIO17", hf_gpio_pull_mode_t::HF_GPIO_PULL_MODE_UP);
+```
+
+#### **3. Interrupt Configuration**
+```cpp
+// Configure interrupt on rising edge
+gpio.ConfigureInterrupt("GPIO_PCAL_IMU_INT", 
+                       hf_gpio_interrupt_trigger_t::HF_GPIO_INTERRUPT_TRIGGER_RISING_EDGE,
+                       my_interrupt_callback);
+
+// Enable the interrupt
+gpio.EnableInterrupt("GPIO_PCAL_IMU_INT");
+```
+
+#### **4. Error Handling Best Practices**
+```cpp
+// Always check return codes
+auto result = gpio.Set("GPIO_EXT_GPIO_CS_1", true);
+if (result != hf_gpio_err_t::GPIO_SUCCESS) {
+    logger.Error("GPIO", "Failed to set pin: %s", HfGpioErrToString(result));
+    // Handle error appropriately
+}
+```
+
+#### **5. Understanding Active State Polarity**
+```cpp
+// Active-Low Configuration (common for LEDs, buttons)
+// Logical ACTIVE = Electrical LOW
+// Logical INACTIVE = Electrical HIGH
+// Use when: LED cathode connected to pin, button pulls pin low when pressed
+
+// Active-High Configuration (common for relays, enable signals)
+// Logical ACTIVE = Electrical HIGH  
+// Logical INACTIVE = Electrical LOW
+// Use when: LED anode connected to pin, relay needs high to activate
+```
+
 ### Core Operations
 
 #### Initialization
