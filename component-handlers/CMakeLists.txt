@@ -50,8 +50,6 @@ set(COMPONENT_SOURCES
     Tmc9660Example.cpp
     
     # Header files
-    All.h
-    SystemInit.h
 )
 
 # Create component library

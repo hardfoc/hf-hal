@@ -21,18 +21,21 @@ This documentation index provides comprehensive access to all HardFOC HAL system
 ### Essential Documentation
 - **[🏠 Main README](README.md)** - Project overview and quick start guide
 - **[⚡ Quick Start Examples](#quick-start-examples)** - Get up and running in minutes
-- **[🔧 System Integration](docs/api/INTEGRATION_GUIDE.md)** - Integration with existing projects
-- **[⚙️ Hardware Setup](docs/hardware/HARDWARE_SETUP.md)** - Hardware configuration guide
+- **[🔧 System Integration](API/README.md)** - Integration with existing projects
+- **[⚙️ Architecture Guidelines](docs/development/ARCHITECTURE_GUIDELINES.md)** - Hardware configuration guide
 
 ### Quick Start Examples
 
 ```cpp
 // Minimal HardFOC initialization
-#include "API/All.h"
+#include "API/Vortex.h"
 
 int main() {
+    // Get the Vortex API instance
+    auto& vortex = Vortex::GetInstance();
+    
     // Initialize the complete system
-    if (!HARDFOC_INIT()) {
+    if (!vortex.EnsureInitialized()) {
         printf("System initialization failed\n");
         return -1;
     }
@@ -47,8 +50,9 @@ int main() {
     
     // Main loop with health monitoring
     while (true) {
-        HARDFOC_MAINTAIN();
-        if (!HARDFOC_HEALTHY()) {
+        // System runs continuously - Vortex API handles maintenance
+        auto diagnostics = vortex.GetSystemDiagnostics();
+        if (!diagnostics.system_healthy) {
             printf("System health check failed\n");
         }
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -132,16 +136,13 @@ Driver handlers provide hardware-specific interfaces for individual devices. Eac
 ## 🏗️ Architecture Documentation
 
 ### Core System Architecture
-- **[🏗️ Hardware Abstraction Architecture](docs/HARDFOC_HARDWARE_ABSTRACTION_ARCHITECTURE.md)** - Complete HAL architecture
-- **[⚡ GPIO System Architecture](docs/GPIO_ARCHITECTURE_FINAL.md)** - GPIO system design and implementation
-- **[📊 PWM Architecture](docs/PWM_ARCHITECTURE.md)** - PWM system design
-- **[🔔 Unified GPIO Interrupt Architecture](docs/UNIFIED_GPIO_INTERRUPT_ARCHITECTURE.md)** - Modern interrupt handling
+- **[🏗️ Hardware Abstraction Architecture](docs/development/ARCHITECTURE_GUIDELINES.md)** - Complete HAL architecture
+- **[⚡ GPIO System Architecture](docs/component-handlers/GPIO_MANAGER_README.md)** - GPIO system design and implementation
 
 ### System Integration Guides
-- **[🔧 GPIO & ADC System Guide](docs/HARDFOC_GPIO_ADC_SYSTEM.md)** - Comprehensive system guide
-- **[📡 Communication Architecture](docs/COMMCHANNELSMANAGER_ARCHITECTURE.md)** - Communication system design
-- **[🧪 Component Handler Integration](docs/COMPONENT_HANDLER_INTEGRATION_GUIDE.md)** - Integration patterns
-- **[📋 Final Implementation Report](docs/FINAL_IMPLEMENTATION_REPORT.md)** - Implementation status
+- **[🔧 GPIO Manager Guide](docs/component-handlers/GPIO_MANAGER_README.md)** - GPIO system guide
+- **[📊 ADC Manager Guide](docs/component-handlers/ADC_MANAGER_README.md)** - ADC system guide
+- **[📡 Communication Manager](docs/component-handlers/COMM_CHANNELS_MANAGER_README.md)** - Communication system documentation
 
 ### Architecture Principles
 
@@ -162,16 +163,15 @@ Driver handlers provide hardware-specific interfaces for individual devices. Eac
 ## 🔌 API Reference
 
 ### Public API Documentation
-- **[🔌 Complete API Reference](docs/api/API_REFERENCE.md)** - Full public API documentation
-- **[🚀 Integration Guide](docs/api/INTEGRATION_GUIDE.md)** - System integration examples
-- **[⚙️ System Initialization](docs/api/SYSTEM_INITIALIZATION.md)** - Initialization procedures
+- **[🔌 Complete API Reference](API/README.md)** - Full public API documentation
+- **[🚀 Integration Guide](API/README.md)** - System integration examples  
+- **[⚙️ System Initialization](API/README.md)** - Initialization procedures
 
 ### API Organization
 
 #### Core API Includes
 ```cpp
-#include "API/All.h"                    // Complete HAL system
-#include "component-handlers/All.h"     // Component handlers only
+#include "API/Vortex.h"                 // Unified Vortex API
 ```
 
 #### Manager Access Patterns
@@ -195,22 +195,16 @@ auto* handler = motor.handler(0);
 ## 🔗 Hardware Integration
 
 ### Board Configuration
-- **[🏗️ HardFOC Vortex V1 Board](docs/hardware/HARDFOC_VORTEX_V1.md)** - Board-specific configuration
-- **[📍 ESP32-C6 Pin Configuration](docs/hardware/ESP32_C6_PIN_MAPPING.md)** - Pin mapping and configuration
-- **[⚡ Power Management](docs/hardware/POWER_MANAGEMENT.md)** - Power system design
-- **[🔧 Hardware Setup Guide](docs/hardware/HARDWARE_SETUP.md)** - Complete setup instructions
+- **[🏗️ Hardware Architecture](docs/development/ARCHITECTURE_GUIDELINES.md)** - Board-specific configuration
 
-### Device Configuration
-- **[🔌 PCAL95555 Configuration](docs/hardware/PCAL95555_CONFIGURATION.md)** - GPIO expander setup
-- **[🎛️ TMC9660 Configuration](docs/hardware/TMC9660_CONFIGURATION.md)** - Motor controller setup
-- **[📐 AS5047U Configuration](docs/hardware/AS5047U_CONFIGURATION.md)** - Position encoder setup
-- **[🧭 BNO08x Configuration](docs/hardware/BNO08X_CONFIGURATION.md)** - IMU sensor setup
+### Device Documentation
+- **[🔌 PCAL95555 Handler](docs/driver-handlers/PCAL95555_HANDLER_README.md)** - GPIO expander documentation
+- **[🎛️ TMC9660 Handler](docs/driver-handlers/TMC9660_HANDLER_README.md)** - Motor controller documentation
+- **[📐 AS5047U Handler](docs/driver-handlers/AS5047U_HANDLER_README.md)** - Position encoder documentation
+- **[🧭 BNO08x Handler](docs/driver-handlers/BNO08X_HANDLER_README.md)** - IMU sensor documentation
 
-### Interface Guides
-- **[🔌 SPI Interface Guide](docs/hardware/SPI_INTERFACE_GUIDE.md)** - SPI communication setup
-- **[📡 I2C Interface Guide](docs/hardware/I2C_INTERFACE_GUIDE.md)** - I2C communication setup
-- **[📟 UART Interface Guide](docs/hardware/UART_INTERFACE_GUIDE.md)** - UART communication setup
-- **[🌐 CAN Interface Guide](docs/hardware/CAN_INTERFACE_GUIDE.md)** - CAN communication setup
+### Communication Interface
+- **[📡 Communication Manager](docs/component-handlers/COMM_CHANNELS_MANAGER_README.md)** - SPI, I2C, UART, CAN communication
 
 ## 🧪 Testing and Validation
 
@@ -268,10 +262,12 @@ private:
 ### Health Monitoring
 ```cpp
 // System health check
-if (!HARDFOC_HEALTHY()) {
-    // Get detailed status
-    auto gpio_status = GpioManager::GetInstance().GetSystemStatus();
-    auto adc_status = AdcManager::GetInstance().GetSystemStatus();
+auto& vortex = Vortex::GetInstance();
+auto diagnostics = vortex.GetSystemDiagnostics();
+if (!diagnostics.system_healthy) {
+    // Get detailed status from individual managers
+    auto gpio_status = vortex.gpio.GetSystemStatus();
+    auto adc_status = vortex.adc.GetSystemStatus();
     
     printf("GPIO Health: %s\n", gpio_status.overall_healthy ? "OK" : "FAIL");
     printf("ADC Health: %s\n", adc_status.overall_healthy ? "OK" : "FAIL");

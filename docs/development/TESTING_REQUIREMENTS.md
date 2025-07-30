@@ -94,12 +94,13 @@ class SystemIntegrationTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // Initialize complete system
-        ASSERT_TRUE(HARDFOC_INIT());
+        auto& vortex = Vortex::GetInstance();
+        ASSERT_TRUE(vortex.EnsureInitialized());
     }
     
     void TearDown() override {
-        // Cleanup system
-        HARDFOC_MAINTAIN();
+        // Cleanup system - Vortex API handles cleanup automatically
+        // No explicit cleanup needed due to RAII design
     }
 };
 
@@ -158,7 +159,8 @@ class HardwareInLoopTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // Initialize hardware
-        ASSERT_TRUE(HARDFOC_INIT());
+        auto& vortex = Vortex::GetInstance();
+        ASSERT_TRUE(vortex.EnsureInitialized());
         
         // Verify hardware is present
         auto& motor = MotorController::GetInstance();
@@ -239,7 +241,8 @@ Validate performance requirements and identify performance bottlenecks.
 class PerformanceTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        ASSERT_TRUE(HARDFOC_INIT());
+        auto& vortex = Vortex::GetInstance();
+        ASSERT_TRUE(vortex.EnsureInitialized());
     }
 };
 
@@ -318,7 +321,8 @@ Test system behavior under extreme conditions and high load.
 class StressTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        ASSERT_TRUE(HARDFOC_INIT());
+        auto& vortex = Vortex::GetInstance();
+        ASSERT_TRUE(vortex.EnsureInitialized());
     }
 };
 
@@ -391,7 +395,7 @@ Use Google Test framework for comprehensive testing:
 
 ```cpp
 #include <gtest/gtest.h>
-#include "component-handlers/All.h"
+#include "API/Vortex.h"
 
 // Test fixture setup
 class ComponentTest : public ::testing::Test {
