@@ -13,6 +13,9 @@ set(HF_HAL_ROOT ${CMAKE_CURRENT_LIST_DIR})
 list(APPEND EXTRA_COMPONENT_DIRS "${HF_HAL_ROOT}/utils-and-drivers/hf-core-drivers/external/")
 list(APPEND EXTRA_COMPONENT_DIRS "${HF_HAL_ROOT}/utils-and-drivers/hf-core-drivers/external/hf-ws2812-rmt-driver")
 
+# Include the Vortex API component
+list(APPEND EXTRA_COMPONENT_DIRS "${HF_HAL_ROOT}/API")
+
 #
 # ─── 1 · Locate all implementation files (skip docs, examples, tests) ──────────
 #
@@ -58,7 +61,7 @@ idf_component_register(
     # PUBLIC deps: anything the *application* must also link against.
     # (change to taste – these are the most common for a HAL).
     #
-    REQUIRES      driver freertos hf-ws2812-rmt-driver nvs_flash
+    REQUIRES      driver freertos hf-ws2812-rmt-driver nvs_flash vortex-api
     # PRIVATE deps: used only while building this lib.
     #
     PRIV_REQUIRES hal esp_timer esp_adc esp_driver_spi esp_driver_i2c esp_driver_uart esp_driver_gpio 
