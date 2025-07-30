@@ -73,6 +73,9 @@ Component handlers provide high-level management interfaces for system resources
 | **📡 CommChannelsManager** | Communication interfaces | ESP32-C6 SPI/I2C/UART/CAN | **[📖 Comm Manager Guide](docs/component-handlers/COMM_CHANNELS_MANAGER_README.md)** |
 | **🎛️ MotorController** | Motor controller management | TMC9660 devices | **[📖 Motor Controller Guide](docs/component-handlers/MOTOR_CONTROLLER_README.md)** |
 | **🧭 ImuManager** | IMU sensor management | BNO08x via I2C | **[📖 IMU Manager Guide](docs/component-handlers/IMU_MANAGER_README.md)** |
+| **🌡️ TemperatureManager** | Temperature monitoring | NTC thermistors, integrated sensors | **[📖 Temperature Manager Guide](docs/component-handlers/TEMPERATURE_MANAGER_README.md)** |
+| **💡 LedManager** | LED control system | WS2812 strips, individual LEDs | **[📖 LED Manager Guide](docs/component-handlers/LED_MANAGER_README.md)** |
+| **🎯 EncoderManager** | Position encoder system | AS5047U, incremental encoders | **[📖 Encoder Manager Guide](docs/component-handlers/ENCODER_MANAGER_README.md)** |
 
 ### Component Handler Features
 
@@ -98,6 +101,27 @@ Component handlers provide high-level management interfaces for system resources
 - **Handler Access**: Direct access to individual Tmc9660Handler instances
 - **Communication Flexibility**: SPI and UART interface support
 
+#### TemperatureManager - Temperature Monitoring System
+- **Multi-Sensor Support**: NTC thermistors, integrated sensors, external devices
+- **Unified API**: Single interface for all temperature measurements
+- **Automatic Calibration**: Built-in calibration and compensation
+- **Trend Analysis**: Temperature history and trend monitoring
+- **Safety Monitoring**: Over-temperature protection and alerts
+
+#### LedManager - LED Control System
+- **WS2812 Support**: Full RGB LED strip control with RMT interface
+- **Individual LED Control**: GPIO-based LED control
+- **Color Management**: RGB, HSV, and temperature-based color control
+- **Animation System**: Built-in animations and custom pattern support
+- **Power Management**: Current limiting and thermal protection
+
+#### EncoderManager - Position Encoder System
+- **Multi-Encoder Support**: AS5047U, incremental, and custom encoders
+- **Unified API**: Single interface for all position measurements
+- **Real-time Tracking**: High-speed position and velocity monitoring
+- **Automatic Calibration**: Built-in calibration and compensation
+- **Position History**: Position tracking and trend analysis
+
 ## 🔧 Driver Handlers
 
 Driver handlers provide hardware-specific interfaces for individual devices. Each handler encapsulates device communication, configuration, and operation.
@@ -110,6 +134,7 @@ Driver handlers provide hardware-specific interfaces for individual devices. Eac
 | **🔌 Pcal95555Handler** | PCAL95555 GPIO Expander | I2C | 16-bit GPIO expansion | **[📖 PCAL95555 Handler Guide](docs/driver-handlers/PCAL95555_HANDLER_README.md)** |
 | **📐 As5047uHandler** | AS5047U Position Encoder | SPI | Magnetic angle sensing | **[📖 AS5047U Handler Guide](docs/driver-handlers/AS5047U_HANDLER_README.md)** |
 | **🧭 Bno08xHandler** | BNO08x IMU Sensor | I2C | 9-axis motion sensing | **[📖 BNO08x Handler Guide](docs/driver-handlers/BNO08X_HANDLER_README.md)** |
+| **📝 Logger** | Unified Logging System | UART/File/Network | Multi-destination logging | **[📖 Logger Handler Guide](docs/driver-handlers/LOGGER_HANDLER_README.md)** |
 
 ### Driver Handler Features
 
@@ -123,15 +148,18 @@ Driver handlers provide hardware-specific interfaces for individual devices. Eac
 
 #### Hardware Support Matrix
 
-| Feature | ESP32-C6 | PCAL95555 | TMC9660 | AS5047U | BNO08x |
-|---------|-----------|-----------|---------|---------|--------|
-| **GPIO** | ✅ 40+ pins | ✅ 32 pins | ✅ 8 pins | ❌ | ❌ |
-| **ADC** | ✅ 6 channels | ❌ | ✅ 3 channels | ❌ | ❌ |
-| **SPI** | ✅ Master | ❌ | ✅ Slave | ✅ Slave | ❌ |
-| **I2C** | ✅ Master | ✅ Slave | ❌ | ❌ | ✅ Slave |
-| **UART** | ✅ 3 ports | ❌ | ✅ TMCL | ❌ | ❌ |
-| **PWM** | ✅ 6 channels | ❌ | ✅ Motor PWM | ❌ | ❌ |
-| **Interrupts** | ✅ GPIO | ✅ GPIO | ✅ Fault | ❌ | ✅ Data ready |
+| Feature | ESP32-C6 | PCAL95555 | TMC9660 | AS5047U | BNO08x | NTC Sensors | WS2812 LEDs | Logger |
+|---------|-----------|-----------|---------|---------|--------|-------------|-------------|---------|
+| **GPIO** | ✅ 40+ pins | ✅ 32 pins | ✅ 8 pins | ❌ | ❌ | ❌ | ✅ Individual LEDs | ❌ |
+| **ADC** | ✅ 6 channels | ❌ | ✅ 3 channels | ❌ | ❌ | ✅ Thermistors | ❌ | ❌ |
+| **SPI** | ✅ Master | ❌ | ✅ Slave | ✅ Slave | ❌ | ❌ | ❌ | ❌ |
+| **I2C** | ✅ Master | ✅ Slave | ❌ | ❌ | ✅ Slave | ✅ External sensors | ❌ | ❌ |
+| **UART** | ✅ 3 ports | ❌ | ✅ TMCL | ❌ | ❌ | ❌ | ❌ | ✅ Console output |
+| **PWM** | ✅ 6 channels | ❌ | ✅ Motor PWM | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **RMT** | ✅ 8 channels | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ LED strips | ❌ |
+| **File System** | ✅ SPIFFS/LittleFS | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ File logging |
+| **Network** | ✅ WiFi/Ethernet | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ Network logging |
+| **Interrupts** | ✅ GPIO | ✅ GPIO | ✅ Fault | ❌ | ✅ Data ready | ❌ | ❌ | ❌ |
 
 ## 🏗️ Architecture Documentation
 
@@ -143,6 +171,9 @@ Driver handlers provide hardware-specific interfaces for individual devices. Eac
 - **[🔧 GPIO Manager Guide](docs/component-handlers/GPIO_MANAGER_README.md)** - GPIO system guide
 - **[📊 ADC Manager Guide](docs/component-handlers/ADC_MANAGER_README.md)** - ADC system guide
 - **[📡 Communication Manager](docs/component-handlers/COMM_CHANNELS_MANAGER_README.md)** - Communication system documentation
+- **[🌡️ Temperature Manager Guide](docs/component-handlers/TEMPERATURE_MANAGER_README.md)** - Temperature monitoring system
+- **[💡 LED Manager Guide](docs/component-handlers/LED_MANAGER_README.md)** - LED control system
+- **[🎯 Encoder Manager Guide](docs/component-handlers/ENCODER_MANAGER_README.md)** - Position encoder system
 
 ### Architecture Principles
 
@@ -180,16 +211,25 @@ Driver handlers provide hardware-specific interfaces for individual devices. Eac
 auto& gpio = GpioManager::GetInstance();
 auto& adc = AdcManager::GetInstance();
 auto& motor = MotorController::GetInstance();
+auto& temp = TemperatureManager::GetInstance();
+auto& led = LedManager::GetInstance();
+auto& encoder = EncoderManager::GetInstance();
 
 // Initialization pattern
 gpio.EnsureInitialized();
 adc.Initialize();
 motor.EnsureInitialized();
+temp.EnsureInitialized();
+led.EnsureInitialized();
+encoder.EnsureInitialized();
 
 // Usage patterns
-gpio.SetPin("ESP32_GPIO_2", true);
-float voltage = adc.ReadVoltage("ESP32_ADC1_CH0");
+gpio.SetActive("GPIO_EXT_GPIO_CS_1");
+float voltage = adc.ReadChannelV("ADC_TMC9660_AIN3");
 auto* handler = motor.handler(0);
+float temperature = temp.ReadTemperature("ESP32_INTERNAL");
+led.SetColor(LedColor(255, 0, 0));
+uint16_t angle = encoder.ReadAngle(0);
 ```
 
 ## 🔗 Hardware Integration
@@ -267,16 +307,25 @@ private:
 
 ### Health Monitoring
 ```cpp
+#include "utils-and-drivers/driver-handlers/Logger.h"
+
 // System health check
+auto& logger = Logger::GetInstance();
 auto& vortex = Vortex::GetInstance();
 auto diagnostics = vortex.GetSystemDiagnostics();
 if (!diagnostics.system_healthy) {
     // Get detailed status from individual managers
     auto gpio_status = vortex.gpio.GetSystemStatus();
     auto adc_status = vortex.adc.GetSystemStatus();
+    auto temp_status = vortex.temperature.GetSystemStatus();
+    auto led_status = vortex.led.GetSystemStatus();
+    auto encoder_status = vortex.encoder.GetSystemStatus();
     
-    printf("GPIO Health: %s\n", gpio_status.overall_healthy ? "OK" : "FAIL");
-    printf("ADC Health: %s\n", adc_status.overall_healthy ? "OK" : "FAIL");
+    logger.Info("SYSTEM", "GPIO Health: %s", gpio_status.overall_healthy ? "OK" : "FAIL");
+    logger.Info("SYSTEM", "ADC Health: %s", adc_status.overall_healthy ? "OK" : "FAIL");
+    logger.Info("SYSTEM", "Temperature Health: %s", temp_status.system_healthy ? "OK" : "FAIL");
+    logger.Info("SYSTEM", "LED Health: %s", led_status.system_healthy ? "OK" : "FAIL");
+    logger.Info("SYSTEM", "Encoder Health: %s", encoder_status.system_healthy ? "OK" : "FAIL");
 }
 ```
 
@@ -317,7 +366,7 @@ if (!diagnostics.system_healthy) {
 - **SPI Protocol**: Serial Peripheral Interface specifications
 - **I2C Protocol**: Inter-Integrated Circuit specifications  
 - **UART Protocol**: Universal Asynchronous Receiver-Transmitter
-- **TMCL Protocol**: Trinamic Motion Control Language
+- **TMCL Protocol**: Trinamic Motion Control Language (ON SPI OR UART PORT)
 
 ## 🆘 Getting Help
 

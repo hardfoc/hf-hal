@@ -56,7 +56,7 @@ void as5047u_basic_example() {
     
     auto* spi = comm.GetSpiDevice(SpiDeviceId::AS5047U_POSITION_ENCODER);
     if (!spi) {
-        printf("SPI interface not available\n");
+        logger.Info("AS5047U", "SPI interface not available\n");
         return;
     }
     
@@ -65,16 +65,16 @@ void as5047u_basic_example() {
     
     // Initialize handler
     if (handler.Initialize() != As5047uError::SUCCESS) {
-        printf("Failed to initialize AS5047U\n");
+        logger.Info("AS5047U", "Failed to initialize AS5047U\n");
         return;
     }
     
     // Read angle measurement
     As5047uMeasurement measurement;
     if (handler.ReadMeasurement(measurement) == As5047uError::SUCCESS) {
-        printf("Angle: %u LSB (%.2f°)\n", measurement.angle_compensated, 
+        logger.Info("AS5047U", "Angle: %u LSB (%.2f°)\n", measurement.angle_compensated, 
                As5047uHandler::LSBToDegrees(measurement.angle_compensated));
-        printf("Velocity: %.2f RPM\n", measurement.velocity_rpm);
+        logger.Info("AS5047U", "Velocity: %.2f RPM\n", measurement.velocity_rpm);
     }
 }
 ```
@@ -211,14 +211,14 @@ void basic_angle_example() {
         double angle_degrees = As5047uHandler::LSBToDegrees(angle);
         double angle_radians = As5047uHandler::LSBToRadians(angle);
         
-        printf("Angle: %u LSB (%.2f°, %.4f rad)\n", 
+        logger.Info("AS5047U", "Angle: %u LSB (%.2f°, %.4f rad)\n", 
                angle, angle_degrees, angle_radians);
     }
     
     // Read velocity
     double velocity_rpm;
     if (handler.ReadVelocityRPM(velocity_rpm) == As5047uError::SUCCESS) {
-        printf("Velocity: %.2f RPM\n", velocity_rpm);
+        logger.Info("AS5047U", "Velocity: %.2f RPM\n", velocity_rpm);
     }
 }
 ```
@@ -239,19 +239,19 @@ void complete_measurement_example() {
     // Read complete measurement data
     As5047uMeasurement measurement;
     if (handler.ReadMeasurement(measurement) == As5047uError::SUCCESS) {
-        printf("Complete measurement data:\n");
-        printf("  Raw angle: %u LSB\n", measurement.angle_raw);
-        printf("  Compensated angle: %u LSB\n", measurement.angle_compensated);
-        printf("  Angle degrees: %.2f°\n", 
+        logger.Info("AS5047U", "Complete measurement data:\n");
+        logger.Info("AS5047U", "  Raw angle: %u LSB\n", measurement.angle_raw);
+        logger.Info("AS5047U", "  Compensated angle: %u LSB\n", measurement.angle_compensated);
+        logger.Info("AS5047U", "  Angle degrees: %.2f°\n", 
                As5047uHandler::LSBToDegrees(measurement.angle_compensated));
-        printf("  Velocity LSB: %d\n", measurement.velocity_raw);
-        printf("  Velocity deg/s: %.2f\n", measurement.velocity_deg_per_sec);
-        printf("  Velocity rad/s: %.4f\n", measurement.velocity_rad_per_sec);
-        printf("  Velocity RPM: %.2f\n", measurement.velocity_rpm);
-        printf("  AGC value: %u\n", measurement.agc_value);
-        printf("  Magnitude: %u\n", measurement.magnitude);
-        printf("  Error flags: 0x%04X\n", measurement.error_flags);
-        printf("  Valid: %s\n", measurement.valid ? "Yes" : "No");
+        logger.Info("AS5047U", "  Velocity LSB: %d\n", measurement.velocity_raw);
+        logger.Info("AS5047U", "  Velocity deg/s: %.2f\n", measurement.velocity_deg_per_sec);
+        logger.Info("AS5047U", "  Velocity rad/s: %.4f\n", measurement.velocity_rad_per_sec);
+        logger.Info("AS5047U", "  Velocity RPM: %.2f\n", measurement.velocity_rpm);
+        logger.Info("AS5047U", "  AGC value: %u\n", measurement.agc_value);
+        logger.Info("AS5047U", "  Magnitude: %u\n", measurement.magnitude);
+        logger.Info("AS5047U", "  Error flags: 0x%04X\n", measurement.error_flags);
+        logger.Info("AS5047U", "  Valid: %s\n", measurement.valid ? "Yes" : "No");
     }
 }
 ```
@@ -272,27 +272,27 @@ void diagnostics_example() {
     // Read comprehensive diagnostics
     As5047uDiagnostics diagnostics;
     if (handler.ReadDiagnostics(diagnostics) == As5047uError::SUCCESS) {
-        printf("Sensor diagnostics:\n");
-        printf("  Magnetic field OK: %s\n", diagnostics.magnetic_field_ok ? "Yes" : "No");
-        printf("  AGC warning: %s\n", diagnostics.agc_warning ? "Yes" : "No");
-        printf("  CORDIC overflow: %s\n", diagnostics.cordic_overflow ? "Yes" : "No");
-        printf("  Offset compensation OK: %s\n", diagnostics.offset_compensation_ok ? "Yes" : "No");
-        printf("  Communication OK: %s\n", diagnostics.communication_ok ? "Yes" : "No");
-        printf("  Last error flags: 0x%04X\n", diagnostics.last_error_flags);
-        printf("  Communication errors: %u\n", diagnostics.communication_errors);
-        printf("  Total measurements: %u\n", diagnostics.total_measurements);
+        logger.Info("AS5047U", "Sensor diagnostics:\n");
+        logger.Info("AS5047U", "  Magnetic field OK: %s\n", diagnostics.magnetic_field_ok ? "Yes" : "No");
+        logger.Info("AS5047U", "  AGC warning: %s\n", diagnostics.agc_warning ? "Yes" : "No");
+        logger.Info("AS5047U", "  CORDIC overflow: %s\n", diagnostics.cordic_overflow ? "Yes" : "No");
+        logger.Info("AS5047U", "  Offset compensation OK: %s\n", diagnostics.offset_compensation_ok ? "Yes" : "No");
+        logger.Info("AS5047U", "  Communication OK: %s\n", diagnostics.communication_ok ? "Yes" : "No");
+        logger.Info("AS5047U", "  Last error flags: 0x%04X\n", diagnostics.last_error_flags);
+        logger.Info("AS5047U", "  Communication errors: %u\n", diagnostics.communication_errors);
+        logger.Info("AS5047U", "  Total measurements: %u\n", diagnostics.total_measurements);
     }
     
     // Check magnetic field status
     bool field_ok;
     if (handler.IsMagneticFieldOK(field_ok) == As5047uError::SUCCESS) {
-        printf("Magnetic field status: %s\n", field_ok ? "OK" : "WEAK");
+        logger.Info("AS5047U", "Magnetic field status: %s\n", field_ok ? "OK" : "WEAK");
     }
     
     // Read AGC value
     uint8_t agc_value;
     if (handler.ReadAGC(agc_value) == As5047uError::SUCCESS) {
-        printf("AGC value: %u (0-255)\n", agc_value);
+        logger.Info("AS5047U", "AGC value: %u (0-255)\n", agc_value);
     }
 }
 ```
@@ -313,32 +313,32 @@ void configuration_example() {
     // Set zero position
     uint16_t zero_position = 8192;  // 180 degrees
     if (handler.SetZeroPosition(zero_position) == As5047uError::SUCCESS) {
-        printf("Zero position set to %u LSB\n", zero_position);
+        logger.Info("AS5047U", "Zero position set to %u LSB\n", zero_position);
     }
     
     // Enable DAEC
     if (handler.SetDAEC(true) == As5047uError::SUCCESS) {
-        printf("DAEC enabled\n");
+        logger.Info("AS5047U", "DAEC enabled\n");
     }
     
     // Enable adaptive filtering
     if (handler.SetAdaptiveFilter(true) == As5047uError::SUCCESS) {
-        printf("Adaptive filtering enabled\n");
+        logger.Info("AS5047U", "Adaptive filtering enabled\n");
     }
     
     // Configure interface outputs
     if (handler.ConfigureInterface(true, false, false) == As5047uError::SUCCESS) {
-        printf("ABI output enabled\n");
+        logger.Info("AS5047U", "ABI output enabled\n");
     }
     
     // Set ABI resolution
     if (handler.SetABIResolution(12) == As5047uError::SUCCESS) {
-        printf("ABI resolution set to 12 bits\n");
+        logger.Info("AS5047U", "ABI resolution set to 12 bits\n");
     }
     
     // Set rotation direction
     if (handler.SetRotationDirection(true) == As5047uError::SUCCESS) {
-        printf("Clockwise rotation enabled\n");
+        logger.Info("AS5047U", "Clockwise rotation enabled\n");
     }
 }
 ```
@@ -373,13 +373,13 @@ void advanced_config_example() {
     // Verify configuration
     As5047uConfig current_config;
     if (handler.GetConfiguration(current_config) == As5047uError::SUCCESS) {
-        printf("Current configuration:\n");
-        printf("  Frame format: %d\n", static_cast<int>(current_config.frame_format));
-        printf("  DAEC enabled: %s\n", current_config.enable_daec ? "Yes" : "No");
-        printf("  Adaptive filter: %s\n", current_config.enable_adaptive_filter ? "Yes" : "No");
-        printf("  Zero position: %u\n", current_config.zero_position);
-        printf("  ABI output: %s\n", current_config.enable_abi_output ? "Yes" : "No");
-        printf("  ABI resolution: %u bits\n", current_config.abi_resolution_bits);
+        logger.Info("AS5047U", "Current configuration:\n");
+        logger.Info("AS5047U", "  Frame format: %d\n", static_cast<int>(current_config.frame_format));
+        logger.Info("AS5047U", "  DAEC enabled: %s\n", current_config.enable_daec ? "Yes" : "No");
+        logger.Info("AS5047U", "  Adaptive filter: %s\n", current_config.enable_adaptive_filter ? "Yes" : "No");
+        logger.Info("AS5047U", "  Zero position: %u\n", current_config.zero_position);
+        logger.Info("AS5047U", "  ABI output: %s\n", current_config.enable_abi_output ? "Yes" : "No");
+        logger.Info("AS5047U", "  ABI resolution: %u bits\n", current_config.abi_resolution_bits);
     }
 }
 ```
@@ -399,7 +399,7 @@ void error_handling_example() {
     // Check initialization
     As5047uError result = handler.Initialize();
     if (result != As5047uError::SUCCESS) {
-        printf("ERROR: Failed to initialize AS5047U: %s\n", 
+        logger.Info("AS5047U", "ERROR: Failed to initialize AS5047U: %s\n", 
                As5047uErrorToString(result));
         return;
     }
@@ -408,13 +408,13 @@ void error_handling_example() {
     uint16_t angle;
     result = handler.ReadAngle(angle);
     if (result != As5047uError::SUCCESS) {
-        printf("ERROR: Failed to read angle: %s\n", As5047uErrorToString(result));
+        logger.Info("AS5047U", "ERROR: Failed to read angle: %s\n", As5047uErrorToString(result));
         return;
     }
     
     // Check sensor readiness
     if (!handler.IsSensorReady()) {
-        printf("ERROR: Sensor not ready\n");
+        logger.Info("AS5047U", "ERROR: Sensor not ready\n");
         return;
     }
     
@@ -422,7 +422,7 @@ void error_handling_example() {
     uint16_t error_flags;
     if (handler.ReadErrorFlags(error_flags) == As5047uError::SUCCESS) {
         if (error_flags != 0) {
-            printf("WARNING: Error flags detected: 0x%04X\n", error_flags);
+            logger.Info("AS5047U", "WARNING: Error flags detected: 0x%04X\n", error_flags);
         }
     }
     
@@ -430,11 +430,11 @@ void error_handling_example() {
     bool field_ok;
     if (handler.IsMagneticFieldOK(field_ok) == As5047uError::SUCCESS) {
         if (!field_ok) {
-            printf("WARNING: Weak magnetic field detected\n");
+            logger.Info("AS5047U", "WARNING: Weak magnetic field detected\n");
         }
     }
     
-    printf("All operations successful\n");
+    logger.Info("AS5047U", "All operations successful\n");
 }
 ```
 
@@ -459,16 +459,16 @@ void continuous_monitoring() {
         if (handler.ReadMeasurement(measurement) == As5047uError::SUCCESS) {
             double angle_deg = As5047uHandler::LSBToDegrees(measurement.angle_compensated);
             
-            printf("Sample %d: Angle=%.2f°, Velocity=%.2f RPM, AGC=%u\n", 
+            logger.Info("AS5047U", "Sample %d: Angle=%.2f°, Velocity=%.2f RPM, AGC=%u\n", 
                    i, angle_deg, measurement.velocity_rpm, measurement.agc_value);
             
             // Check for issues
             if (measurement.error_flags != 0) {
-                printf("WARNING: Error flags: 0x%04X\n", measurement.error_flags);
+                logger.Info("AS5047U", "WARNING: Error flags: 0x%04X\n", measurement.error_flags);
             }
             
             if (measurement.agc_value < 50 || measurement.agc_value > 200) {
-                printf("WARNING: AGC out of range: %u\n", measurement.agc_value);
+                logger.Info("AS5047U", "WARNING: AGC out of range: %u\n", measurement.agc_value);
             }
         }
         
@@ -491,25 +491,25 @@ void calibration_example() {
     if (handler.Initialize() != As5047uError::SUCCESS) return;
     
     // Perform calibration
-    printf("Starting sensor calibration...\n");
+    logger.Info("AS5047U", "Starting sensor calibration...\n");
     if (handler.PerformCalibration() == As5047uError::SUCCESS) {
-        printf("Calibration completed successfully\n");
+        logger.Info("AS5047U", "Calibration completed successfully\n");
         
         // Program settings to OTP (WARNING: One-time operation)
-        printf("Programming settings to OTP...\n");
+        logger.Info("AS5047U", "Programming settings to OTP...\n");
         if (handler.ProgramOTP() == As5047uError::SUCCESS) {
-            printf("Settings programmed to OTP successfully\n");
+            logger.Info("AS5047U", "Settings programmed to OTP successfully\n");
         } else {
-            printf("Failed to program OTP\n");
+            logger.Info("AS5047U", "Failed to program OTP\n");
         }
     } else {
-        printf("Calibration failed\n");
+        logger.Info("AS5047U", "Calibration failed\n");
     }
     
     // Reset to defaults if needed
-    printf("Resetting to defaults...\n");
+    logger.Info("AS5047U", "Resetting to defaults...\n");
     if (handler.ResetToDefaults() == As5047uError::SUCCESS) {
-        printf("Reset to defaults completed\n");
+        logger.Info("AS5047U", "Reset to defaults completed\n");
     }
 }
 ```
@@ -547,7 +547,7 @@ void multi_sensor_integration() {
         As5047uMeasurement measurement;
         if (handlers[i]->ReadMeasurement(measurement) == As5047uError::SUCCESS) {
             double angle_deg = As5047uHandler::LSBToDegrees(measurement.angle_compensated);
-            printf("Sensor %zu: Angle=%.2f°, Velocity=%.2f RPM\n", 
+            logger.Info("AS5047U", "Sensor %zu: Angle=%.2f°, Velocity=%.2f RPM\n", 
                    i, angle_deg, measurement.velocity_rpm);
         }
     }

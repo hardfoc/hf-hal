@@ -645,6 +645,38 @@ bool GpioManager::Initialize() noexcept {
             continue;
         }
         
+        // Filter pins based on current hardware configuration
+        // Only register pins that are actually available on the current board
+        bool should_register = false;
+        
+        switch (static_cast<HfGpioChipType>(mapping.chip_type)) {
+            case HfGpioChipType::ESP32_INTERNAL:
+                // ESP32 internal: only unit 0, bank 0
+                should_register = (mapping.chip_unit == 0 && mapping.gpio_bank == 0);
+                break;
+                
+            case HfGpioChipType::PCAL95555_EXPANDER:
+                // PCAL95555: only unit 0, bank 0 (single expander on board)
+                should_register = (mapping.chip_unit == 0 && mapping.gpio_bank == 0);
+                break;
+                
+            case HfGpioChipType::TMC9660_CONTROLLER:
+                // TMC9660: only unit 0, bank 0 (single controller on board)
+                should_register = (mapping.chip_unit == 0 && mapping.gpio_bank == 0);
+                break;
+                
+            default:
+                UpdateLastError(hf_gpio_err_t::GPIO_ERR_INVALID_PARAMETER);
+                continue;
+        }
+        
+        if (!should_register) {
+            Logger::GetInstance().Info("GpioManager", "Skipping GPIO %.*s (chip_unit=%d, bank=%d) - not available on current hardware", 
+                               static_cast<int>(mapping.name.length()), mapping.name.data(), 
+                               mapping.chip_unit, mapping.gpio_bank);
+            continue;
+        }
+        
         // Create GPIO based on chip type
         std::shared_ptr<BaseGpio> gpio;
         
@@ -656,13 +688,13 @@ bool GpioManager::Initialize() noexcept {
                 break;
                 
             case HfGpioChipType::PCAL95555_EXPANDER:
-                gpio = CreatePcal95555GpioPin(mapping.physical_pin, mapping.unit_number, mapping.is_inverted, 
+                gpio = CreatePcal95555GpioPin(mapping.physical_pin, mapping.chip_unit, mapping.is_inverted, 
                                             mapping.has_pull, mapping.pull_is_up, mapping.is_push_pull, 
                                             mapping.max_current_ma);
                 break;
                 
             case HfGpioChipType::TMC9660_CONTROLLER:
-                gpio = CreateTmc9660GpioPin(mapping.physical_pin, mapping.unit_number, mapping.is_inverted, 
+                gpio = CreateTmc9660GpioPin(mapping.physical_pin, mapping.chip_unit, mapping.is_inverted, 
                                           mapping.has_pull, mapping.pull_is_up, mapping.is_push_pull, 
                                           mapping.max_current_ma);
                 break;
@@ -675,8 +707,14 @@ bool GpioManager::Initialize() noexcept {
         if (gpio) {
             // Register the GPIO with its string name
             RegisterGpio(mapping.name, std::move(gpio));
+            Logger::GetInstance().Info("GpioManager", "Registered GPIO %.*s (chip_unit=%d, bank=%d)", 
+                               static_cast<int>(mapping.name.length()), mapping.name.data(), 
+                               mapping.chip_unit, mapping.gpio_bank);
         } else {
             UpdateLastError(hf_gpio_err_t::GPIO_ERR_HARDWARE_FAULT);
+            Logger::GetInstance().Error("GpioManager", "Failed to create GPIO %.*s (chip_unit=%d, bank=%d)", 
+                                static_cast<int>(mapping.name.length()), mapping.name.data(), 
+                                mapping.chip_unit, mapping.gpio_bank);
         }
     }
     

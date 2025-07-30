@@ -56,7 +56,7 @@ void ntc_basic_example() {
     
     auto* adc = adc_manager.Get(0);  // Get first ADC
     if (!adc) {
-        printf("ADC interface not available\n");
+        logger.Info("NTC", "ADC interface not available\n");
         return;
     }
     
@@ -70,14 +70,14 @@ void ntc_basic_example() {
     
     // Initialize handler
     if (handler.Initialize() != hf_temp_err_t::HF_TEMP_ERR_NONE) {
-        printf("Failed to initialize NTC temperature handler\n");
+        logger.Info("NTC", "Failed to initialize NTC temperature handler\n");
         return;
     }
     
     // Read temperature
     float temperature;
     if (handler.ReadTemperature(temperature) == hf_temp_err_t::HF_TEMP_ERR_NONE) {
-        printf("Temperature: %.2f°C\n", temperature);
+        logger.Info("NTC", "Temperature: %.2f°C\n", temperature);
     }
 }
 ```
@@ -194,17 +194,17 @@ void basic_temperature_example() {
     // Read temperature
     float temperature;
     if (handler.ReadTemperature(temperature) == hf_temp_err_t::HF_TEMP_ERR_NONE) {
-        printf("Temperature: %.2f°C\n", temperature);
+        logger.Info("NTC", "Temperature: %.2f°C\n", temperature);
     }
     
     // Get temperature statistics
     hf_temp_statistics_t stats;
     if (handler.GetStatistics(stats) == hf_temp_err_t::HF_TEMP_ERR_NONE) {
-        printf("Temperature statistics:\n");
-        printf("  Min: %.2f°C\n", stats.min_temperature_celsius);
-        printf("  Max: %.2f°C\n", stats.max_temperature_celsius);
-        printf("  Average: %.2f°C\n", stats.average_temperature_celsius);
-        printf("  Readings: %u\n", stats.total_readings);
+        logger.Info("NTC", "Temperature statistics:\n");
+        logger.Info("NTC", "  Min: %.2f°C\n", stats.min_temperature_celsius);
+        logger.Info("NTC", "  Max: %.2f°C\n", stats.max_temperature_celsius);
+        logger.Info("NTC", "  Average: %.2f°C\n", stats.average_temperature_celsius);
+        logger.Info("NTC", "  Readings: %u\n", stats.total_readings);
     }
 }
 ```
@@ -245,7 +245,7 @@ void advanced_config_example() {
     // Set thresholds for monitoring
     handler.SetThresholds(60.0f, 80.0f);  // Warning at 60°C, critical at 80°C
     
-    printf("Advanced NTC configuration applied\n");
+    logger.Info("NTC", "Advanced NTC configuration applied\n");
 }
 ```
 
@@ -273,10 +273,10 @@ void threshold_monitoring_example() {
         [](float temperature_celsius, hf_temp_threshold_type_t threshold_type, void* user_data) {
             switch (threshold_type) {
                 case hf_temp_threshold_type_t::HF_TEMP_THRESHOLD_LOW:
-                    printf("Temperature below threshold: %.2f°C\n", temperature_celsius);
+                    logger.Info("NTC", "Temperature below threshold: %.2f°C\n", temperature_celsius);
                     break;
                 case hf_temp_threshold_type_t::HF_TEMP_THRESHOLD_HIGH:
-                    printf("Temperature above threshold: %.2f°C\n", temperature_celsius);
+                    logger.Info("NTC", "Temperature above threshold: %.2f°C\n", temperature_celsius);
                     break;
             }
         },
@@ -287,7 +287,7 @@ void threshold_monitoring_example() {
     for (int i = 0; i < 100; i++) {
         float temperature;
         if (handler.ReadTemperature(temperature) == hf_temp_err_t::HF_TEMP_ERR_NONE) {
-            printf("Temperature: %.2f°C\n", temperature);
+            logger.Info("NTC", "Temperature: %.2f°C\n", temperature);
         }
         vTaskDelay(pdMS_TO_TICKS(1000));  // 1Hz monitoring
     }
@@ -318,7 +318,7 @@ void calibration_example() {
     // Calibrate with reference temperature
     float reference_temp = 25.0f;  // Room temperature
     if (handler.Calibrate(reference_temp) == ntc_err_t::NTC_ERR_NONE) {
-        printf("Calibration completed with reference temperature %.1f°C\n", reference_temp);
+        logger.Info("NTC", "Calibration completed with reference temperature %.1f°C\n", reference_temp);
     }
     
     // Configure filtering
@@ -327,7 +327,7 @@ void calibration_example() {
     // Read filtered temperature
     float temperature;
     if (handler.ReadTemperature(temperature) == hf_temp_err_t::HF_TEMP_ERR_NONE) {
-        printf("Filtered temperature: %.2f°C\n", temperature);
+        logger.Info("NTC", "Filtered temperature: %.2f°C\n", temperature);
     }
 }
 ```
@@ -354,7 +354,7 @@ void continuous_monitoring_example() {
     handler.StartContinuousMonitoring(
         10,  // 10Hz sampling rate
         [](float temperature_celsius, hf_u64_t timestamp_us, void* user_data) {
-            printf("Continuous reading: %.2f°C at %llu us\n", temperature_celsius, timestamp_us);
+            logger.Info("NTC", "Continuous reading: %.2f°C at %llu us\n", temperature_celsius, timestamp_us);
         },
         nullptr
     );
@@ -366,7 +366,7 @@ void continuous_monitoring_example() {
         // Get diagnostics
         hf_temp_diagnostics_t diagnostics;
         if (handler.GetDiagnostics(diagnostics) == hf_temp_err_t::HF_TEMP_ERR_NONE) {
-            printf("Diagnostics: errors=%u, warnings=%u, last_error=%d\n",
+            logger.Info("NTC", "Diagnostics: errors=%u, warnings=%u, last_error=%d\n",
                    diagnostics.total_errors, diagnostics.total_warnings, 
                    static_cast<int>(diagnostics.last_error));
         }
@@ -392,7 +392,7 @@ void error_handling_example() {
     // Check initialization
     hf_temp_err_t result = handler.Initialize();
     if (result != hf_temp_err_t::HF_TEMP_ERR_NONE) {
-        printf("ERROR: Failed to initialize NTC handler: %d\n", static_cast<int>(result));
+        logger.Info("NTC", "ERROR: Failed to initialize NTC handler: %d\n", static_cast<int>(result));
         return;
     }
     
@@ -400,28 +400,28 @@ void error_handling_example() {
     float temperature;
     result = handler.ReadTemperature(temperature);
     if (result != hf_temp_err_t::HF_TEMP_ERR_NONE) {
-        printf("ERROR: Failed to read temperature: %d\n", static_cast<int>(result));
+        logger.Info("NTC", "ERROR: Failed to read temperature: %d\n", static_cast<int>(result));
         return;
     }
     
     // Check temperature range
     if (temperature < -40.0f || temperature > 125.0f) {
-        printf("WARNING: Temperature out of range: %.2f°C\n", temperature);
+        logger.Info("NTC", "WARNING: Temperature out of range: %.2f°C\n", temperature);
     }
     
     // Get diagnostics
     hf_temp_diagnostics_t diagnostics;
     if (handler.GetDiagnostics(diagnostics) == hf_temp_err_t::HF_TEMP_ERR_NONE) {
         if (diagnostics.total_errors > 0) {
-            printf("WARNING: %u errors detected\n", diagnostics.total_errors);
+            logger.Info("NTC", "WARNING: %u errors detected\n", diagnostics.total_errors);
         }
         
         if (diagnostics.last_error != hf_temp_err_t::HF_TEMP_ERR_NONE) {
-            printf("Last error: %d\n", static_cast<int>(diagnostics.last_error));
+            logger.Info("NTC", "Last error: %d\n", static_cast<int>(diagnostics.last_error));
         }
     }
     
-    printf("All operations successful\n");
+    logger.Info("NTC", "All operations successful\n");
 }
 ```
 
@@ -471,7 +471,7 @@ void multi_sensor_example() {
     for (size_t i = 0; i < handlers.size(); i++) {
         float temperature;
         if (handlers[i]->ReadTemperature(temperature) == hf_temp_err_t::HF_TEMP_ERR_NONE) {
-            printf("Sensor %zu: %.2f°C\n", i, temperature);
+            logger.Info("NTC", "Sensor %zu: %.2f°C\n", i, temperature);
         }
     }
 }
@@ -504,13 +504,13 @@ void custom_ntc_example() {
     
     // Apply custom NTC configuration
     if (handler.SetNtcConfiguration(ntc_config) == ntc_err_t::NTC_ERR_NONE) {
-        printf("Custom NTC configuration applied\n");
+        logger.Info("NTC", "Custom NTC configuration applied\n");
     }
     
     // Read temperature with custom configuration
     float temperature;
     if (handler.ReadTemperature(temperature) == hf_temp_err_t::HF_TEMP_ERR_NONE) {
-        printf("Custom NTC temperature: %.2f°C\n", temperature);
+        logger.Info("NTC", "Custom NTC temperature: %.2f°C\n", temperature);
     }
 }
 ```
@@ -549,9 +549,9 @@ void performance_optimization() {
     float avg_time_us = (end_time - start_time) / static_cast<float>(READ_COUNT);
     float reads_per_sec = 1000000.0f / avg_time_us;
     
-    printf("Performance test:\n");
-    printf("  Average read time: %.2f µs\n", avg_time_us);
-    printf("  Reads per second: %.0f\n", reads_per_sec);
+    logger.Info("NTC", "Performance test:\n");
+    logger.Info("NTC", "  Average read time: %.2f µs\n", avg_time_us);
+    logger.Info("NTC", "  Reads per second: %.0f\n", reads_per_sec);
 }
 ```
 

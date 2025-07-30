@@ -54,7 +54,7 @@ void gpio_example() {
     
     // Initialize the manager
     if (!gpio.EnsureInitialized()) {
-        printf("Failed to initialize GPIO manager\n");
+        logger.Info("GPIO", "Failed to initialize GPIO manager\n");
         return;
     }
     
@@ -67,7 +67,7 @@ void gpio_example() {
     // Read pin state
     bool state;
     if (gpio.Read("ESP32_GPIO_2", state) == HF_GPIO_SUCCESS) {
-        printf("Pin state: %s\n", state ? "ACTIVE" : "INACTIVE");
+        logger.Info("GPIO", "Pin state: %s\n", state ? "ACTIVE" : "INACTIVE");
     }
 }
 ```
@@ -273,21 +273,23 @@ hf_gpio_err_t::HF_GPIO_ERR_OUT_OF_MEMORY     // Memory allocation failed
 
 ```cpp
 #include "component-handlers/GpioManager.h"
+#include "utils-and-drivers/driver-handlers/Logger.h"
 
 void basic_gpio_example() {
+    auto& logger = Logger::GetInstance();
     auto& gpio = GpioManager::GetInstance();
     gpio.EnsureInitialized();
     
-    // Configure pins
-    gpio.SetDirection("ESP32_GPIO_2", HF_GPIO_DIRECTION_OUTPUT);
-    gpio.SetDirection("ESP32_GPIO_9", HF_GPIO_DIRECTION_INPUT);
-    gpio.SetPullMode("ESP32_GPIO_9", HF_GPIO_PULL_MODE_UP);
+    // Configure pins using correct pin names
+    gpio.SetDirection("GPIO_EXT_GPIO_CS_1", hf_gpio_direction_t::HF_GPIO_DIRECTION_OUTPUT);
+    gpio.SetDirection("GPIO_PCAL_IMU_INT", hf_gpio_direction_t::HF_GPIO_DIRECTION_INPUT);
+    gpio.SetPullMode("GPIO_PCAL_IMU_INT", hf_gpio_pull_mode_t::HF_GPIO_PULL_MODE_UP);
     
     // Control LED based on button
     while (true) {
         bool button_state;
-        if (gpio.Read("ESP32_GPIO_9", button_state) == HF_GPIO_SUCCESS) {
-            gpio.Set("ESP32_GPIO_2", !button_state);  // Active low button
+        if (gpio.Read("GPIO_PCAL_IMU_INT", button_state) == hf_gpio_err_t::GPIO_SUCCESS) {
+            gpio.Set("GPIO_EXT_GPIO_CS_1", !button_state);  // Active low button
         }
         
         vTaskDelay(pdMS_TO_TICKS(50));
@@ -302,27 +304,28 @@ void multi_pin_example() {
     auto& gpio = GpioManager::GetInstance();
     gpio.EnsureInitialized();
     
-    // Configure multiple LEDs
-    std::vector<std::string_view> led_pins = {
-        "ESP32_GPIO_2", "ESP32_GPIO_3", "ESP32_GPIO_4", "ESP32_GPIO_5"
+    // Configure multiple GPIO pins using correct pin names from pin config
+    std::vector<std::string_view> gpio_pins = {
+        "GPIO_EXT_GPIO_CS_1", "GPIO_EXT_GPIO_CS_2", 
+        "GPIO_PCAL_DRV_EN", "GPIO_PCAL_RST_CTRL"
     };
     
-    for (const auto& pin : led_pins) {
-        gpio.SetDirection(pin, HF_GPIO_DIRECTION_OUTPUT);
+    for (const auto& pin : gpio_pins) {
+        gpio.SetDirection(pin, hf_gpio_direction_t::HF_GPIO_DIRECTION_OUTPUT);
     }
     
-    // Create LED patterns
+    // Create patterns
     std::vector<bool> pattern1 = {true, false, true, false};
     std::vector<bool> pattern2 = {false, true, false, true};
     
     // Alternate patterns using batch operations
     for (int i = 0; i < 10; i++) {
-        GpioBatchOperation op1(led_pins, pattern1);
+        GpioBatchOperation op1(gpio_pins, pattern1);
         auto result1 = gpio.BatchWrite(op1);
         
         vTaskDelay(pdMS_TO_TICKS(500));
         
-        GpioBatchOperation op2(led_pins, pattern2);
+        GpioBatchOperation op2(gpio_pins, pattern2);
         auto result2 = gpio.BatchWrite(op2);
         
         vTaskDelay(pdMS_TO_TICKS(500));
@@ -337,21 +340,22 @@ void interrupt_example() {
     auto& gpio = GpioManager::GetInstance();
     gpio.EnsureInitialized();
     
-    // Configure interrupt pin
-    gpio.SetDirection("ESP32_GPIO_9", HF_GPIO_DIRECTION_INPUT);
-    gpio.SetPullMode("ESP32_GPIO_9", HF_GPIO_PULL_MODE_UP);
+    // Configure interrupt pin using correct pin name
+    gpio.SetDirection("GPIO_PCAL_IMU_INT", hf_gpio_direction_t::HF_GPIO_DIRECTION_INPUT);
+    gpio.SetPullMode("GPIO_PCAL_IMU_INT", hf_gpio_pull_mode_t::HF_GPIO_PULL_MODE_UP);
     
     // Set interrupt callback
     auto callback = [](std::string_view pin_name, bool state, void* user_data) {
-        printf("Interrupt on %.*s: %s\n", 
-               static_cast<int>(pin_name.size()), pin_name.data(),
-               state ? "ACTIVE" : "INACTIVE");
+        auto& logger = Logger::GetInstance();
+        logger.Info("GPIO_INT", "Interrupt on %.*s: %s", 
+                   static_cast<int>(pin_name.size()), pin_name.data(),
+                   state ? "ACTIVE" : "INACTIVE");
     };
     
-    gpio.ConfigureInterrupt("ESP32_GPIO_9", HF_GPIO_INTERRUPT_TRIGGER_BOTH_EDGES, callback);
-    gpio.EnableInterrupt("ESP32_GPIO_9");
+    gpio.ConfigureInterrupt("GPIO_PCAL_IMU_INT", hf_gpio_interrupt_trigger_t::HF_GPIO_INTERRUPT_TRIGGER_BOTH_EDGES, callback);
+    gpio.EnableInterrupt("GPIO_PCAL_IMU_INT");
     
-    printf("Interrupt configured. Press button to trigger...\n");
+    logger.Info("GPIO", "Interrupt configured. Press button to trigger...");
     
     // Main loop
     while (true) {
@@ -369,25 +373,25 @@ void diagnostics_example() {
     
     // Get system status
     GpioSystemDiagnostics diagnostics;
-    if (gpio.GetSystemDiagnostics(diagnostics) == HF_GPIO_SUCCESS) {
-        printf("GPIO System Status:\n");
-        printf("  Overall healthy: %s\n", diagnostics.system_healthy ? "YES" : "NO");
-        printf("  Total pins: %u\n", diagnostics.total_pins_registered);
-        printf("  Total operations: %u\n", diagnostics.total_operations);
-        printf("  Successful operations: %u\n", diagnostics.successful_operations);
-        printf("  Failed operations: %u\n", diagnostics.failed_operations);
-        printf("  Communication errors: %u\n", diagnostics.communication_errors);
-        printf("  Hardware errors: %u\n", diagnostics.hardware_errors);
-        printf("  System uptime: %llu ms\n", diagnostics.system_uptime_ms);
+    if (gpio.GetSystemDiagnostics(diagnostics) == hf_gpio_err_t::GPIO_SUCCESS) {
+        logger.Info("GPIO", "GPIO System Status:");
+        logger.Info("GPIO", "  Overall healthy: %s", diagnostics.system_healthy ? "YES" : "NO");
+        logger.Info("GPIO", "  Total pins: %u", diagnostics.total_pins_registered);
+        logger.Info("GPIO", "  Total operations: %u", diagnostics.total_operations);
+        logger.Info("GPIO", "  Successful operations: %u", diagnostics.successful_operations);
+        logger.Info("GPIO", "  Failed operations: %u", diagnostics.failed_operations);
+        logger.Info("GPIO", "  Communication errors: %u", diagnostics.communication_errors);
+        logger.Info("GPIO", "  Hardware errors: %u", diagnostics.hardware_errors);
+        logger.Info("GPIO", "  System uptime: %llu ms", diagnostics.system_uptime_ms);
     }
     
     // Get pin statistics
     BaseGpio::PinStatistics stats;
-    if (gpio.GetStatistics("ESP32_GPIO_2", stats) == HF_GPIO_SUCCESS) {
-        printf("\nPin ESP32_GPIO_2 statistics:\n");
-        printf("  Access count: %u\n", stats.access_count);
-        printf("  Error count: %u\n", stats.error_count);
-        printf("  Last access time: %llu\n", stats.last_access_time);
+    if (gpio.GetStatistics("GPIO_EXT_GPIO_CS_1", stats) == hf_gpio_err_t::GPIO_SUCCESS) {
+        logger.Info("GPIO", "Pin GPIO_EXT_GPIO_CS_1 statistics:");
+        logger.Info("GPIO", "  Access count: %u", stats.access_count);
+        logger.Info("GPIO", "  Error count: %u", stats.error_count);
+        logger.Info("GPIO", "  Last access time: %llu", stats.last_access_time);
     }
     
     // Dump all statistics
@@ -414,7 +418,7 @@ void configuration_example() {
     gpio.ConfigurePin("GPIO_PCAL_GPIO17", false); // Includes hash map lookup
     
     bool state = gpio.GetPin("GPIO_EXT_GPIO_CS_1");
-    printf("Pin state: %s\n", state ? "HIGH" : "LOW");
+    logger.Info("GPIO", "Pin state: %s\n", state ? "HIGH" : "LOW");
 }
 ```
 
@@ -433,7 +437,7 @@ void high_performance_example() {
     
     // STEP 2: Validate cached pointers (once, outside loops)
     if (!gpio_cs1 || !gpio_cs2 || !gpio_pcal17) {
-        printf("ERROR: Failed to cache GPIO pointers\n");
+        logger.Info("GPIO", "ERROR: Failed to cache GPIO pointers\n");
         return;
     }
     
@@ -499,14 +503,14 @@ void batch_operations_example() {
     auto result = gpio.BatchWrite(op);
     
     if (result.AllSuccessful()) {
-        printf("All pins set successfully\n");
+        logger.Info("GPIO", "All pins set successfully\n");
     }
     
     // Batch read is also more efficient
     auto read_result = gpio.BatchRead(pins);
     for (size_t i = 0; i < pins.size(); i++) {
         if (read_result.results[i] == hf_gpio_err_t::GPIO_SUCCESS) {
-            printf("Pin %.*s: %s\n", 
+            logger.Info("GPIO", "Pin %.*s: %s\n", 
                    static_cast<int>(pins[i].size()), pins[i].data(),
                    read_result.states[i] ? "ACTIVE" : "INACTIVE");
         }
@@ -532,28 +536,28 @@ void error_handling_example() {
     
     // Check initialization
     if (!gpio.EnsureInitialized()) {
-        printf("ERROR: Failed to initialize GPIO manager\n");
+        logger.Info("GPIO", "ERROR: Failed to initialize GPIO manager\n");
         return;
     }
     
     // Validate pin exists before use
     if (!gpio.Contains("ESP32_GPIO_2")) {
-        printf("ERROR: Pin ESP32_GPIO_2 not registered\n");
+        logger.Info("GPIO", "ERROR: Pin ESP32_GPIO_2 not registered\n");
         return;
     }
     
     // Safe pin operations with error checking
     auto result = gpio.SetActive("ESP32_GPIO_2");
     if (result != HF_GPIO_SUCCESS) {
-        printf("ERROR: Failed to set pin ESP32_GPIO_2: %d\n", static_cast<int>(result));
+        logger.Info("GPIO", "ERROR: Failed to set pin ESP32_GPIO_2: %d\n", static_cast<int>(result));
     }
     
     // Monitor system health
     GpioSystemDiagnostics diagnostics;
     if (gpio.GetSystemDiagnostics(diagnostics) == HF_GPIO_SUCCESS) {
         if (!diagnostics.system_healthy) {
-            printf("WARNING: GPIO system health check failed\n");
-            printf("Total errors: %u\n", diagnostics.failed_operations);
+            logger.Info("GPIO", "WARNING: GPIO system health check failed\n");
+            logger.Info("GPIO", "Total errors: %u\n", diagnostics.failed_operations);
         }
     }
 }
@@ -584,7 +588,7 @@ void integrated_example() {
     gpio.SetDirection("TMC9660_FAULT", HF_GPIO_DIRECTION_INPUT);
     auto fault_callback = [&motor](std::string_view pin, bool state, void* user_data) {
         if (!state) {  // Fault is active low
-            printf("Motor fault detected!\n");
+            logger.Info("GPIO", "Motor fault detected!\n");
             // Handle fault condition
         }
     };

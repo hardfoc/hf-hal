@@ -1,36 +1,217 @@
 ###############################################################################
-#  HardFOC HAL – Component-Manager manifest
+#  HardFOC HAL Vortex V1 – ESP-IDF Component Manager Manifest
+#  
+#  This manifest file describes the HardFOC HAL (Hardware Abstraction Layer)
+#  component for the ESP-IDF Component Manager. The HAL provides a unified
+#  interface for motor control, sensor management, and communication on the
+#  HardFOC Vortex V1 platform.
+#
+#  For more information about the ESP-IDF Component Manager manifest format,
+#  see: https://docs.espressif.com/projects/idf-component-manager/en/latest/reference/manifest_file.html
 ###############################################################################
-name: hf-hal                      # ↱ component name, must be unique
-version: "0.1.0"                  # ↱ bump patch on bug-fix, minor on new APIs
-description: "HardFOC hardware-abstraction layer - drivers, utilities and MCU wrappers in one component"
-url: "https://github.com/hardfoc/hf-hal"   # repository home
-documentation: "https://hardfoc.dev/docs/hal"  # (adjust if you host docs)
 
+# ─── Component Metadata ───────────────────────────────────────────────────────
+name: hf-hal-vortex-v1
+version: "1.0.0"
+description: |
+  HardFOC Hardware Abstraction Layer for Vortex V1 platform - comprehensive 
+  motor control, sensor management, and communication interface. Provides 
+  unified APIs for TMC9660 motor controllers, BNO08x IMU sensors, AS5047U 
+  encoders, PCAL95555 GPIO expanders, and WS2812 LED control with full 
+  ESP32-C6 integration and RTOS support.
+
+# ─── External Links ───────────────────────────────────────────────────────────
+url: "https://github.com/hardfoc/hf-hal-vortex-v1"
+repository: "https://github.com/hardfoc/hf-hal-vortex-v1.git"
+documentation: "https://hardfoc.dev/docs/hal"
+issues: "https://github.com/hardfoc/hf-hal-vortex-v1/issues"
+discussion: "https://github.com/hardfoc/hf-hal-vortex-v1/discussions"
+
+# ─── Licensing and Maintenance ───────────────────────────────────────────────
 license: "GPL-3.0-or-later"
 maintainers:
   - "Nebiyu Tadesse <nebysma@gmail.com>"
-tags: [ "hardfoc", "motor-control", "hal", "driver", "esp-idf", "foc", "bldc" ]
 
-# ESP-IDF SoCs officially verified in CI
+# ─── Component Classification ────────────────────────────────────────────────
+tags:
+  - "hardfoc"           # HardFOC ecosystem
+  - "motor-control"     # Motor control functionality
+  - "hal"               # Hardware abstraction layer
+  - "driver"            # Device drivers
+  - "esp-idf"           # ESP-IDF framework
+  - "foc"               # Field-oriented control
+  - "bldc"              # Brushless DC motors
+  - "sensor"            # Sensor management
+  - "gpio"              # GPIO control
+  - "spi"               # SPI communication
+  - "i2c"               # I2C communication
+  - "uart"              # UART communication
+  - "can"               # CAN communication
+  - "adc"               # ADC functionality
+  - "rtos"              # RTOS integration
+  - "vortex-v1"         # Vortex V1 platform
+
+# ─── Supported Targets ───────────────────────────────────────────────────────
 targets:
-  - esp32c6
+  - esp32c6             # Primary target - HardFOC Vortex V1 platform
 
 # ─── Dependencies ────────────────────────────────────────────────────────────
 dependencies:
-  # The IDF tool-chain (any v5 or later)
+  # ESP-IDF Framework (required for all ESP32 development)
   idf: ">=5.0.0"
+  
+  # ESP-IDF Core Components (public dependencies)
+  driver: "*"           # ESP32 hardware drivers
+  freertos: "*"         # Real-time operating system
+  nvs_flash: "*"        # Non-volatile storage
+  esp_timer: "*"        # High-resolution timers
+  esp_system: "*"       # System utilities
+  esp_common: "*"       # Common ESP32 utilities
+  esp_rom: "*"          # ROM functions
+  esp_hw_support: "*"   # Hardware support
+  hal: "*"              # Hardware abstraction layer
+  soc: "*"              # System-on-chip support
+  log: "*"              # Logging system
+  
+  # ESP-IDF Communication Drivers (public dependencies)
+  esp_adc: "*"          # ADC functionality
+  esp_gpio: "*"         # GPIO control
+  esp_i2c: "*"          # I2C communication
+  esp_spi: "*"          # SPI communication
+  esp_can: "*"          # CAN communication
+  esp_uart: "*"         # UART communication
+  esp_pm: "*"           # Power management
+  esp_pwm: "*"          # PWM functionality
+  esp_pio: "*"          # Programmable I/O
+  
+  # ESP-IDF Network and Connectivity (public dependencies)
+  esp_wifi: "*"         # WiFi functionality
+  esp_netif: "*"        # Network interface
+  esp_event: "*"        # Event system
+  esp_partition: "*"    # Partition management
+  esp_ota: "*"          # Over-the-air updates
+  esp_http_client: "*"  # HTTP client
+  esp_https_ota: "*"    # HTTPS OTA
+  esp_websocket_client: "*"  # WebSocket client
+  esp_http_server: "*"  # HTTP server
 
-# ─── Packaging rules – keep download size minimal ────────────────────────────
+# ─── External Driver Dependencies ────────────────────────────────────────────
+# These are exposed via EXTRA_COMPONENT_DIRS in CMakeLists.txt
+# and built as separate ESP-IDF components for header access
+
+# ─── Packaging Configuration ─────────────────────────────────────────────────
 files:
+  # Include all source files and headers
+  include:
+    - "API/**/*"
+    - "component-handlers/**/*"
+    - "utils-and-drivers/**/*"
+    - "CMakeLists.txt"
+    - "idf_component.yml"
+    - "LICENSE"
+    - "README.md"
+    - "DOCUMENTATION_INDEX.md"
+  
+  # Exclude development and documentation files to minimize package size
   exclude:
+    # Documentation and examples
     - "**/docs/**"
+    - "**/Datasheet/**"
     - "**/datasheet/**"
     - "**/examples/**"
     - "**/tests/**"
+    
+    # Development and CI files
     - "**/.github/**"
-    - "**/*.md"          # if you don’t want READMEs in the archive
+    - "**/.gitlab-ci.yml"
+    - "**/.git/**"
+    - "**/.svn/**"
+    
+    # IDE and editor files
+    - "**/.idea/**"
+    - "**/.vscode/**"
+    - "**/.settings/**"
+    - "**/.DS_Store"
+    - "**/Thumbs.db"
+    
+    # Build artifacts
+    - "**/build/**"
+    - "**/dist/**"
+    - "**/managed_components/**"
+    - "**/dependencies.lock"
+    - "**/sdkconfig"
+    - "**/sdkconfig.old"
+    - "**/.component_hash"
+    
+    # Python and cache files
+    - "**/__pycache__/**"
+    - "**/*.pyc"
+    - "**/*.pyd"
+    - "**/*.pyo"
+    - "**/*.py"
+
+# ─── Examples ────────────────────────────────────────────────────────────────
+# Examples are automatically discovered from the examples/ directory
+# Additional example directories can be specified here if needed
 
 ###############################################################################
-#  End of manifest
+#  Component Architecture Overview
+#  
+#  The HardFOC HAL consists of several layers:
+#
+#  1. API Layer (API/)
+#     - Vortex API singleton providing unified access to all components
+#     - System diagnostics and health monitoring
+#     - Initialization order management
+#
+#  2. Component Handlers (component-handlers/)
+#     - CommChannelsManager: SPI, I2C, UART, CAN interfaces
+#     - GpioManager: Multi-source GPIO management (ESP32, PCAL95555, TMC9660)
+#     - AdcManager: ADC channel management (ESP32, TMC9660)
+#     - MotorController: TMC9660 motor controller management
+#     - ImuManager: BNO08x IMU sensor management
+#     - EncoderManager: AS5047U encoder management
+#     - LedManager: WS2812 LED control
+#     - TemperatureManager: Multi-source temperature monitoring
+#
+#  3. Driver Handlers (utils-and-drivers/driver-handlers/)
+#     - Hardware-specific drivers for each device type
+#     - Unified interfaces for device communication
+#     - Error handling and diagnostics
+#
+#  4. Core Drivers (utils-and-drivers/hf-core-drivers/)
+#     - Interface wrappers for ESP32 peripherals
+#     - Platform mapping and pin configuration
+#     - Hardware abstraction layer
+#
+#  5. Core Utils (utils-and-drivers/hf-core-utils/)
+#     - RTOS wrappers and utilities
+#     - General-purpose utilities
+#     - CAN communication utilities
+#
+#  6. External Drivers (utils-and-drivers/hf-core-drivers/external/)
+#     - Third-party device drivers
+#     - Hardware-specific implementations
+#
+#  Usage Example:
+#  ```cpp
+#  #include "API/Vortex.h"
+#  
+#  // Get the unified API instance
+#  auto& vortex = Vortex::GetInstance();
+#  
+#  // Initialize all systems
+#  if (vortex.EnsureInitialized()) {
+#      // Access motor controllers
+#      auto& motors = vortex.motors;
+#      
+#      // Access IMU sensors
+#      auto& imu = vortex.imu;
+#      
+#      // Access GPIO management
+#      auto& gpio = vortex.gpio;
+#      
+#      // Use any component through unified interface
+#  }
+#  ```
 ###############################################################################

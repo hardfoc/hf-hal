@@ -47,9 +47,9 @@ auto& temp_sensor = tmc9660_handler.temperature();
 // Read temperature in Celsius
 float temperature_celsius = 0.0f;
 if (temp_sensor.ReadTemperatureCelsius(&temperature_celsius) == hf_temp_err_t::TEMP_SUCCESS) {
-    printf("Chip temperature: %.2f°C\n", temperature_celsius);
+    logger.Info("TMC9660", "Chip temperature: %.2f°C\n", temperature_celsius);
 } else {
-    printf("Failed to read temperature\n");
+    logger.Info("TMC9660", "Failed to read temperature\n");
 }
 ```
 
@@ -74,11 +74,11 @@ temp_sensor.ReadTemperatureUnit(&temp_rankine, HF_TEMP_UNIT_RANKINE);
 ```cpp
 hf_temp_sensor_info_t sensor_info;
 if (temp_sensor.GetSensorInfo(&sensor_info) == hf_temp_err_t::TEMP_SUCCESS) {
-    printf("Sensor: %s %s\n", sensor_info.manufacturer, sensor_info.model);
-    printf("Range: %.1f°C to %.1f°C\n", 
+    logger.Info("TMC9660", "Sensor: %s %s\n", sensor_info.manufacturer, sensor_info.model);
+    logger.Info("TMC9660", "Range: %.1f°C to %.1f°C\n", 
            sensor_info.min_temp_celsius, sensor_info.max_temp_celsius);
-    printf("Resolution: %.2f°C\n", sensor_info.resolution_celsius);
-    printf("Accuracy: %.1f°C\n", sensor_info.accuracy_celsius);
+    logger.Info("TMC9660", "Resolution: %.2f°C\n", sensor_info.resolution_celsius);
+    logger.Info("TMC9660", "Accuracy: %.1f°C\n", sensor_info.accuracy_celsius);
 }
 ```
 
@@ -88,20 +88,20 @@ if (temp_sensor.GetSensorInfo(&sensor_info) == hf_temp_err_t::TEMP_SUCCESS) {
 // Get operation statistics
 hf_temp_statistics_t stats;
 if (temp_sensor.GetStatistics(stats) == hf_temp_err_t::TEMP_SUCCESS) {
-    printf("Total readings: %d\n", stats.temperature_readings);
-    printf("Success rate: %.1f%%\n", 
+    logger.Info("TMC9660", "Total readings: %d\n", stats.temperature_readings);
+    logger.Info("TMC9660", "Success rate: %.1f%%\n", 
            (float)stats.successful_operations / stats.total_operations * 100.0f);
-    printf("Min temperature: %.2f°C\n", stats.min_temperature_celsius);
-    printf("Max temperature: %.2f°C\n", stats.max_temperature_celsius);
-    printf("Average temperature: %.2f°C\n", stats.avg_temperature_celsius);
+    logger.Info("TMC9660", "Min temperature: %.2f°C\n", stats.min_temperature_celsius);
+    logger.Info("TMC9660", "Max temperature: %.2f°C\n", stats.max_temperature_celsius);
+    logger.Info("TMC9660", "Average temperature: %.2f°C\n", stats.avg_temperature_celsius);
 }
 
 // Get diagnostic information
 hf_temp_diagnostics_t diagnostics;
 if (temp_sensor.GetDiagnostics(diagnostics) == hf_temp_err_t::TEMP_SUCCESS) {
-    printf("Sensor healthy: %s\n", diagnostics.sensor_healthy ? "YES" : "NO");
-    printf("Sensor available: %s\n", diagnostics.sensor_available ? "YES" : "NO");
-    printf("Consecutive errors: %d\n", diagnostics.consecutive_errors);
+    logger.Info("TMC9660", "Sensor healthy: %s\n", diagnostics.sensor_healthy ? "YES" : "NO");
+    logger.Info("TMC9660", "Sensor available: %s\n", diagnostics.sensor_available ? "YES" : "NO");
+    logger.Info("TMC9660", "Consecutive errors: %d\n", diagnostics.consecutive_errors);
 }
 ```
 
@@ -110,11 +110,11 @@ if (temp_sensor.GetDiagnostics(diagnostics) == hf_temp_err_t::TEMP_SUCCESS) {
 ```cpp
 hf_temp_reading_t reading;
 if (temp_sensor.ReadTemperature(&reading) == hf_temp_err_t::TEMP_SUCCESS) {
-    printf("Temperature: %.2f°C\n", reading.temperature_celsius);
-    printf("Raw value: %.2f\n", reading.temperature_raw);
-    printf("Timestamp: %llu us\n", reading.timestamp_us);
-    printf("Accuracy: %.2f°C\n", reading.accuracy_celsius);
-    printf("Valid: %s\n", reading.is_valid ? "YES" : "NO");
+    logger.Info("TMC9660", "Temperature: %.2f°C\n", reading.temperature_celsius);
+    logger.Info("TMC9660", "Raw value: %.2f\n", reading.temperature_raw);
+    logger.Info("TMC9660", "Timestamp: %llu us\n", reading.timestamp_us);
+    logger.Info("TMC9660", "Accuracy: %.2f°C\n", reading.accuracy_celsius);
+    logger.Info("TMC9660", "Valid: %s\n", reading.is_valid ? "YES" : "NO");
 }
 ```
 
@@ -128,10 +128,10 @@ The TMC9660 temperature sensor supports the following capabilities:
 ```cpp
 hf_u32_t capabilities = temp_sensor.GetCapabilities();
 if (temp_sensor.HasCapability(HF_TEMP_CAP_HIGH_PRECISION)) {
-    printf("High precision supported\n");
+    logger.Info("TMC9660", "High precision supported\n");
 }
 if (temp_sensor.HasCapability(HF_TEMP_CAP_FAST_RESPONSE)) {
-    printf("Fast response supported\n");
+    logger.Info("TMC9660", "Fast response supported\n");
 }
 ```
 
@@ -145,19 +145,19 @@ hf_temp_err_t error = temp_sensor.ReadTemperatureCelsius(&temperature);
 
 switch (error) {
     case hf_temp_err_t::TEMP_SUCCESS:
-        printf("Temperature read successfully: %.2f°C\n", temperature);
+        logger.Info("TMC9660", "Temperature read successfully: %.2f°C\n", temperature);
         break;
     case hf_temp_err_t::TEMP_ERR_NOT_INITIALIZED:
-        printf("Temperature sensor not initialized\n");
+        logger.Info("TMC9660", "Temperature sensor not initialized\n");
         break;
     case hf_temp_err_t::TEMP_ERR_READ_FAILED:
-        printf("Failed to read temperature from TMC9660\n");
+        logger.Info("TMC9660", "Failed to read temperature from TMC9660\n");
         break;
     case hf_temp_err_t::TEMP_ERR_OUT_OF_RANGE:
-        printf("Temperature reading out of expected range\n");
+        logger.Info("TMC9660", "Temperature reading out of expected range\n");
         break;
     default:
-        printf("Unknown error: %s\n", GetTempErrorString(error));
+        logger.Info("TMC9660", "Unknown error: %s\n", GetTempErrorString(error));
         break;
 }
 ```
@@ -180,7 +180,7 @@ temperature_sensors.push_back(&tmc9660_handler.temperature());
 for (auto* sensor : temperature_sensors) {
     float temp = 0.0f;
     if (sensor->ReadTemperatureCelsius(&temp) == hf_temp_err_t::TEMP_SUCCESS) {
-        printf("Temperature: %.2f°C\n", temp);
+        logger.Info("TMC9660", "Temperature: %.2f°C\n", temp);
     }
 }
 ```
@@ -234,8 +234,8 @@ tmc9660_handler.DumpDiagnostics();
 // Get specific temperature diagnostics
 hf_temp_diagnostics_t diagnostics;
 temp_sensor.GetDiagnostics(diagnostics);
-printf("Last error: %s\n", GetTempErrorString(diagnostics.last_error_code));
-printf("Consecutive errors: %d\n", diagnostics.consecutive_errors);
+logger.Info("TMC9660", "Last error: %s\n", GetTempErrorString(diagnostics.last_error_code));
+logger.Info("TMC9660", "Consecutive errors: %d\n", diagnostics.consecutive_errors);
 ```
 
 ## See Also

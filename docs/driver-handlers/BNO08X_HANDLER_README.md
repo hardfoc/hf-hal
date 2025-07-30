@@ -56,7 +56,7 @@ void bno08x_basic_example() {
     
     auto* i2c = comm.GetI2cDevice(I2cDeviceId::BNO08X_IMU);
     if (!i2c) {
-        printf("I2C interface not available\n");
+        logger.Info("BNO08x", "I2C interface not available\n");
         return;
     }
     
@@ -65,16 +65,16 @@ void bno08x_basic_example() {
     
     // Initialize handler
     if (handler.Initialize() != Bno08xError::SUCCESS) {
-        printf("Failed to initialize BNO08x\n");
+        logger.Info("BNO08x", "Failed to initialize BNO08x\n");
         return;
     }
     
     // Read IMU data
     Bno08xImuData imu_data;
     if (handler.ReadImuData(imu_data) == Bno08xError::SUCCESS) {
-        printf("Acceleration: %.2f, %.2f, %.2f m/s²\n", 
+        logger.Info("BNO08x", "Acceleration: %.2f, %.2f, %.2f m/s²\n", 
                imu_data.acceleration.x, imu_data.acceleration.y, imu_data.acceleration.z);
-        printf("Orientation: %.2f, %.2f, %.2f rad\n", 
+        logger.Info("BNO08x", "Orientation: %.2f, %.2f, %.2f rad\n", 
                imu_data.euler.roll, imu_data.euler.pitch, imu_data.euler.yaw);
     }
 }
@@ -230,11 +230,11 @@ void basic_imu_example() {
     // Read sensor data
     Bno08xImuData imu_data;
     if (handler.ReadImuData(imu_data) == Bno08xError::SUCCESS) {
-        printf("Acceleration: %.2f, %.2f, %.2f m/s²\n", 
+        logger.Info("BNO08x", "Acceleration: %.2f, %.2f, %.2f m/s²\n", 
                imu_data.acceleration.x, imu_data.acceleration.y, imu_data.acceleration.z);
-        printf("Angular velocity: %.2f, %.2f, %.2f rad/s\n", 
+        logger.Info("BNO08x", "Angular velocity: %.2f, %.2f, %.2f rad/s\n", 
                imu_data.gyroscope.x, imu_data.gyroscope.y, imu_data.gyroscope.z);
-        printf("Orientation: %.2f, %.2f, %.2f rad\n", 
+        logger.Info("BNO08x", "Orientation: %.2f, %.2f, %.2f rad\n", 
                imu_data.euler.roll, imu_data.euler.pitch, imu_data.euler.yaw);
     }
 }
@@ -262,16 +262,16 @@ void motion_detection_example() {
     Bno08xActivityData activity_data;
     if (handler.ReadActivityData(activity_data) == Bno08xError::SUCCESS) {
         if (activity_data.tap_detected) {
-            printf("Tap detected! Double: %s, Direction: %d\n", 
+            logger.Info("BNO08x", "Tap detected! Double: %s, Direction: %d\n", 
                    activity_data.double_tap ? "Yes" : "No", activity_data.tap_direction);
         }
         
         if (activity_data.step_detected) {
-            printf("Step detected! Total steps: %u\n", activity_data.step_count);
+            logger.Info("BNO08x", "Step detected! Total steps: %u\n", activity_data.step_count);
         }
         
         if (activity_data.shake_detected) {
-            printf("Shake detected!\n");
+            logger.Info("BNO08x", "Shake detected!\n");
         }
     }
 }
@@ -298,7 +298,7 @@ void spi_interface_example() {
     // Read data
     Bno08xVector3 acceleration;
     if (handler.ReadAcceleration(acceleration) == Bno08xError::SUCCESS) {
-        printf("SPI Acceleration: %.2f, %.2f, %.2f m/s²\n", 
+        logger.Info("BNO08x", "SPI Acceleration: %.2f, %.2f, %.2f m/s²\n", 
                acceleration.x, acceleration.y, acceleration.z);
     }
 }
@@ -320,19 +320,19 @@ void calibration_example() {
     // Check calibration status
     Bno08xCalibrationStatus cal_status;
     if (handler.ReadCalibrationStatus(cal_status) == Bno08xError::SUCCESS) {
-        printf("Accelerometer accuracy: %d\n", cal_status.accelerometer_accuracy);
-        printf("Gyroscope accuracy: %d\n", cal_status.gyroscope_accuracy);
-        printf("Magnetometer accuracy: %d\n", cal_status.magnetometer_accuracy);
-        printf("System accuracy: %d\n", cal_status.system_accuracy);
-        printf("Calibration complete: %s\n", cal_status.calibration_complete ? "Yes" : "No");
+        logger.Info("BNO08x", "Accelerometer accuracy: %d\n", cal_status.accelerometer_accuracy);
+        logger.Info("BNO08x", "Gyroscope accuracy: %d\n", cal_status.gyroscope_accuracy);
+        logger.Info("BNO08x", "Magnetometer accuracy: %d\n", cal_status.magnetometer_accuracy);
+        logger.Info("BNO08x", "System accuracy: %d\n", cal_status.system_accuracy);
+        logger.Info("BNO08x", "Calibration complete: %s\n", cal_status.calibration_complete ? "Yes" : "No");
     }
     
     // Start calibration if needed
     bool calibrated;
     if (handler.IsCalibrated(calibrated) == Bno08xError::SUCCESS && !calibrated) {
-        printf("Starting calibration...\n");
+        logger.Info("BNO08x", "Starting calibration...\n");
         if (handler.StartCalibration() == Bno08xError::SUCCESS) {
-            printf("Calibration started successfully\n");
+            logger.Info("BNO08x", "Calibration started successfully\n");
         }
     }
 }
@@ -366,7 +366,7 @@ void advanced_config_example() {
     
     // Set up sensor callback
     handler.SetSensorCallback([](const SensorEvent& event) {
-        printf("Sensor event: type=%d, data=%f\n", 
+        logger.Info("BNO08x", "Sensor event: type=%d, data=%f\n", 
                static_cast<int>(event.sensor), event.data);
     });
     
@@ -399,7 +399,7 @@ void error_handling_example() {
     // Check initialization
     Bno08xError result = handler.Initialize();
     if (result != Bno08xError::SUCCESS) {
-        printf("ERROR: Failed to initialize BNO08x: %s\n", 
+        logger.Info("BNO08x", "ERROR: Failed to initialize BNO08x: %s\n", 
                Bno08xErrorToString(result));
         return;
     }
@@ -408,21 +408,21 @@ void error_handling_example() {
     Bno08xVector3 acceleration;
     result = handler.ReadAcceleration(acceleration);
     if (result != Bno08xError::SUCCESS) {
-        printf("ERROR: Failed to read acceleration: %s\n", 
+        logger.Info("BNO08x", "ERROR: Failed to read acceleration: %s\n", 
                Bno08xErrorToString(result));
         return;
     }
     
     // Check sensor readiness
     if (!handler.IsSensorReady()) {
-        printf("ERROR: Sensor not ready\n");
+        logger.Info("BNO08x", "ERROR: Sensor not ready\n");
         return;
     }
     
     // Get last error for debugging
     Bno08xError last_error = handler.GetLastError();
     if (last_error != Bno08xError::SUCCESS) {
-        printf("Last error: %s\n", Bno08xErrorToString(last_error));
+        logger.Info("BNO08x", "Last error: %s\n", Bno08xErrorToString(last_error));
     }
 }
 ```
@@ -441,7 +441,7 @@ void factory_methods_example() {
     if (i2c) {
         auto i2c_handler = CreateBno08xHandlerI2c(*i2c);
         if (i2c_handler && i2c_handler->Initialize() == Bno08xError::SUCCESS) {
-            printf("I2C handler created successfully\n");
+            logger.Info("BNO08x", "I2C handler created successfully\n");
         }
     }
     
@@ -450,7 +450,7 @@ void factory_methods_example() {
     if (spi) {
         auto spi_handler = CreateBno08xHandlerSpi(*spi);
         if (spi_handler && spi_handler->Initialize() == Bno08xError::SUCCESS) {
-            printf("SPI handler created successfully\n");
+            logger.Info("BNO08x", "SPI handler created successfully\n");
         }
     }
 }
@@ -488,7 +488,7 @@ void multi_sensor_integration() {
     for (size_t i = 0; i < handlers.size(); i++) {
         Bno08xImuData imu_data;
         if (handlers[i]->ReadImuData(imu_data) == Bno08xError::SUCCESS) {
-            printf("Sensor %zu: Roll=%.2f, Pitch=%.2f, Yaw=%.2f\n", 
+            logger.Info("BNO08x", "Sensor %zu: Roll=%.2f, Pitch=%.2f, Yaw=%.2f\n", 
                    i, imu_data.euler.roll, imu_data.euler.pitch, imu_data.euler.yaw);
         }
     }

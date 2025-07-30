@@ -54,32 +54,32 @@ void comm_basic_example() {
     
     // Initialize the manager
     if (!comm.EnsureInitialized()) {
-        printf("Failed to initialize communication manager\n");
+        logger.Info("COMM", "Failed to initialize communication manager\n");
         return;
     }
     
     // Access SPI device
     auto* spi_device = comm.GetSpiDevice(SpiDeviceId::TMC9660_MOTOR_CONTROLLER);
     if (spi_device) {
-        printf("TMC9660 SPI device available\n");
+        logger.Info("COMM", "TMC9660 SPI device available\n");
     }
     
     // Access I2C device
     auto* i2c_device = comm.GetI2cDevice(I2cDeviceId::BNO08X_IMU);
     if (i2c_device) {
-        printf("BNO08x I2C device available\n");
+        logger.Info("COMM", "BNO08x I2C device available\n");
     }
     
     // Access UART
     BaseUart* uart;
     if (comm.GetUart(0, uart)) {
-        printf("UART0 interface available\n");
+        logger.Info("COMM", "UART0 interface available\n");
     }
     
     // Access CAN
     BaseCan* can;
     if (comm.GetCan(0, can)) {
-        printf("CAN interface available\n");
+        logger.Info("COMM", "CAN interface available\n");
     }
 }
 ```
@@ -254,21 +254,21 @@ void spi_example() {
     // Access TMC9660 motor controller
     auto* tmc9660_spi = comm.GetSpiDevice(SpiDeviceId::TMC9660_MOTOR_CONTROLLER);
     if (tmc9660_spi) {
-        printf("TMC9660 SPI device ready\n");
+        logger.Info("COMM", "TMC9660 SPI device ready\n");
         
         // Example SPI transaction
         uint8_t tx_data[4] = {0x01, 0x02, 0x03, 0x04};
         uint8_t rx_data[4];
         
         if (tmc9660_spi->TransmitReceive(tx_data, rx_data, 4) == HF_SPI_SUCCESS) {
-            printf("SPI transaction successful\n");
+            logger.Info("COMM", "SPI transaction successful\n");
         }
     }
     
     // Access AS5047U position encoder
     auto* encoder_spi = comm.GetSpiDevice(SpiDeviceId::AS5047U_POSITION_ENCODER);
     if (encoder_spi) {
-        printf("AS5047U encoder SPI device ready\n");
+        logger.Info("COMM", "AS5047U encoder SPI device ready\n");
     }
 }
 ```
@@ -283,21 +283,21 @@ void i2c_example() {
     // Access BNO08x IMU
     auto* imu_i2c = comm.GetI2cDevice(I2cDeviceId::BNO08X_IMU);
     if (imu_i2c) {
-        printf("BNO08x IMU I2C device ready\n");
+        logger.Info("COMM", "BNO08x IMU I2C device ready\n");
         
         // Example I2C read
         uint8_t reg_addr = 0x00;
         uint8_t data[4];
         
         if (imu_i2c->ReadRegister(reg_addr, data, 4) == HF_I2C_SUCCESS) {
-            printf("I2C read successful\n");
+            logger.Info("COMM", "I2C read successful\n");
         }
     }
     
     // Access PCAL9555 GPIO expander
     auto* gpio_i2c = comm.GetI2cDevice(I2cDeviceId::PCAL9555_GPIO_EXPANDER);
     if (gpio_i2c) {
-        printf("PCAL9555 GPIO expander I2C device ready\n");
+        logger.Info("COMM", "PCAL9555 GPIO expander I2C device ready\n");
     }
 }
 ```
@@ -312,18 +312,18 @@ void runtime_i2c_example() {
     // Create a new I2C device at runtime
     int device_index = comm.CreateI2cDevice(0x48, 100000);  // 100kHz speed
     if (device_index >= 0) {
-        printf("Created I2C device at index %d\n", device_index);
+        logger.Info("COMM", "Created I2C device at index %d\n", device_index);
         
         // Access the created device
         auto* device = comm.GetI2cDevice(0, device_index);
         if (device) {
-            printf("Runtime I2C device ready\n");
+            logger.Info("COMM", "Runtime I2C device ready\n");
         }
     }
     
     // Check if device exists at specific address
     if (comm.HasI2cDeviceAtAddress(0, 0x48)) {
-        printf("Device found at address 0x48\n");
+        logger.Info("COMM", "Device found at address 0x48\n");
     }
 }
 ```
@@ -338,7 +338,7 @@ void uart_example() {
     // Access UART0
     BaseUart* uart;
     if (comm.GetUart(0, uart)) {
-        printf("UART0 ready\n");
+        logger.Info("COMM", "UART0 ready\n");
         
         // Configure UART
         uart->Configure(115200, 8, HF_UART_PARITY_NONE, HF_UART_STOP_BITS_1);
@@ -351,7 +351,7 @@ void uart_example() {
         uint8_t buffer[64];
         size_t received = uart->Receive(buffer, sizeof(buffer));
         if (received > 0) {
-            printf("Received %zu bytes\n", received);
+            logger.Info("COMM", "Received %zu bytes\n", received);
         }
     }
 }
@@ -367,7 +367,7 @@ void can_example() {
     // Access CAN interface
     BaseCan* can;
     if (comm.GetCan(0, can)) {
-        printf("CAN interface ready\n");
+        logger.Info("COMM", "CAN interface ready\n");
         
         // Configure CAN
         can->Configure(500000, HF_CAN_MODE_NORMAL);  // 500kbps
@@ -382,13 +382,13 @@ void can_example() {
         tx_frame.data[3] = 0x04;
         
         if (can->Transmit(tx_frame) == HF_CAN_SUCCESS) {
-            printf("CAN message sent\n");
+            logger.Info("COMM", "CAN message sent\n");
         }
         
         // Receive CAN message
         CanFrame rx_frame;
         if (can->Receive(rx_frame) == HF_CAN_SUCCESS) {
-            printf("CAN message received: ID=0x%03X, DLC=%d\n", 
+            logger.Info("COMM", "CAN message received: ID=0x%03X, DLC=%d\n", 
                    rx_frame.id, rx_frame.dlc);
         }
     }
@@ -408,12 +408,12 @@ void custom_device_example() {
     // Register custom device
     int device_index = comm.RegisterCustomI2cDevice(0, custom_i2c, 0x50);
     if (device_index >= 0) {
-        printf("Custom I2C device registered at index %d\n", device_index);
+        logger.Info("COMM", "Custom I2C device registered at index %d\n", device_index);
         
         // Access the custom device
         auto* device = comm.GetI2cDevice(0, device_index);
         if (device) {
-            printf("Custom I2C device ready\n");
+            logger.Info("COMM", "Custom I2C device ready\n");
         }
     }
     
@@ -423,7 +423,7 @@ void custom_device_example() {
     // Register custom SPI device
     int spi_index = comm.RegisterCustomSpiDevice(custom_spi, 4);  // Use index 4
     if (spi_index >= 0) {
-        printf("Custom SPI device registered at index %d\n", spi_index);
+        logger.Info("COMM", "Custom SPI device registered at index %d\n", spi_index);
     }
 }
 ```
@@ -438,18 +438,18 @@ void diagnostics_example() {
     // Check bus availability
     for (uint8_t i = 0; i < 4; i++) {
         if (comm.IsBusAvailable(i)) {
-            printf("Bus %d is available\n", i);
-            printf("  Device count: %u\n", comm.GetDeviceCountOnBus(i));
+            logger.Info("COMM", "Bus %d is available\n", i);
+            logger.Info("COMM", "  Device count: %u\n", comm.GetDeviceCountOnBus(i));
         }
     }
     
     // Check specific device availability
     if (comm.GetSpiDevice(SpiDeviceId::TMC9660_MOTOR_CONTROLLER)) {
-        printf("TMC9660 SPI device is available\n");
+        logger.Info("COMM", "TMC9660 SPI device is available\n");
     }
     
     if (comm.GetI2cDevice(I2cDeviceId::BNO08X_IMU)) {
-        printf("BNO08x I2C device is available\n");
+        logger.Info("COMM", "BNO08x I2C device is available\n");
     }
     
     // Dump system statistics
@@ -476,7 +476,7 @@ void multi_interface_example() {
     
     // Perform operations on all interfaces
     if (tmc9660_spi && imu_i2c && uart && can) {
-        printf("All communication interfaces ready\n");
+        logger.Info("COMM", "All communication interfaces ready\n");
         
         // Example: Send motor command via SPI, read IMU via I2C, 
         // log via UART, and broadcast status via CAN
@@ -493,14 +493,14 @@ void error_handling_example() {
     
     // Check initialization
     if (!comm.EnsureInitialized()) {
-        printf("ERROR: Failed to initialize communication manager\n");
+        logger.Info("COMM", "ERROR: Failed to initialize communication manager\n");
         return;
     }
     
     // Validate device availability before use
     auto* spi_device = comm.GetSpiDevice(SpiDeviceId::TMC9660_MOTOR_CONTROLLER);
     if (!spi_device) {
-        printf("ERROR: TMC9660 SPI device not available\n");
+        logger.Info("COMM", "ERROR: TMC9660 SPI device not available\n");
         return;
     }
     
@@ -510,12 +510,12 @@ void error_handling_example() {
     
     auto result = spi_device->TransmitReceive(tx_data, rx_data, 4);
     if (result != HF_SPI_SUCCESS) {
-        printf("ERROR: SPI transaction failed: %d\n", static_cast<int>(result));
+        logger.Info("COMM", "ERROR: SPI transaction failed: %d\n", static_cast<int>(result));
     }
     
     // Check bus availability
     if (!comm.IsBusAvailable(0)) {
-        printf("WARNING: SPI bus 0 not available\n");
+        logger.Info("COMM", "WARNING: SPI bus 0 not available\n");
     }
 }
 ```
@@ -548,7 +548,7 @@ void integrated_example() {
         // IMU reading via I2C
         // GPIO control for enable/disable
         // ADC monitoring for current/voltage
-        printf("All systems integrated and ready\n");
+        logger.Info("COMM", "All systems integrated and ready\n");
     }
 }
 ```

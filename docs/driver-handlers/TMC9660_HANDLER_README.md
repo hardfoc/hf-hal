@@ -56,7 +56,7 @@ void tmc9660_basic_example() {
     
     auto* spi = comm.GetSpiDevice(SpiDeviceId::TMC9660_MOTOR_CONTROLLER);
     if (!spi) {
-        printf("SPI interface not available\n");
+        logger.Info("TMC9660", "SPI interface not available\n");
         return;
     }
     
@@ -65,13 +65,13 @@ void tmc9660_basic_example() {
     
     // Initialize handler
     if (!handler.Initialize()) {
-        printf("Failed to initialize TMC9660\n");
+        logger.Info("TMC9660", "Failed to initialize TMC9660\n");
         return;
     }
     
     // Access motor control
     auto& driver = handler.driver();
-    printf("TMC9660 motor controller ready\n");
+    logger.Info("TMC9660", "TMC9660 motor controller ready\n");
     
     // Access GPIO
     auto& gpio = handler.gpio(17);  // GPIO pin 17
@@ -82,7 +82,7 @@ void tmc9660_basic_example() {
     auto& adc = handler.adc();
     float voltage;
     if (adc.ReadChannelV(0, voltage) == hf_adc_err_t::HF_ADC_ERR_NONE) {
-        printf("ADC channel 0: %.2fV\n", voltage);
+        logger.Info("TMC9660", "ADC channel 0: %.2fV\n", voltage);
     }
 }
 ```
@@ -270,7 +270,7 @@ void basic_motor_example() {
     // Set target velocity
     driver.setTargetVelocity(500.0f);  // 500 RPM
     
-    printf("Motor control initialized\n");
+    logger.Info("TMC9660", "Motor control initialized\n");
 }
 ```
 
@@ -303,7 +303,7 @@ void gpio_example() {
     // Read input state
     hf_gpio_level_t level;
     if (gpio1.GetPinLevel(level) == hf_gpio_err_t::HF_GPIO_ERR_NONE) {
-        printf("GPIO 1 level: %s\n", level == hf_gpio_level_t::HF_GPIO_LEVEL_HIGH ? "HIGH" : "LOW");
+        logger.Info("TMC9660", "GPIO 1 level: %s\n", level == hf_gpio_level_t::HF_GPIO_LEVEL_HIGH ? "HIGH" : "LOW");
     }
     
     // Toggle output
@@ -329,25 +329,25 @@ void adc_example() {
     // Read external analog input
     float ain_voltage;
     if (adc.ReadChannelV(0, ain_voltage) == hf_adc_err_t::HF_ADC_ERR_NONE) {
-        printf("AIN0 voltage: %.2fV\n", ain_voltage);
+        logger.Info("TMC9660", "AIN0 voltage: %.2fV\n", ain_voltage);
     }
     
     // Read motor current
     float current_voltage;
     if (adc.ReadCurrentSenseChannel(0, current_voltage) == hf_adc_err_t::HF_ADC_ERR_NONE) {
-        printf("Motor current voltage: %.2fV\n", current_voltage);
+        logger.Info("TMC9660", "Motor current voltage: %.2fV\n", current_voltage);
     }
     
     // Read supply voltage
     float supply_voltage;
     if (adc.ReadVoltageChannel(0, supply_voltage) == hf_adc_err_t::HF_ADC_ERR_NONE) {
-        printf("Supply voltage: %.2fV\n", supply_voltage);
+        logger.Info("TMC9660", "Supply voltage: %.2fV\n", supply_voltage);
     }
     
     // Read chip temperature
     float temp_voltage;
     if (adc.ReadTemperatureChannel(0, temp_voltage) == hf_adc_err_t::HF_ADC_ERR_NONE) {
-        printf("Chip temperature voltage: %.2fV\n", temp_voltage);
+        logger.Info("TMC9660", "Chip temperature voltage: %.2fV\n", temp_voltage);
     }
 }
 ```
@@ -370,17 +370,17 @@ void temperature_example() {
     // Read temperature
     float temperature;
     if (temp.ReadTemperature(temperature) == hf_temp_err_t::HF_TEMP_ERR_NONE) {
-        printf("Chip temperature: %.1f°C\n", temperature);
+        logger.Info("TMC9660", "Chip temperature: %.1f°C\n", temperature);
     }
     
     // Get temperature statistics
     hf_temp_statistics_t stats;
     if (temp.GetStatistics(stats) == hf_temp_err_t::HF_TEMP_ERR_NONE) {
-        printf("Temperature statistics:\n");
-        printf("  Min: %.1f°C\n", stats.min_temperature_celsius);
-        printf("  Max: %.1f°C\n", stats.max_temperature_celsius);
-        printf("  Average: %.1f°C\n", stats.average_temperature_celsius);
-        printf("  Readings: %u\n", stats.total_readings);
+        logger.Info("TMC9660", "Temperature statistics:\n");
+        logger.Info("TMC9660", "  Min: %.1f°C\n", stats.min_temperature_celsius);
+        logger.Info("TMC9660", "  Max: %.1f°C\n", stats.max_temperature_celsius);
+        logger.Info("TMC9660", "  Average: %.1f°C\n", stats.average_temperature_celsius);
+        logger.Info("TMC9660", "  Readings: %u\n", stats.total_readings);
     }
 }
 ```
@@ -427,7 +427,7 @@ void advanced_motor_example() {
         // Read motor feedback
         float current_voltage;
         if (adc.ReadMotorDataChannel(0, current_voltage) == hf_adc_err_t::HF_ADC_ERR_NONE) {
-            printf("Target: %.0f RPM, Current: %.2fV\n", target_velocity, current_voltage);
+            logger.Info("TMC9660", "Target: %.0f RPM, Current: %.2fV\n", target_velocity, current_voltage);
         }
         
         vTaskDelay(pdMS_TO_TICKS(50));  // 20Hz control loop
@@ -454,30 +454,30 @@ void interface_switching_example() {
     Tmc9660Handler handler(*spi);
     if (!handler.Initialize()) return;
     
-    printf("Initial communication mode: %s\n", 
+    logger.Info("TMC9660", "Initial communication mode: %s\n", 
            handler.GetCommMode() == CommMode::SPI ? "SPI" : "UART");
     
     // Check available interfaces
     if (handler.HasSpiInterface()) {
-        printf("SPI interface available\n");
+        logger.Info("TMC9660", "SPI interface available\n");
     }
     
     if (handler.HasUartInterface()) {
-        printf("UART interface available\n");
+        logger.Info("TMC9660", "UART interface available\n");
     }
     
     // Switch to UART if available
     if (handler.HasUartInterface()) {
         if (handler.SwitchCommInterface(CommMode::UART)) {
-            printf("Switched to UART communication\n");
+            logger.Info("TMC9660", "Switched to UART communication\n");
         } else {
-            printf("Failed to switch to UART\n");
+            logger.Info("TMC9660", "Failed to switch to UART\n");
         }
     }
     
     // Switch back to SPI
     if (handler.SwitchCommInterface(CommMode::SPI)) {
-        printf("Switched back to SPI communication\n");
+        logger.Info("TMC9660", "Switched back to SPI communication\n");
     }
 }
 ```
@@ -496,13 +496,13 @@ void error_handling_example() {
     
     // Check initialization
     if (!handler.Initialize()) {
-        printf("ERROR: Failed to initialize TMC9660\n");
+        logger.Info("TMC9660", "ERROR: Failed to initialize TMC9660\n");
         return;
     }
     
     // Check driver readiness
     if (!handler.IsDriverReady()) {
-        printf("ERROR: TMC9660 driver not ready\n");
+        logger.Info("TMC9660", "ERROR: TMC9660 driver not ready\n");
         return;
     }
     
@@ -510,7 +510,7 @@ void error_handling_example() {
     auto& gpio = handler.gpio(0);
     hf_gpio_err_t result = gpio.SetDirection(hf_gpio_direction_t::HF_GPIO_DIRECTION_OUTPUT);
     if (result != hf_gpio_err_t::HF_GPIO_ERR_NONE) {
-        printf("ERROR: Failed to set GPIO direction: %d\n", static_cast<int>(result));
+        logger.Info("TMC9660", "ERROR: Failed to set GPIO direction: %d\n", static_cast<int>(result));
         return;
     }
     
@@ -519,7 +519,7 @@ void error_handling_example() {
     float voltage;
     hf_adc_err_t adc_result = adc.ReadChannelV(0, voltage);
     if (adc_result != hf_adc_err_t::HF_ADC_ERR_NONE) {
-        printf("ERROR: Failed to read ADC: %d\n", static_cast<int>(adc_result));
+        logger.Info("TMC9660", "ERROR: Failed to read ADC: %d\n", static_cast<int>(adc_result));
         return;
     }
     
@@ -528,11 +528,11 @@ void error_handling_example() {
     float temperature;
     hf_temp_err_t temp_result = temp.ReadTemperature(temperature);
     if (temp_result != hf_temp_err_t::HF_TEMP_ERR_NONE) {
-        printf("ERROR: Failed to read temperature: %d\n", static_cast<int>(temp_result));
+        logger.Info("TMC9660", "ERROR: Failed to read temperature: %d\n", static_cast<int>(temp_result));
         return;
     }
     
-    printf("All operations successful\n");
+    logger.Info("TMC9660", "All operations successful\n");
 }
 ```
 
@@ -566,7 +566,7 @@ void multi_interface_config() {
     driver.setMaxCurrent(custom_config.max_current);
     driver.setMaxVelocity(custom_config.max_velocity);
     
-    printf("Custom configuration applied\n");
+    logger.Info("TMC9660", "Custom configuration applied\n");
 }
 ```
 
@@ -617,7 +617,7 @@ void integrated_system_example() {
             driver.disableMotor();  // Low voltage protection
         }
         
-        printf("Temp: %.1f°C, Current: %.2fA, Voltage: %.1fV\n", 
+        logger.Info("TMC9660", "Temp: %.1f°C, Current: %.2fA, Voltage: %.1fV\n", 
                temperature, motor_current, supply_voltage);
         
         vTaskDelay(pdMS_TO_TICKS(100));

@@ -1000,15 +1000,44 @@ hf_adc_err_t AdcManager::RegisterPlatformChannels() noexcept {
             continue;
         }
         
+        // Filter channels based on current hardware configuration
+        // Only register channels that are actually available on the current board
+        bool should_register = false;
+        
+        switch (static_cast<HfAdcChipType>(mapping.chip_type)) {
+            case HfAdcChipType::ESP32_INTERNAL:
+                // ESP32 internal: currently not used (as per user requirements)
+                should_register = false;
+                break;
+                
+            case HfAdcChipType::TMC9660_CONTROLLER:
+                // TMC9660: only unit 0, ADC unit 0 (single controller on board)
+                should_register = (mapping.chip_unit == 0 && mapping.adc_unit == 0);
+                break;
+                
+            default:
+                Logger::GetInstance().Error("AdcManager", "Unknown chip type %d for channel %.*s", 
+                                   mapping.chip_type, static_cast<int>(channel_name.length()), channel_name.data());
+                continue;
+        }
+        
+        if (!should_register) {
+            Logger::GetInstance().Info("AdcManager", "Skipping ADC channel %.*s (chip_unit=%d, adc_unit=%d) - not available on current hardware", 
+                               static_cast<int>(channel_name.length()), channel_name.data(), 
+                               mapping.chip_unit, mapping.adc_unit);
+            continue;
+        }
+        
         // Handle TMC9660 channels
         if (mapping.chip_type == static_cast<uint8_t>(HfAdcChipType::TMC9660_CONTROLLER)) {
-            // Create TMC9660 ADC wrapper
-            auto tmc9660_wrapper = CreateTmc9660AdcWrapper(0); // Use device index 0 for now
+            // Create TMC9660 ADC wrapper with the correct device index
+            auto tmc9660_wrapper = CreateTmc9660AdcWrapper(mapping.chip_unit);
             if (tmc9660_wrapper) {
                 hf_adc_err_t result = RegisterChannel(channel_name, std::move(tmc9660_wrapper));
                 if (result == hf_adc_err_t::ADC_SUCCESS) {
-                    Logger::GetInstance().Info("AdcManager", "Registered TMC9660 channel %.*s", 
-                                       static_cast<int>(channel_name.length()), channel_name.data());
+                    Logger::GetInstance().Info("AdcManager", "Registered TMC9660 channel %.*s (chip_unit=%d, adc_unit=%d)", 
+                                       static_cast<int>(channel_name.length()), channel_name.data(), 
+                                       mapping.chip_unit, mapping.adc_unit);
                     registered_count++;
                 } else {
                     Logger::GetInstance().Info("AdcManager", "Failed to register TMC9660 channel %.*s (error: %d)", 
@@ -1017,8 +1046,9 @@ hf_adc_err_t AdcManager::RegisterPlatformChannels() noexcept {
                     overall_result = result; // Keep track of first error
                 }
             } else {
-                Logger::GetInstance().Info("AdcManager", "Failed to create TMC9660 wrapper for channel %.*s", 
-                                   static_cast<int>(channel_name.length()), channel_name.data());
+                Logger::GetInstance().Info("AdcManager", "Failed to create TMC9660 wrapper for channel %.*s (chip_unit=%d, adc_unit=%d)", 
+                                   static_cast<int>(channel_name.length()), channel_name.data(), 
+                                   mapping.chip_unit, mapping.adc_unit);
                 failed_count++;
                 overall_result = hf_adc_err_t::ADC_ERR_HARDWARE_FAULT;
             }

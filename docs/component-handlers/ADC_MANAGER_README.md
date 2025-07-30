@@ -54,20 +54,20 @@ void adc_example() {
     
     // Initialize the manager
     if (!adc.Initialize()) {
-        printf("Failed to initialize ADC manager\n");
+        logger.Info("ADC", "Failed to initialize ADC manager\n");
         return;
     }
     
     // Read raw ADC value
     uint32_t raw_value;
     if (adc.ReadChannelCount("ESP32_ADC1_CH0", raw_value) == HF_ADC_SUCCESS) {
-        printf("Raw ADC value: %u\n", raw_value);
+        logger.Info("ADC", "Raw ADC value: %u\n", raw_value);
     }
     
     // Read calibrated voltage
     float voltage;
     if (adc.ReadChannelV("ESP32_ADC1_CH0", voltage) == HF_ADC_SUCCESS) {
-        printf("Voltage: %.3fV\n", voltage);
+        logger.Info("ADC", "Voltage: %.3fV\n", voltage);
     }
 }
 ```
@@ -266,26 +266,37 @@ hf_adc_err_t::HF_ADC_ERR_OUT_OF_MEMORY     // Memory allocation failed
 
 ```cpp
 #include "component-handlers/AdcManager.h"
+#include "utils-and-drivers/driver-handlers/Logger.h"
 
 void basic_adc_example() {
+    auto& logger = Logger::GetInstance();
     auto& adc = AdcManager::GetInstance();
-    adc.Initialize();
+    adc.EnsureInitialized();
     
-    // Single channel readings
+    // Single channel readings using correct channel names from pin config
     uint32_t raw_value;
     float voltage;
     
-    if (adc.ReadChannelCount("ESP32_ADC1_CH0", raw_value) == HF_ADC_SUCCESS) {
-        printf("Channel ESP32_ADC1_CH0 raw: %u\n", raw_value);
+    if (adc.ReadChannelCount("ADC_TMC9660_AIN3", raw_value) == hf_adc_err_t::ADC_SUCCESS) {
+        logger.Info("ADC", "Channel ADC_TMC9660_AIN3 raw: %u", raw_value);
     }
     
-    if (adc.ReadChannelV("ESP32_ADC1_CH0", voltage) == HF_ADC_SUCCESS) {
-        printf("Channel ESP32_ADC1_CH0 voltage: %.3fV\n", voltage);
+    if (adc.ReadChannelV("ADC_TMC9660_AIN3", voltage) == hf_adc_err_t::ADC_SUCCESS) {
+        logger.Info("ADC", "Channel ADC_TMC9660_AIN3 voltage: %.3fV", voltage);
     }
     
     // Multiple samples for stability
-    if (adc.ReadChannelV("ESP32_ADC1_CH0", voltage, 16) == HF_ADC_SUCCESS) {
-        printf("Channel ESP32_ADC1_CH0 filtered: %.3fV\n", voltage);
+    if (adc.ReadChannelV("ADC_TMC9660_AIN3", voltage, 16) == hf_adc_err_t::ADC_SUCCESS) {
+        logger.Info("ADC", "Channel ADC_TMC9660_AIN3 filtered: %.3fV", voltage);
+    }
+    
+    // Read TMC9660 internal monitoring channels
+    if (adc.ReadChannelV("TMC9660_CHIP_TEMPERATURE", voltage) == hf_adc_err_t::ADC_SUCCESS) {
+        logger.Info("ADC", "TMC9660 Chip Temperature: %.3fV", voltage);
+    }
+    
+    if (adc.ReadChannelV("TMC9660_SUPPLY_VOLTAGE", voltage) == hf_adc_err_t::ADC_SUCCESS) {
+        logger.Info("ADC", "TMC9660 Supply Voltage: %.3fV", voltage);
     }
 }
 ```
@@ -308,19 +319,19 @@ void multi_channel_example() {
     // Read all channels simultaneously
     auto readings = adc.BatchReadVoltages(channels, 4);  // 4 samples each
     
-    printf("Multi-channel readings (time: %u ms):\n", readings.total_time_ms);
+    logger.Info("ADC", "Multi-channel readings (time: %u ms):\n", readings.total_time_ms);
     for (size_t i = 0; i < channels.size(); i++) {
         if (readings.results[i] == HF_ADC_SUCCESS) {
-            printf("  %.*s: %.3fV (raw: %u)\n",
+            logger.Info("ADC", "  %.*s: %.3fV (raw: %u)\n",
                    static_cast<int>(channels[i].size()), channels[i].data(),
                    readings.voltages[i], readings.raw_values[i]);
         } else {
-            printf("  %.*s: ERROR\n",
+            logger.Info("ADC", "  %.*s: ERROR\n",
                    static_cast<int>(channels[i].size()), channels[i].data());
         }
     }
     
-    printf("All successful: %s\n", readings.AllSuccessful() ? "YES" : "NO");
+    logger.Info("ADC", "All successful: %s\n", readings.AllSuccessful() ? "YES" : "NO");
 }
 ```
 
@@ -332,13 +343,13 @@ void motor_current_example() {
     adc.Initialize();
     
     // Monitor motor current from TMC9660
-    printf("Motor current monitoring:\n");
+    logger.Info("ADC", "Motor current monitoring:\n");
     for (int i = 0; i < 100; i++) {
         float voltage;
         if (adc.ReadChannelV("TMC9660_CURRENT_I0", voltage, 8) == HF_ADC_SUCCESS) {
             // Convert voltage to current (example: 0.1V/A current sensor)
             float current = voltage / 0.1f;
-            printf("Current: %.2fA (%.3fV)\n", current, voltage);
+            logger.Info("ADC", "Current: %.2fA (%.3fV)\n", current, voltage);
         }
         
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -357,15 +368,15 @@ void battery_voltage_example() {
     while (true) {
         float battery_voltage;
         if (adc.ReadChannelV("ESP32_ADC1_CH2", battery_voltage, 32) == HF_ADC_SUCCESS) {
-            printf("Battery: %.2fV", battery_voltage);
+            logger.Info("ADC", "Battery: %.2fV", battery_voltage);
             
             // Battery status indication
             if (battery_voltage > 12.0f) {
-                printf(" [GOOD]\n");
+                logger.Info("ADC", " [GOOD]\n");
             } else if (battery_voltage > 10.5f) {
-                printf(" [LOW]\n");
+                logger.Info("ADC", " [LOW]\n");
             } else {
-                printf(" [CRITICAL]\n");
+                logger.Info("ADC", " [CRITICAL]\n");
             }
         }
         
@@ -384,26 +395,26 @@ void diagnostics_example() {
     // Get system status
     AdcSystemDiagnostics diagnostics;
     if (adc.GetSystemDiagnostics(diagnostics) == HF_ADC_SUCCESS) {
-        printf("ADC System Status:\n");
-        printf("  Overall healthy: %s\n", diagnostics.system_healthy ? "YES" : "NO");
-        printf("  Total channels: %u\n", diagnostics.total_channels_registered);
-        printf("  Total operations: %u\n", diagnostics.total_operations);
-        printf("  Successful operations: %u\n", diagnostics.successful_operations);
-        printf("  Failed operations: %u\n", diagnostics.failed_operations);
-        printf("  Calibration errors: %u\n", diagnostics.calibration_errors);
-        printf("  Communication errors: %u\n", diagnostics.communication_errors);
-        printf("  Hardware errors: %u\n", diagnostics.hardware_errors);
-        printf("  Avg read time: %.2fµs\n", diagnostics.average_read_time_us);
-        printf("  System uptime: %llu ms\n", diagnostics.system_uptime_ms);
+        logger.Info("ADC", "ADC System Status:\n");
+        logger.Info("ADC", "  Overall healthy: %s\n", diagnostics.system_healthy ? "YES" : "NO");
+        logger.Info("ADC", "  Total channels: %u\n", diagnostics.total_channels_registered);
+        logger.Info("ADC", "  Total operations: %u\n", diagnostics.total_operations);
+        logger.Info("ADC", "  Successful operations: %u\n", diagnostics.successful_operations);
+        logger.Info("ADC", "  Failed operations: %u\n", diagnostics.failed_operations);
+        logger.Info("ADC", "  Calibration errors: %u\n", diagnostics.calibration_errors);
+        logger.Info("ADC", "  Communication errors: %u\n", diagnostics.communication_errors);
+        logger.Info("ADC", "  Hardware errors: %u\n", diagnostics.hardware_errors);
+        logger.Info("ADC", "  Avg read time: %.2fµs\n", diagnostics.average_read_time_us);
+        logger.Info("ADC", "  System uptime: %llu ms\n", diagnostics.system_uptime_ms);
     }
     
     // Get channel statistics
     BaseAdc::AdcStatistics stats;
     if (adc.GetStatistics("ESP32_ADC1_CH0", stats) == HF_ADC_SUCCESS) {
-        printf("\nChannel ESP32_ADC1_CH0 statistics:\n");
-        printf("  Access count: %u\n", stats.access_count);
-        printf("  Error count: %u\n", stats.error_count);
-        printf("  Last access time: %llu\n", stats.last_access_time);
+        logger.Info("ADC", "\nChannel ESP32_ADC1_CH0 statistics:\n");
+        logger.Info("ADC", "  Access count: %u\n", stats.access_count);
+        logger.Info("ADC", "  Error count: %u\n", stats.error_count);
+        logger.Info("ADC", "  Last access time: %llu\n", stats.last_access_time);
     }
     
     // Dump all statistics
@@ -429,8 +440,8 @@ void configuration_example() {
     float voltage = adc.ReadVoltage("ADC_TMC9660_AIN3");      // ~200-800ns per call
     float current = adc.ReadVoltage("TMC9660_CURRENT_I0");    // Includes hash map lookup
     
-    printf("Temperature sensor: %.3fV\n", voltage);
-    printf("Motor current: %.3fV\n", current);
+    logger.Info("ADC", "Temperature sensor: %.3fV\n", voltage);
+    logger.Info("ADC", "Motor current: %.3fV\n", current);
 }
 ```
 
@@ -449,7 +460,7 @@ void high_performance_example() {
     
     // STEP 2: Validate cached pointers (once, outside loops)
     if (!adc_temp || !adc_current || !adc_velocity) {
-        printf("ERROR: Failed to cache ADC pointers\n");
+        logger.Info("ADC", "ERROR: Failed to cache ADC pointers\n");
         return;
     }
     
@@ -539,10 +550,10 @@ void batch_operations_example() {
     
     auto batch_time = esp_timer_get_time() - start_time;
     
-    printf("Performance comparison:\n");
-    printf("  Single reads: %lld µs\n", single_time);
-    printf("  Batch reads: %lld µs\n", batch_time);
-    printf("  Speedup: %.1fx\n", static_cast<float>(single_time) / batch_time);
+    logger.Info("ADC", "Performance comparison:\n");
+    logger.Info("ADC", "  Single reads: %lld µs\n", single_time);
+    logger.Info("ADC", "  Batch reads: %lld µs\n", batch_time);
+    logger.Info("ADC", "  Speedup: %.1fx\n", static_cast<float>(single_time) / batch_time);
 }
 ```
 
@@ -571,7 +582,7 @@ void ultra_high_performance_example() {
     }
     
     if (cached_channels.size() != channel_names.size()) {
-        printf("ERROR: Failed to cache all ADC channels\n");
+        logger.Info("ADC", "ERROR: Failed to cache all ADC channels\n");
         return;
     }
     
@@ -617,17 +628,17 @@ void advanced_batch_example() {
     AdcBatchOperation operation(channels, samples, intervals);
     auto result = adc.BatchRead(operation);
     
-    printf("Advanced batch operation results:\n");
+    logger.Info("ADC", "Advanced batch operation results:\n");
     for (size_t i = 0; i < channels.size(); i++) {
         if (result.results[i] == HF_ADC_SUCCESS) {
-            printf("  %.*s: %.3fV (raw: %u, samples: %u, interval: %u ms)\n",
+            logger.Info("ADC", "  %.*s: %.3fV (raw: %u, samples: %u, interval: %u ms)\n",
                    static_cast<int>(channels[i].size()), channels[i].data(),
                    result.voltages[i], result.raw_values[i],
                    samples[i], intervals[i]);
         }
     }
     
-    printf("Total time: %u ms\n", result.total_time_ms);
+    logger.Info("ADC", "Total time: %u ms\n", result.total_time_ms);
 }
 ```
 
@@ -641,13 +652,13 @@ void error_handling_example() {
     
     // Check initialization
     if (!adc.Initialize()) {
-        printf("ERROR: Failed to initialize ADC manager\n");
+        logger.Info("ADC", "ERROR: Failed to initialize ADC manager\n");
         return;
     }
     
     // Validate channel exists before use
     if (!adc.IsChannelAvailable("ESP32_ADC1_CH0")) {
-        printf("ERROR: Channel ESP32_ADC1_CH0 not available\n");
+        logger.Info("ADC", "ERROR: Channel ESP32_ADC1_CH0 not available\n");
         return;
     }
     
@@ -655,16 +666,16 @@ void error_handling_example() {
     float voltage;
     auto result = adc.ReadChannelV("ESP32_ADC1_CH0", voltage);
     if (result != HF_ADC_SUCCESS) {
-        printf("ERROR: Failed to read ADC channel: %d\n", static_cast<int>(result));
+        logger.Info("ADC", "ERROR: Failed to read ADC channel: %d\n", static_cast<int>(result));
     }
     
     // Monitor system health
     AdcSystemDiagnostics diagnostics;
     if (adc.GetSystemDiagnostics(diagnostics) == HF_ADC_SUCCESS) {
         if (!diagnostics.system_healthy) {
-            printf("WARNING: ADC system health check failed\n");
-            printf("Failed operations: %u\n", diagnostics.failed_operations);
-            printf("Calibration errors: %u\n", diagnostics.calibration_errors);
+            logger.Info("ADC", "WARNING: ADC system health check failed\n");
+            logger.Info("ADC", "Failed operations: %u\n", diagnostics.failed_operations);
+            logger.Info("ADC", "Calibration errors: %u\n", diagnostics.calibration_errors);
         }
     }
 }
@@ -691,7 +702,7 @@ void motor_adc_integration() {
         if (adc.ReadChannelV("TMC9660_CURRENT_I0", motor_current) == HF_ADC_SUCCESS) {
             // Check for overcurrent condition
             if (motor_current > 5.0f) {
-                printf("Overcurrent detected: %.2fA\n", motor_current);
+                logger.Info("ADC", "Overcurrent detected: %.2fA\n", motor_current);
                 // Disable motor or reduce current
             }
         }
@@ -701,7 +712,7 @@ void motor_adc_integration() {
         if (adc.ReadChannelV("ESP32_ADC1_CH0", supply_voltage) == HF_ADC_SUCCESS) {
             // Check for undervoltage condition
             if (supply_voltage < 10.0f) {
-                printf("Undervoltage detected: %.2fV\n", supply_voltage);
+                logger.Info("ADC", "Undervoltage detected: %.2fV\n", supply_voltage);
                 // Implement protection measures
             }
         }

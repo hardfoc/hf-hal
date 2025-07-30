@@ -56,7 +56,7 @@ void pcal95555_basic_example() {
     
     auto* i2c = comm.GetI2cDevice(I2cDeviceId::PCAL9555_GPIO_EXPANDER);
     if (!i2c) {
-        printf("I2C interface not available\n");
+        logger.Info("PCAL95555", "I2C interface not available\n");
         return;
     }
     
@@ -65,7 +65,7 @@ void pcal95555_basic_example() {
     
     // Initialize handler
     if (!handler.EnsureInitialized()) {
-        printf("Failed to initialize PCAL95555\n");
+        logger.Info("PCAL95555", "Failed to initialize PCAL95555\n");
         return;
     }
     
@@ -78,8 +78,8 @@ void pcal95555_basic_example() {
     hf_bool_t state;
     handler.ReadInput(1, state);        // Read pin 1
     
-    printf("PCAL95555 GPIO operations complete\n");
-    printf("Pin 1 state: %s\n", state ? "HIGH" : "LOW");
+    logger.Info("PCAL95555", "PCAL95555 GPIO operations complete\n");
+    logger.Info("PCAL95555", "Pin 1 state: %s\n", state ? "HIGH" : "LOW");
 }
 ```
 
@@ -210,7 +210,7 @@ void basic_gpio_example() {
     // Read input
     hf_bool_t state;
     if (handler.ReadInput(1, state) == hf_gpio_err_t::HF_GPIO_ERR_NONE) {
-        printf("Pin 1 state: %s\n", state ? "HIGH" : "LOW");
+        logger.Info("PCAL95555", "Pin 1 state: %s\n", state ? "HIGH" : "LOW");
     }
 }
 ```
@@ -236,7 +236,7 @@ void interrupt_example() {
         handler.ConfigureInterrupt(
             hf_gpio_interrupt_trigger_t::HF_GPIO_INTERRUPT_TRIGGER_FALLING_EDGE,
             [](BaseGpio* gpio, hf_gpio_interrupt_trigger_t trigger, void* user_data) {
-                printf("PCAL95555 interrupt triggered\n");
+                logger.Info("PCAL95555", "PCAL95555 interrupt triggered\n");
             }
         );
         
@@ -246,7 +246,7 @@ void interrupt_example() {
     // Monitor interrupt status
     uint16_t interrupt_status;
     if (handler.GetAllInterruptStatus(interrupt_status) == hf_gpio_err_t::HF_GPIO_ERR_NONE) {
-        printf("Interrupt status: 0x%04X\n", interrupt_status);
+        logger.Info("PCAL95555", "Interrupt status: 0x%04X\n", interrupt_status);
     }
 }
 ```
@@ -278,7 +278,7 @@ void base_gpio_example() {
         pin->ConfigureInterrupt(
             hf_gpio_interrupt_trigger_t::HF_GPIO_INTERRUPT_TRIGGER_RISING_EDGE,
             [](BaseGpio* gpio, hf_gpio_interrupt_trigger_t trigger, void* user_data) {
-                printf("Pin interrupt triggered\n");
+                logger.Info("PCAL95555", "Pin interrupt triggered\n");
             }
         );
     }
@@ -325,14 +325,14 @@ void error_handling_example() {
     
     // Check initialization
     if (!handler.EnsureInitialized()) {
-        printf("ERROR: Failed to initialize PCAL95555\n");
+        logger.Info("PCAL95555", "ERROR: Failed to initialize PCAL95555\n");
         return;
     }
     
     // Validate pin operations
     hf_gpio_err_t result = handler.SetDirection(20, hf_gpio_direction_t::HF_GPIO_DIRECTION_OUTPUT);
     if (result != hf_gpio_err_t::HF_GPIO_ERR_NONE) {
-        printf("ERROR: Invalid pin operation: %d\n", static_cast<int>(result));
+        logger.Info("PCAL95555", "ERROR: Invalid pin operation: %d\n", static_cast<int>(result));
         return;
     }
     
@@ -340,7 +340,7 @@ void error_handling_example() {
     for (hf_u8_t pin = 0; pin < handler.PinCount(); pin++) {
         result = handler.SetDirection(pin, hf_gpio_direction_t::HF_GPIO_DIRECTION_INPUT);
         if (result != hf_gpio_err_t::HF_GPIO_ERR_NONE) {
-            printf("ERROR: Failed to configure pin %d: %d\n", pin, static_cast<int>(result));
+            logger.Info("PCAL95555", "ERROR: Failed to configure pin %d: %d\n", pin, static_cast<int>(result));
         }
     }
 }
@@ -410,8 +410,8 @@ void interrupt_monitoring() {
         handler.GetAllInterruptMasks(interrupt_masks);
         handler.GetAllInterruptStatus(interrupt_status);
         
-        printf("Interrupt masks: 0x%04X\n", interrupt_masks);
-        printf("Interrupt status: 0x%04X\n", interrupt_status);
+        logger.Info("PCAL95555", "Interrupt masks: 0x%04X\n", interrupt_masks);
+        logger.Info("PCAL95555", "Interrupt status: 0x%04X\n", interrupt_status);
     }
 }
 ```

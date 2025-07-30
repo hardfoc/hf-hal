@@ -63,27 +63,27 @@ void motor_example() {
     
     // Initialize the manager (automatically creates onboard TMC9660)
     if (!motor.EnsureInitialized()) {
-        printf("Failed to initialize motor controller\n");
+        logger.Info("MOTOR", "Failed to initialize motor controller\n");
         return;
     }
     
     // Get onboard TMC9660 handler
     auto* handler = motor.handler(0);  // Index 0 = onboard device
     if (!handler) {
-        printf("Handler not available\n");
+        logger.Info("MOTOR", "Handler not available\n");
         return;
     }
     
     // Initialize the handler (creates TMC9660 driver instance)
     if (!handler->Initialize()) {
-        printf("Failed to initialize TMC9660 handler\n");
+        logger.Info("MOTOR", "Failed to initialize TMC9660 handler\n");
         return;
     }
     
     // Get the TMC9660 driver instance
     auto tmc = motor.driver(0);
     if (!tmc) {
-        printf("TMC9660 driver not available\n");
+        logger.Info("MOTOR", "TMC9660 driver not available\n");
         return;
     }
     
@@ -94,21 +94,21 @@ void motor_example() {
     
     auto boot_result = tmc->bootloaderInit(&cfg);
     if (boot_result != TMC9660::BootloaderInitResult::Success) {
-        printf("Failed to initialize TMC9660 bootloader\n");
+        logger.Info("MOTOR", "Failed to initialize TMC9660 bootloader\n");
         return;
     }
     
     // Now can use TMC9660 parameter-based API
     if (tmc->setTargetVelocity(1000)) {  // Set 1000 internal velocity units
-        printf("Target velocity set\n");
+        logger.Info("MOTOR", "Target velocity set\n");
     }
     
     // Set torque using FOC control structure
     if (tmc->focControl.setTargetTorque(500)) {  // 500 mA
-        printf("Target torque set\n");
+        logger.Info("MOTOR", "Target torque set\n");
     }
     
-    printf("Motor controller initialized and ready\n");
+    logger.Info("MOTOR", "Motor controller initialized and ready\n");
 }
 ```
 
@@ -187,19 +187,19 @@ void single_motor_control() {
     auto& motor = MotorController::GetInstance();
     
     if (!motor.EnsureInitialized()) {
-        printf("Failed to initialize motor controller\n");
+        logger.Info("MOTOR", "Failed to initialize motor controller\n");
         return;
     }
     
     auto* handler = motor.handler(0);
     if (!handler || !handler->Initialize()) {
-        printf("Failed to initialize TMC9660 handler\n");
+        logger.Info("MOTOR", "Failed to initialize TMC9660 handler\n");
         return;
     }
     
     auto tmc = motor.driver(0);
     if (!tmc) {
-        printf("TMC9660 driver not available\n");
+        logger.Info("MOTOR", "TMC9660 driver not available\n");
         return;
     }
     
@@ -209,34 +209,34 @@ void single_motor_control() {
     cfg.boot.start_motor_control = true;
     
     if (tmc->bootloaderInit(&cfg) != TMC9660::BootloaderInitResult::Success) {
-        printf("Bootloader initialization failed\n");
+        logger.Info("MOTOR", "Bootloader initialization failed\n");
         return;
     }
     
     // Start motor control
     if (tmc->setTargetVelocity(500)) {  // 500 internal velocity units
-        printf("Velocity set to 500\n");
+        logger.Info("MOTOR", "Velocity set to 500\n");
     }
     
     // Set torque limit
     if (tmc->focControl.setTargetTorque(1000)) {  // 1000 mA
-        printf("Torque limit set to 1000 mA\n");
+        logger.Info("MOTOR", "Torque limit set to 1000 mA\n");
     }
     
     // Read feedback
     int32_t actual_velocity;
     if (tmc->getActualVelocity(actual_velocity)) {
-        printf("Actual velocity: %ld\n", actual_velocity);
+        logger.Info("MOTOR", "Actual velocity: %ld\n", actual_velocity);
     }
     
     int32_t actual_position;
     if (tmc->getActualPosition(actual_position)) {
-        printf("Actual position: %ld\n", actual_position);
+        logger.Info("MOTOR", "Actual position: %ld\n", actual_position);
     }
     
     // Stop motor
     if (tmc->focControl.stop()) {
-        printf("Motor stopped\n");
+        logger.Info("MOTOR", "Motor stopped\n");
     }
 }
 ```
@@ -248,13 +248,13 @@ void multi_device_example() {
     auto& motor = MotorController::GetInstance();
     
     if (!motor.EnsureInitialized()) {
-        printf("Failed to initialize motor controller\n");
+        logger.Info("MOTOR", "Failed to initialize motor controller\n");
         return;
     }
     
     // Create external TMC9660 device
     if (motor.CreateExternalDevice(2, SpiDeviceId::EXTERNAL_DEVICE_1, 0x01)) {
-        printf("External device created on CS_1\n");
+        logger.Info("MOTOR", "External device created on CS_1\n");
         
         // Initialize external device
         auto* ext_handler = motor.handler(2);
@@ -269,7 +269,7 @@ void multi_device_example() {
                 if (ext_tmc->bootloaderInit(&cfg) == TMC9660::BootloaderInitResult::Success) {
                     // Control external motor
                     ext_tmc->setTargetVelocity(1000);  // 1000 internal units
-                    printf("External motor configured\n");
+                    logger.Info("MOTOR", "External motor configured\n");
                 }
             }
         }
@@ -283,7 +283,7 @@ void multi_device_example() {
         // Synchronized control
         onboard_tmc->setTargetVelocity(750);
         external_tmc->setTargetVelocity(750);
-        printf("Both motors set to 750 velocity units\n");
+        logger.Info("MOTOR", "Both motors set to 750 velocity units\n");
     }
 }
 ```
@@ -318,7 +318,7 @@ void tmc9660_io_example() {
     // Read GPIO states
     bool gpio17_state;
     if (gpio17.IsActive(gpio17_state) == hf_gpio_err_t::GPIO_SUCCESS) {
-        printf("GPIO17 state: %s\n", gpio17_state ? "Active" : "Inactive");
+        logger.Info("MOTOR", "GPIO17 state: %s\n", gpio17_state ? "Active" : "Inactive");
     }
     
     // Access TMC9660 ADC
@@ -327,7 +327,7 @@ void tmc9660_io_example() {
     // Read ADC channels (requires channel IDs)
     float voltage;
     if (adc.ReadChannelV(0, voltage) == hf_adc_err_t::ADC_SUCCESS) {
-        printf("ADC Channel 0: %.3f V\n", voltage);
+        logger.Info("MOTOR", "ADC Channel 0: %.3f V\n", voltage);
     }
     
     // Read multiple ADC channels
@@ -337,7 +337,7 @@ void tmc9660_io_example() {
     
     if (adc.ReadMultipleChannels(channels.data(), 3, raw_values.data(), voltages.data()) == hf_adc_err_t::ADC_SUCCESS) {
         for (int i = 0; i < 3; i++) {
-            printf("ADC Channel %d: %lu counts, %.3f V\n", i, raw_values[i], voltages[i]);
+            logger.Info("MOTOR", "ADC Channel %d: %lu counts, %.3f V\n", i, raw_values[i], voltages[i]);
         }
     }
 }
@@ -373,7 +373,7 @@ public:
         // STEP 1: Cache TMC9660 driver pointer for fast access
         tmc_driver_ = motor.driver(0);
         if (!tmc_driver_) {
-            printf("ERROR: TMC9660 driver not available\n");
+            logger.Info("MOTOR", "ERROR: TMC9660 driver not available\n");
             return false;
         }
         
@@ -383,7 +383,7 @@ public:
         velocity_sensor_ = vortex.adc.Get("TMC9660_MOTOR_VELOCITY");
         
         if (!current_sensor_ || !velocity_sensor_) {
-            printf("ERROR: Failed to cache motor feedback sensors\n");
+            logger.Info("MOTOR", "ERROR: Failed to cache motor feedback sensors\n");
             return false;
         }
         
@@ -453,31 +453,31 @@ void error_handling_example() {
     
     // Check initialization
     if (!motor.EnsureInitialized()) {
-        printf("ERROR: Failed to initialize motor controller\n");
+        logger.Info("MOTOR", "ERROR: Failed to initialize motor controller\n");
         return;
     }
     
     // Validate device before use
     if (!motor.IsDeviceValid(0)) {
-        printf("ERROR: Onboard device not valid\n");
+        logger.Info("MOTOR", "ERROR: Onboard device not valid\n");
         return;
     }
     
     // Safe device access
     auto* handler = motor.handler(0);
     if (!handler) {
-        printf("ERROR: Handler not available\n");
+        logger.Info("MOTOR", "ERROR: Handler not available\n");
         return;
     }
     
     if (!handler->Initialize()) {
-        printf("ERROR: Failed to initialize handler\n");
+        logger.Info("MOTOR", "ERROR: Failed to initialize handler\n");
         return;
     }
     
     auto tmc = motor.driver(0);
     if (!tmc) {
-        printf("ERROR: TMC9660 driver not available\n");
+        logger.Info("MOTOR", "ERROR: TMC9660 driver not available\n");
         return;
     }
     
@@ -488,22 +488,22 @@ void error_handling_example() {
     
     auto boot_result = tmc->bootloaderInit(&cfg);
     if (boot_result != TMC9660::BootloaderInitResult::Success) {
-        printf("ERROR: Bootloader initialization failed\n");
+        logger.Info("MOTOR", "ERROR: Bootloader initialization failed\n");
         return;
     }
     
     // Safe motor control with error checking
     if (!tmc->setTargetVelocity(500)) {
-        printf("ERROR: Failed to set target velocity\n");
+        logger.Info("MOTOR", "ERROR: Failed to set target velocity\n");
         return;
     }
     
     if (!tmc->focControl.setTargetTorque(1000)) {
-        printf("ERROR: Failed to set target torque\n");
+        logger.Info("MOTOR", "ERROR: Failed to set target torque\n");
         return;
     }
     
-    printf("Motor control configured successfully\n");
+    logger.Info("MOTOR", "Motor control configured successfully\n");
 }
 ```
 
@@ -538,11 +538,11 @@ void diagnostic_example() {
     auto& motor = MotorController::GetInstance();
     
     // Get system statistics
-    printf("Active devices: %d\n", motor.GetDeviceCount());
+    logger.Info("MOTOR", "Active devices: %d\n", motor.GetDeviceCount());
     
     auto active_indices = motor.GetActiveDeviceIndices();
     for (uint8_t index : active_indices) {
-        printf("Device %d is active\n", index);
+        logger.Info("MOTOR", "Device %d is active\n", index);
         
         if (motor.IsDeviceValid(index)) {
             auto* handler = motor.handler(index);
