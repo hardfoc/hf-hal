@@ -485,7 +485,7 @@ void error_handling_example() {
 ### Integration with Other Managers
 
 ```cpp
-#include "component-handlers/All.h"
+#include "component-handlers/ImuManager.h"
 
 void integrated_example() {
     // Initialize all managers

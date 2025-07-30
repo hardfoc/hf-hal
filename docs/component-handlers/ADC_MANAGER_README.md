@@ -531,7 +531,7 @@ void error_handling_example() {
 ### With Motor Controller
 
 ```cpp
-#include "component-handlers/All.h"
+#include "component-handlers/AdcManager.h"
 
 void motor_adc_integration() {
     auto& adc = AdcManager::GetInstance();

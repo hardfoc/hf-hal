@@ -163,8 +163,6 @@ The Vortex API manages initialization in the correct dependency order for the Ha
 
 ```cpp
 #include "API/Vortex.h"  // Unified Vortex API for HardFOC Vortex V1
-// OR
-#include "API/All.h"     // Complete HAL system
 ```
 
 ### 2. Initialize and Use the System
@@ -304,10 +302,10 @@ if (encoder_handler) {
 - **[🏗️ Vortex API Architecture](API/Vortex.h)** - API design and implementation
 
 ### 🎯 Core System Documentation
-- **[🔧 GPIO & ADC System](docs/HARDFOC_GPIO_ADC_SYSTEM.md)** - Comprehensive system guide
-- **[🏗️ Hardware Abstraction Architecture](docs/HARDFOC_HARDWARE_ABSTRACTION_ARCHITECTURE.md)** - Core architecture
-- **[⚡ GPIO Architecture](docs/GPIO_ARCHITECTURE_FINAL.md)** - GPIO system design
-- **[📊 PWM Architecture](docs/PWM_ARCHITECTURE.md)** - PWM system design
+- **[🔧 GPIO Manager](docs/component-handlers/GPIO_MANAGER_README.md)** - GPIO system guide
+- **[📊 ADC Manager](docs/component-handlers/ADC_MANAGER_README.md)** - ADC system guide
+- **[🏗️ Architecture Guidelines](docs/development/ARCHITECTURE_GUIDELINES.md)** - Core architecture
+- **[⚡ GPIO System](docs/component-handlers/GPIO_MANAGER_README.md)** - GPIO system design
 
 ### 📚 Component Handler Documentation
 - **[🎛️ GPIO Manager](docs/component-handlers/GPIO_MANAGER_README.md)** - GPIO management system
@@ -629,22 +627,16 @@ void DemonstrateMotors(Vortex& vortex) {
 ## 🔗 Hardware Integration
 
 ### HardFOC Vortex V1 Board Configuration
-- **[🏗️ HardFOC Vortex V1 Board](docs/hardware/HARDFOC_VORTEX_V1.md)** - Board-specific configuration and features
-- **[📍 ESP32-C6 Pin Configuration](docs/hardware/ESP32_C6_PIN_MAPPING.md)** - Pin mapping and configuration
-- **[⚡ Power Management](docs/hardware/POWER_MANAGEMENT.md)** - Power system design
-- **[🔧 Hardware Setup Guide](docs/hardware/HARDWARE_SETUP.md)** - Complete setup instructions
+- **[🏗️ Hardware Architecture](docs/development/ARCHITECTURE_GUIDELINES.md)** - Board-specific configuration and features
 
 ### Device Configuration for HardFOC Vortex V1
-- **[🔌 PCAL95555 Configuration](docs/hardware/PCAL95555_CONFIGURATION.md)** - GPIO expander setup
-- **[🎛️ TMC9660 Configuration](docs/hardware/TMC9660_CONFIGURATION.md)** - Motor controller setup
-- **[📐 AS5047U Configuration](docs/hardware/AS5047U_CONFIGURATION.md)** - Position encoder setup
-- **[🧭 BNO08x Configuration](docs/hardware/BNO08X_CONFIGURATION.md)** - IMU sensor setup
+- **[🔌 PCAL95555 Handler](docs/driver-handlers/PCAL95555_HANDLER_README.md)** - GPIO expander documentation
+- **[🎛️ TMC9660 Handler](docs/driver-handlers/TMC9660_HANDLER_README.md)** - Motor controller documentation
+- **[📐 AS5047U Handler](docs/driver-handlers/AS5047U_HANDLER_README.md)** - Position encoder documentation
+- **[🧭 BNO08x Handler](docs/driver-handlers/BNO08X_HANDLER_README.md)** - IMU sensor documentation
 
-### Interface Guides
-- **[🔌 SPI Interface Guide](docs/hardware/SPI_INTERFACE_GUIDE.md)** - SPI communication setup
-- **[📡 I2C Interface Guide](docs/hardware/I2C_INTERFACE_GUIDE.md)** - I2C communication setup
-- **[📟 UART Interface Guide](docs/hardware/UART_INTERFACE_GUIDE.md)** - UART communication setup
-- **[🌐 CAN Interface Guide](docs/hardware/CAN_INTERFACE_GUIDE.md)** - CAN communication setup
+### Communication Interface
+- **[📡 Communication Manager](docs/component-handlers/COMM_CHANNELS_MANAGER_README.md)** - SPI, I2C, UART, CAN communication
 
 ## 🧪 Testing
 
@@ -688,7 +680,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **📚 Documentation**: Start with [DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md)
 - **🔌 Vortex API**: See [API/README.md](API/README.md) for unified API guide
-- **🏗️ HardFOC Vortex V1**: See [docs/hardware/HARDFOC_VORTEX_V1.md](docs/hardware/HARDFOC_VORTEX_V1.md) for board details
+- **🏗️ HardFOC Vortex V1**: See [Architecture Guidelines](docs/development/ARCHITECTURE_GUIDELINES.md) for board details
 - **🐛 Issues**: Report bugs via GitHub Issues
 - **💬 Discussions**: Use GitHub Discussions for questions
 - **📧 Contact**: HardFOC Team

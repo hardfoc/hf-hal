@@ -61,7 +61,7 @@ The HardFOC HAL follows a layered architecture pattern with clear separation of 
   - System initialization and maintenance
   - Health monitoring and diagnostics
   - Unified access to all components
-- **Files**: `API/All.h`, `API/HardFocIntegration.h`
+- **Files**: `API/Vortex.h`
 
 #### Component Handlers (Managers)
 - **Purpose**: High-level singleton managers providing unified interfaces

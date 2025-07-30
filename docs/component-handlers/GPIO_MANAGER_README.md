@@ -477,7 +477,7 @@ void error_handling_example() {
 ### With Other Managers
 
 ```cpp
-#include "component-handlers/All.h"
+#include "component-handlers/GpioManager.h"
 
 void integrated_example() {
     // Initialize all managers

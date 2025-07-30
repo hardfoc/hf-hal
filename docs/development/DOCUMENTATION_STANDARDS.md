@@ -353,9 +353,7 @@ gpio.SetPin("ESP32_GPIO_2", false);
 ```
 
 ### See Also
-- [GetPin](api/GetPin.md)
-- [ConfigurePin](api/ConfigurePin.md)
-- [GpioManager](api/GpioManager.md)
+- [GpioManager Documentation](../component-handlers/GPIO_MANAGER_README.md)
 ```
 
 #### Class Reference
@@ -403,17 +401,17 @@ static GpioManager& GetInstance() noexcept;
 ### Methods
 
 #### Core Operations
-- [SetPin](api/SetPin.md): Set pin state
-- [GetPin](api/GetPin.md): Get pin state
-- [TogglePin](api/TogglePin.md): Toggle pin state
+- SetPin: Set pin state
+- GetPin: Get pin state
+- TogglePin: Toggle pin state
 
 #### Configuration
-- [ConfigurePin](api/ConfigurePin.md): Configure pin mode
-- [SetInterrupt](api/SetInterrupt.md): Set pin interrupt
+- ConfigurePin: Configure pin mode
+- SetInterrupt: Set pin interrupt
 
 #### Diagnostics
-- [GetLastError](api/GetLastError.md): Get last error code
-- [GetStatistics](api/GetStatistics.md): Get operation statistics
+- GetLastError: Get last error code
+- GetStatistics: Get operation statistics
 
 ### Example Usage
 ```cpp
@@ -438,9 +436,8 @@ void gpio_example() {
 ```
 
 ### See Also
-- [AdcManager](api/AdcManager.md)
-- [CommChannelsManager](api/CommChannelsManager.md)
-- [Platform Mapping](docs/platform-mapping.md)
+- [AdcManager Documentation](../component-handlers/ADC_MANAGER_README.md)
+- [CommChannelsManager Documentation](../component-handlers/COMM_CHANNELS_MANAGER_README.md)
 ```
 
 ### API Documentation Structure
@@ -448,23 +445,18 @@ void gpio_example() {
 #### Directory Organization
 ```
 docs/
-├── api/                    # API reference documentation
-│   ├── index.md           # API overview and navigation
-│   ├── classes/           # Class documentation
-│   │   ├── GpioManager.md
-│   │   ├── AdcManager.md
-│   │   └── ...
-│   ├── functions/         # Function documentation
-│   │   ├── SetPin.md
-│   │   ├── GetPin.md
-│   │   └── ...
-│   └── examples/          # API examples
-│       ├── basic-usage.md
-│       ├── advanced-usage.md
-│       └── ...
-├── guides/                # User guides
-├── technical/             # Technical documentation
-└── development/           # Development documentation
+├── component-handlers/     # Component handler documentation
+│   ├── GPIO_MANAGER_README.md
+│   ├── ADC_MANAGER_README.md
+│   ├── IMU_MANAGER_README.md
+│   └── ...
+├── driver-handlers/       # Driver handler documentation
+├── development/           # Development documentation
+└── ...
+API/                       # Unified API documentation
+├── README.md             # Complete API reference
+├── Vortex.h              # Main API header
+└── Vortex.cpp            # Implementation
 ```
 
 #### Documentation Standards
