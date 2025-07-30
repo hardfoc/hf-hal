@@ -246,8 +246,14 @@ private:
 ### Development Guidelines
 - **[📝 Coding Standards](docs/development/CODING_STANDARDS.md)** - Code style and conventions
 - **[🏗️ Architecture Guidelines](docs/development/ARCHITECTURE_GUIDELINES.md)** - System design principles
+- **[⚡ Performance Optimization Guide](docs/development/PERFORMANCE_OPTIMIZATION_GUIDE.md)** - String lookups vs cached access
+- **[🔧 Base Interface Reference](docs/development/BASEINTERFACE_REFERENCE.md)** - BaseGpio and BaseAdc detailed API
 - **[🧪 Testing Requirements](docs/development/TESTING_REQUIREMENTS.md)** - Test coverage and quality
 - **[📚 Documentation Standards](docs/development/DOCUMENTATION_STANDARDS.md)** - Documentation requirements
+
+### Documentation Corrections
+- **[📋 Documentation Corrections Summary](DOCUMENTATION_CORRECTIONS.md)** - Summary of base interface corrections made
+- **[🚗 Motor Controller Corrections](MOTOR_CONTROLLER_CORRECTIONS.md)** - Comprehensive TMC9660 driver interface corrections
 
 ### Contribution Workflow
 1. **Fork Repository** - Create your own fork for development
