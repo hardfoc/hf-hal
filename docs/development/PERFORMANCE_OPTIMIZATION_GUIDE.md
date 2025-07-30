@@ -718,3 +718,10 @@ The HardFOC Vortex V1 platform provides a carefully designed dual-access API tha
 - **Monitor performance** to ensure optimal operation
 
 This dual-access design enables the HardFOC Vortex V1 platform to serve both **application developers** seeking convenience and **control engineers** requiring maximum performance, making it suitable for everything from simple automation to advanced real-time motor control systems.
+
+## 📖 Additional Resources
+
+- **[🔧 Base Interface Reference](BASEINTERFACE_REFERENCE.md)** - Detailed BaseGpio and BaseAdc API documentation with complete function listings and hardware-specific implementations
+- **[🎛️ GPIO Manager](../component-handlers/GPIO_MANAGER_README.md)** - Complete GPIO management system documentation
+- **[📊 ADC Manager](../component-handlers/ADC_MANAGER_README.md)** - Complete ADC management system documentation
+- **[🔌 Vortex API](../API/README.md)** - Unified system interface documentation
