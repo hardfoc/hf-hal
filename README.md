@@ -26,7 +26,7 @@ The **Vortex API** is named after the **HardFOC Vortex V1** board, providing a u
 - **🔌 Vortex API**: Unified singleton interface to all system components
 - **🏗️ HardFOC Vortex V1 Optimized**: Specifically designed for the Vortex V1 board
 - **🔧 Unified Hardware Management**: Single API for GPIO, ADC, SPI, I2C, UART, and CAN
-- **🎛️ Multi-Source Support**: ESP32-C6, PCAL95555, TMC9660 integrated
+- **🎛️ Multi-Source Support**: ESP32-C6, PCAL95555, TMC9660, BNO08x, AS5047U, NTC thermistors, WS2812 LEDs integrated
 - **🔒 Thread-Safe Operations**: Concurrent access from multiple tasks
 - **📊 Advanced Diagnostics**: Real-time health monitoring and error tracking
 - **⚡ High Performance**: Optimized batch operations and interrupt handling
